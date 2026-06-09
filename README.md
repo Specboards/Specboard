@@ -12,8 +12,9 @@ Open-core: self-host the core for free, or use the hosted SaaS.
 - **Design:** [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - **Build plan:** [`docs/PLAN.md`](./docs/PLAN.md)
 
-> Status: **scaffold**. Typed package boundaries with stubbed services and
-> placeholder UI — not yet a working product.
+> Status: **early build**. The web UI (Backlog · Board · Roadmap · Feature
+> detail), spec parsing, status workflow, DB schema/seed, and MCP tools are
+> working; GitHub sync and auth are still stubbed.
 
 ## Layout
 
@@ -37,7 +38,7 @@ Specs live under `specs/<feature>/spec.md` with YAML frontmatter:
 
 ```yaml
 ---
-id: <uuid>          # stable link to SpecBoard metadata (survives renames)
+id: <uuid> # stable link to SpecBoard metadata (survives renames)
 title: My Feature
 kind: feature
 ---
@@ -46,12 +47,48 @@ kind: feature
 Per-repo config (which globs are specs, workflow, custom fields, write mode)
 lives in [`.specboard/config.yml`](./.specboard/config.yml).
 
-## Develop
+## Local testing — quick start
 
-Requires Node 22+ and pnpm 10+.
+Requires Node 22+ and pnpm 10+. No database needed:
 
 ```bash
 pnpm install
+pnpm build
+pnpm --filter @specboard/web dev   # http://localhost:3000
+```
+
+Without `DATABASE_URL`, the app runs in **local file mode**: it reads
+`specs/**/spec.md` straight from this repo and persists PM metadata (status,
+priority, tags, quarter) to `.specboard/local-metadata.json`. The committed
+file pre-populates the boards with this repo's own specs; edit freely and
+`git checkout .specboard/local-metadata.json` to reset.
+
+### With Postgres (the real deployment shape)
+
+```bash
+pnpm db:up        # docker compose Postgres on :5432 (or bring your own)
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/specboard
+pnpm db:migrate   # apply infra/supabase/migrations
+pnpm db:seed      # import specs/** into features + spec_index
+pnpm --filter @specboard/web dev
+```
+
+The UI is identical; metadata now lives in `features` rows, matching the
+architecture's system-of-record split.
+
+### MCP server (agents)
+
+```bash
+pnpm --filter @specboard/mcp build
+DATABASE_URL=postgres://... node apps/mcp/dist/server.js
+```
+
+Exposes `list_features` / `read_spec` / `update_status` (workflow-validated)
+over stdio. Requires the seeded Postgres above.
+
+## Develop
+
+```bash
 pnpm build          # turbo: builds all packages/apps
 pnpm test           # runs unit tests (e.g. the spec parser in packages/core)
 pnpm typecheck
@@ -61,14 +98,14 @@ pnpm typecheck
 
 ```bash
 pnpm --filter @specboard/db generate   # emit table migrations into infra/supabase/migrations
-pnpm --filter @specboard/db migrate     # apply against $DATABASE_URL
-# then apply infra/supabase/migrations/0001_rls_policies.sql for tenant isolation
+pnpm db:migrate                         # apply against $DATABASE_URL
+# then apply infra/supabase/migrations/0001_rls_policies.sql for tenant isolation (SaaS)
 ```
 
 ### Self-host
 
 ```bash
-docker compose -f infra/docker-compose.yml up
+docker compose -f infra/docker-compose.yml up   # web (infra/web.Dockerfile) + Postgres
 ```
 
 ## License

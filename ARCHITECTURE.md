@@ -2,7 +2,7 @@
 
 SpecBoard is a lightweight, spec-based product-management layer for teams doing
 **spec-driven development**. Specs live as markdown in your git repo (canonical,
-versioned with code, read by AI coding agents). SpecBoard layers the *product*
+versioned with code, read by AI coding agents). SpecBoard layers the _product_
 metadata — status, assignment, priority, backlog order, roadmap — **on top** of
 those specs so PM, UX, and engineering can collaborate without editing files in a
 terminal and without duplicating work into a separate tracker.
@@ -21,11 +21,11 @@ stable spec id.
 
 ## System of record
 
-| Data | Home | Why |
-| --- | --- | --- |
-| Spec content (`spec.md`, `plan.md`, `tasks.md`) | **Git** | Diff-able, versioned with code, read by agents |
+| Data                                                       | Home         | Why                                                                           |
+| ---------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------- |
+| Spec content (`spec.md`, `plan.md`, `tasks.md`)            | **Git**      | Diff-able, versioned with code, read by agents                                |
 | Metadata (status, assignee, priority, rank, tags, roadmap) | **Database** | Queryable, real-time, access-controlled; no spec-file thrash on a status flip |
-| Spec index (content cache + git path/sha) | **Database** | Fast boards/search without hitting git on every render |
+| Spec index (content cache + git path/sha)                  | **Database** | Fast boards/search without hitting git on every render                        |
 
 ### Spec identity — the linchpin
 
@@ -61,7 +61,7 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
   `features`, `spec_index`, `comments`, `activity_log`) + Postgres client. RLS policies
   in `infra/supabase/migrations`.
 - **`packages/git`** — GitHub App client + reconciler (`reconcileSpecs`), webhook
-  verification/affected-spec resolution. *(GitHub calls stubbed in scaffold.)*
+  verification/affected-spec resolution. _(GitHub calls stubbed in scaffold.)_
 - **`packages/ui`** — shared design tokens / components.
 - **`apps/web`** — Next.js App Router UI; Supabase auth; routes for Backlog, Board,
   Roadmap, Feature detail.
@@ -106,8 +106,19 @@ Postgres / **Supabase** (Postgres + Auth + RLS) · `@modelcontextprotocol/sdk` �
 - **Self-host:** `infra/docker-compose.yml` (web + Postgres).
 - **SaaS:** Next.js on Vercel + Supabase; migrations in `infra/supabase/`.
 
+## Local file mode (development/testing)
+
+When `DATABASE_URL` is unset, `apps/web` swaps its store implementation
+(`apps/web/src/lib/store`) for a filesystem-backed one: specs are read directly
+from this repo's `specs/` directory and metadata persists to
+`.specboard/local-metadata.json`. Same UI, zero infrastructure — useful for UI
+testing and for dogfooding SpecBoard on its own specs. Postgres mode is the
+deployment shape.
+
 ## Status
 
-This repository is a **scaffold**: typed package boundaries with stubbed services and
-placeholder UI. No end-to-end feature is wired yet. See `docs/PLAN.md` for the build
-plan and `README.md` for getting started.
+**Early build.** Working: web UI (Backlog · Board · Roadmap · Feature detail,
+base shadcn styling), spec parser + status workflow (`packages/core`), Drizzle
+schema/migrations/seed (`packages/db`), DB-backed MCP tools (`apps/mcp`), local
+file mode. Still stubbed: GitHub App sync (`packages/git`), Supabase auth,
+spec editing from the UI. See `docs/PLAN.md` for the build plan.

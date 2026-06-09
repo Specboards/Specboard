@@ -21,13 +21,17 @@
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
+    "seed": "tsx src/seed.ts",
     "lint": "eslint src"
   },
   "dependencies": {
+    "@specboard/core": "workspace:*",
     "drizzle-orm": "^0.38.2",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.1"
+    "@types/node": "^22.19.20",
+    "drizzle-kit": "^0.30.1",
+    "tsx": "^4.22.4"
   }
 }

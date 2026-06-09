@@ -1,17 +1,98 @@
+import Link from "next/link";
+
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { StatusDot } from "@/components/status-dot";
+import { StatusSelect } from "@/components/status-select";
+import { priorityLabel, sortFeatures } from "@/lib/feature-helpers";
+import { getStore } from "@/lib/store";
+
+export const dynamic = "force-dynamic";
+
 /**
- * Backlog. SCAFFOLD: PM-facing prioritized list with drag-to-rank. Wire to
- * `features` ordered by `rank`, with inline status/assignee/priority editing
- * (metadata writes go straight to the DB — no git churn).
+ * Backlog: prioritized list of features. Status edits here update metadata
+ * only (DB or local file) — spec content stays canonical in git.
  */
-export default function BacklogPage() {
+export default async function BacklogPage() {
+  const store = await getStore();
+  const features = sortFeatures(await store.listFeatures()).filter(
+    (f) => f.status !== "archived",
+  );
+
   return (
-    <section>
-      <h1>Backlog</h1>
-      <p style={{ color: "#6b7280" }}>
-        Prioritized, rankable list of features. Editing status/assignee/priority here updates
-        DB metadata only; spec content edits commit back to git.
-      </p>
-      <p style={{ color: "#9ca3af" }}>No features yet (scaffold).</p>
+    <section className="space-y-4">
+      <div>
+        <h1 className="text-lg font-semibold tracking-tight">Backlog</h1>
+        <p className="text-sm text-muted-foreground">
+          Prioritized features. Metadata edits land in the database; spec
+          content stays in git.
+        </p>
+      </div>
+      {features.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No specs found. Add a <code>specs/&lt;feature&gt;/spec.md</code> with{" "}
+          <code>id</code> and <code>title</code> frontmatter.
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14">Pri</TableHead>
+              <TableHead>Feature</TableHead>
+              <TableHead className="w-44">Status</TableHead>
+              <TableHead>Tags</TableHead>
+              <TableHead className="w-24">Quarter</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {features.map((f) => (
+              <TableRow key={f.specId}>
+                <TableCell className="font-mono text-xs text-muted-foreground">
+                  {priorityLabel(f.priority)}
+                </TableCell>
+                <TableCell>
+                  <Link
+                    href={`/feature/${f.specId}`}
+                    className="font-medium hover:underline"
+                  >
+                    {f.title}
+                  </Link>
+                  <div className="text-xs text-muted-foreground">{f.path}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <StatusDot status={f.status} />
+                    <StatusSelect
+                      specId={f.specId}
+                      status={f.status}
+                      className="h-8 w-36"
+                    />
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {f.tags.map((tag) => (
+                      <Badge key={tag} variant="secondary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {f.roadmapQuarter ?? "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </section>
   );
 }
