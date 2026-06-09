@@ -1,0 +1,31 @@
+{
+  "3f1a8c2e-0b7d-4e2a-9c11-2a6b8d4e1f00": {
+    "status": "done",
+    "priority": 3,
+    "tags": ["docs"],
+    "roadmapQuarter": "2026-Q2"
+  },
+  "7c4e9b1a-5d2f-4c8e-a3b6-91d0e7f2c455": {
+    "status": "in_progress",
+    "priority": 0,
+    "tags": ["git-sync", "onboarding"],
+    "roadmapQuarter": "2026-Q3"
+  },
+  "9a2d6f3b-8e1c-4a7d-b5f0-3c8e2d914a66": {
+    "status": "ready",
+    "priority": 1,
+    "tags": ["git-sync"],
+    "roadmapQuarter": "2026-Q3"
+  },
+  "5b8f2c7d-1a4e-4f9b-8c3d-6e0a9b5d2f88": {
+    "status": "defining",
+    "priority": 1,
+    "tags": ["agents"],
+    "roadmapQuarter": "2026-Q4"
+  },
+  "2e6a8d4c-9b3f-4e1a-a7c5-8f2b0d6e3a11": {
+    "status": "backlog",
+    "priority": 2,
+    "tags": ["editor", "ux"]
+  }
+}
