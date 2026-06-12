@@ -5,6 +5,8 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { isBlockedEmailDomain } from "@specboard/core";
 import { createDb, schema } from "@specboard/db";
 
+import { sendEmail } from "@/lib/email";
+
 /**
  * Reject sign-ups from consumer email providers (gmail.com, outlook.com, …)
  * when `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS` is truthy. On for the hosted
@@ -26,7 +28,29 @@ function createAuth(url: string) {
         verification: schema.verifications,
       },
     }),
-    emailAndPassword: { enabled: true },
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: async ({ user, url }) => {
+        await sendEmail({
+          to: user.email,
+          subject: "Reset your SpecBoard password",
+          textBody: `Hi ${user.name},\n\nReset your SpecBoard password here:\n${url}\n\nIf you didn't request this, you can ignore this email.`,
+        });
+      },
+    },
+    emailVerification: {
+      // Delivered via Postmark when POSTMARK_SERVER_TOKEN is set; sign-in is
+      // not blocked on verification yet (flip requireEmailVerification once
+      // the sending domain is verified and a sign-up UI exists).
+      sendOnSignUp: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        await sendEmail({
+          to: user.email,
+          subject: "Verify your SpecBoard email",
+          textBody: `Hi ${user.name},\n\nConfirm your email address to finish setting up SpecBoard:\n${url}`,
+        });
+      },
+    },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== "/sign-up/email" || !blockPublicEmailDomains()) return;
