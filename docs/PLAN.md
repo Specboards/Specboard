@@ -19,6 +19,11 @@ Postgres, losing git as the source of truth. GitHub **Spec Kit** is git-native b
 with no PM layer. JIRA/Aha are heavyweight and disconnected from the actual specs. SpecBoard
 fills the gap.
 
+> **Amendment (2026-06-12):** the Supabase + Vercel decision below is
+> superseded — the hosted SaaS will run on Fly.io with plain managed Postgres,
+> and auth moves to Better Auth (in-app, works identically for self-host).
+> Details and execution steps: [`PLAN-fly-better-auth.md`](./PLAN-fly-better-auth.md).
+
 ### Decisions locked with the user
 - **Source of truth:** spec **content lives in git** (canonical); **metadata lives in the DB**,
   linked to specs by a stable spec ID.
