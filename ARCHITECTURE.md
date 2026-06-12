@@ -45,7 +45,7 @@ Git Integration Service (GitHub App)  ── packages/git
    reads/parses specs · injects ids · reconciles on push · writes edits back
    │                                   ▲
    ▼ content + sha (index)             │ specs + metadata
-Postgres / Supabase  ── packages/db    │
+Postgres  ── packages/db               │
    metadata (system of record) + spec index + RLS multi-tenancy
    ▲                                   │
    │                                   │
@@ -58,13 +58,14 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
   parser (`parseSpec`), status state machine (`canTransition`), `.specboard/config.yml`
   schema (`parseRepoConfig`). Unit-tested.
 - **`packages/db`** — Drizzle schema (`workspaces`, `members`, `repositories`,
-  `features`, `spec_index`, `comments`, `activity_log`) + Postgres client. RLS policies
-  in `infra/supabase/migrations`.
+  `features`, `spec_index`, `comments`, `activity_log`, plus the Better Auth
+  `users`/`sessions`/`accounts`/`verifications` tables) + Postgres client. RLS
+  policies in `infra/migrations`.
 - **`packages/git`** — GitHub App client + reconciler (`reconcileSpecs`), webhook
   verification/affected-spec resolution. _(GitHub calls stubbed in scaffold.)_
 - **`packages/ui`** — shared design tokens / components.
-- **`apps/web`** — Next.js App Router UI; Supabase auth; routes for Backlog, Board,
-  Roadmap, Feature detail.
+- **`apps/web`** — Next.js App Router UI; in-app auth via Better Auth
+  (`/api/auth/*`); routes for Backlog, Board, Roadmap, Feature detail.
 - **`apps/mcp`** — MCP server exposing prioritized, status-aware specs to agents.
 
 ## Key flows
@@ -82,7 +83,8 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
 ## Multi-tenancy
 
 `workspace` is the tenant root; every tenant row carries `workspace_id` and Postgres
-**RLS** isolates tenants (`specboard_is_member(workspace_id)` via Supabase `auth.uid()`).
+**RLS** isolates tenants (`specboard_is_member(workspace_id)` via the
+`app.user_id` transaction-local session variable set by the app).
 SaaS = many workspaces on shared infra; self-host = a single workspace.
 
 ## Open-core boundary
@@ -98,13 +100,16 @@ fully functional standalone (no crippleware).
 ## Tech stack
 
 Turborepo + pnpm workspaces · TypeScript · Next.js (App Router) · Drizzle ORM ·
-Postgres / **Supabase** (Postgres + Auth + RLS) · `@modelcontextprotocol/sdk` ·
+Postgres (RLS multi-tenancy) · Better Auth · `@modelcontextprotocol/sdk` ·
 `octokit` (GitHub App).
 
 ## Deployment
 
 - **Self-host:** `infra/docker-compose.yml` (web + Postgres).
-- **SaaS:** Next.js on Vercel + Supabase; migrations in `infra/supabase/`.
+- **SaaS:** Fly.io Machines running `infra/web.Dockerfile` (the same image
+  self-hosters run) + Fly Managed Postgres; auth via Better Auth in-app.
+  Two environments: test.specboard.ai (every push to `main`) and
+  app.specboard.ai (manual promote). Migrations in `infra/migrations/`.
 
 ## Local file mode (development/testing)
 
@@ -120,5 +125,7 @@ deployment shape.
 **Early build.** Working: web UI (Backlog · Board · Roadmap · Feature detail,
 base shadcn styling), spec parser + status workflow (`packages/core`), Drizzle
 schema/migrations/seed (`packages/db`), DB-backed MCP tools (`apps/mcp`), local
-file mode. Still stubbed: GitHub App sync (`packages/git`), Supabase auth,
-spec editing from the UI. See `docs/PLAN.md` for the build plan.
+file mode, auth endpoints (Better Auth: email/password sign-up with optional
+consumer-domain blocking). Still stubbed: GitHub App sync (`packages/git`),
+sign-in/sign-up UI and session-gated writes, spec editing from the UI. See
+`docs/PLAN.md` for the build plan.
