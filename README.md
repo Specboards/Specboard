@@ -29,7 +29,8 @@ packages/
   ui/         Shared design tokens / components
 infra/
   docker-compose.yml   Self-host stack (web + Postgres)
-  supabase/            SaaS migrations + RLS policies
+  migrations/          Drizzle migrations (tables, auth, RLS policies)
+  web.Dockerfile       Web app image (self-host + Fly.io SaaS)
 ```
 
 ## Repo conventions for specs
@@ -68,7 +69,7 @@ file pre-populates the boards with this repo's own specs; edit freely and
 ```bash
 pnpm db:up        # docker compose Postgres on :5432 (or bring your own)
 export DATABASE_URL=postgres://postgres:postgres@localhost:5432/specboard
-pnpm db:migrate   # apply infra/supabase/migrations
+pnpm db:migrate   # apply infra/migrations
 pnpm db:seed      # import specs/** into features + spec_index
 pnpm --filter @specboard/web dev
 ```
@@ -97,9 +98,8 @@ pnpm typecheck
 ### Database
 
 ```bash
-pnpm --filter @specboard/db generate   # emit table migrations into infra/supabase/migrations
-pnpm db:migrate                         # apply against $DATABASE_URL
-# then apply infra/supabase/migrations/0001_rls_policies.sql for tenant isolation (SaaS)
+pnpm --filter @specboard/db generate   # emit table migrations into infra/migrations
+pnpm db:migrate                         # apply against $DATABASE_URL (incl. RLS policies)
 ```
 
 ### Self-host

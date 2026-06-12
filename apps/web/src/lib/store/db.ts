@@ -10,7 +10,7 @@ import type {
   FeatureStore,
 } from "./types";
 
-/** Postgres-backed store (self-host compose stack or Supabase). */
+/** Postgres-backed store (self-host compose stack or managed Postgres). */
 export class DbStore implements FeatureStore {
   private readonly db: Database;
 

@@ -1,5 +1,6 @@
-# Self-host stack: SpecBoard web + Postgres. The hosted SaaS instead uses
-# Supabase (Postgres + Auth + RLS) — see infra/supabase/.
+# Self-host stack: SpecBoard web + Postgres. The hosted SaaS runs the same
+# image on Fly.io Machines + Fly Managed Postgres; auth (Better Auth) runs
+# in-app against Postgres in both shapes. Migrations: infra/migrations/.
 services:
   db:
     image: postgres:16-alpine
@@ -25,6 +26,9 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/specboard
       # Single-workspace self-host: auth/SSO are commercial add-ons.
       SPECBOARD_SELF_HOST: "true"
+      # Set to "true" to reject sign-ups from consumer email providers
+      # (gmail.com, outlook.com, ...). Off by default for self-host.
+      SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS: "false"
     ports:
       - "3000:3000"
     depends_on:
