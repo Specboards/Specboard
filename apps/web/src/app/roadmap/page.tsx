@@ -20,9 +20,9 @@ export const dynamic = "force-dynamic";
 
 /** Roadmap: features grouped by quarter, unscheduled work last. */
 export default async function RoadmapPage() {
-  await requireWorkspaceAccess();
+  const access = await requireWorkspaceAccess();
   const store = await getStore();
-  const features = sortFeatures(await store.listFeatures()).filter(
+  const features = sortFeatures(await store.listFeatures(access ?? undefined)).filter(
     (f) => f.status !== "archived",
   );
 

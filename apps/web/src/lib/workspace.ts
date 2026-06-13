@@ -2,6 +2,20 @@ import { asc, eq, members, workspaces, type Database } from "@specboard/db";
 
 export type Workspace = typeof workspaces.$inferSelect;
 export type Member = typeof members.$inferSelect;
+export type MemberRole = Member["role"];
+
+/** Roles allowed to mutate workspace data. `viewer` (the default for everyone
+ * past the first user) is read-only. */
+const WRITE_ROLES: ReadonlySet<MemberRole> = new Set<MemberRole>([
+  "admin",
+  "pm",
+  "ux",
+  "eng",
+]);
+
+export function canWrite(role: MemberRole): boolean {
+  return WRITE_ROLES.has(role);
+}
 
 /**
  * Workspace + membership bootstrap. The hosted product runs one workspace per

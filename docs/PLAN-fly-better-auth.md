@@ -376,12 +376,25 @@ Rough priority order; the first three unblock real multi-user usage.
    ungated in local file mode. Still open: assigning richer roles
    (`pm`/`ux`/`eng`) and an admin UI to manage members — everyone past the first
    is a `viewer` today.
-3. **`specboard_app` non-owner DB role** so RLS actually enforces on the SaaS
-   (the app currently connects as the table owner, which bypasses RLS), plus
-   a request-scoped db helper that runs `set_config('app.user_id', …, true)`
-   per transaction. Then run verification item 4 above.
+3. **DB-enforced tenant isolation.** _App-layer half done 2026-06-13:_ every
+   tenant query now runs through a `WorkspaceScope` (`store/types.ts`) — the
+   `DbStore` filters by `workspaceId` and sets `app.user_id` inside a
+   transaction (`store/db.ts`), and reads/writes are authorized by membership +
+   role (`resolveReadScope` / `authorizeWrite` in `lib/auth-session.ts`;
+   `viewer` is read-only via `canWrite`). This gives real isolation in the app
+   even though the connection still bypasses RLS. _Still open (needs live
+   infra):_ provision the `specboard_app` **non-owner** role, split the
+   migration connection (owner) from the runtime connection (non-owner), and
+   swap the Fly `DATABASE_URL` secret — only then does RLS enforce at the DB and
+   verification item 4 above becomes meaningful. Onboarding writes
+   (`createWorkspaceWithOwner` / `ensureMembership`, default-denied under RLS)
+   will need the privileged connection at that point.
 4. **Flip `requireEmailVerification`** in `lib/auth.ts` once the Postmark
    sender domain (specboard.ai DKIM + Return-Path DNS) is verified.
+   _Security note:_ until this is on, an unverified work-domain sign-up can take
+   the **first-user `admin`** slot on a fresh deployment — verify before
+   bootstrapping production, or gate the `/setup`/first-admin path on a verified
+   email.
 5. **GitHub App sync** (`packages/git` is still stubbed): webhook endpoint
    `/api/webhooks/github`; before going live, production already runs
    `min_machines_running = 1` so deliveries won't hit cold starts.

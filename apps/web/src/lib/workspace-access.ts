@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 
 import { getServerSessionUser } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
-import { ensureMembership, type Member } from "@/lib/workspace";
+import type { WorkspaceScope } from "@/lib/store/types";
+import { ensureMembership, type MemberRole } from "@/lib/workspace";
+
+/** Tenant scope plus the caller's role, as resolved for a content page. */
+export type PageAccess = WorkspaceScope & { role: MemberRole };
 
 /**
  * Page-level access gate for content routes. When auth is enabled:
@@ -10,11 +14,10 @@ import { ensureMembership, type Member } from "@/lib/workspace";
  * - session, no workspace → redirect to /setup (first user names the org)
  * - session + workspace   → auto-join as viewer if needed, then proceed
  *
- * Returns `null` in local file mode (auth disabled), where pages are ungated.
+ * Returns the tenant scope to pass to the store, or `null` in local file mode
+ * (auth disabled), where pages are ungated and the store is unscoped.
  */
-export async function requireWorkspaceAccess(): Promise<
-  { userId: string; membership: Member } | null
-> {
+export async function requireWorkspaceAccess(): Promise<PageAccess | null> {
   const db = getDb();
   const user = await getServerSessionUser();
   if (!db) return null; // file mode — no auth, no gating
@@ -23,5 +26,9 @@ export async function requireWorkspaceAccess(): Promise<
   const membership = await ensureMembership(db, user.id);
   if (!membership) redirect("/setup");
 
-  return { userId: user.id, membership };
+  return {
+    userId: user.id,
+    workspaceId: membership.workspaceId,
+    role: membership.role,
+  };
 }

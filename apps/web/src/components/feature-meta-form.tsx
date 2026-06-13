@@ -11,7 +11,13 @@ import { statusLabel, statusOptions } from "@/lib/feature-helpers";
 import type { FeatureDetail } from "@/lib/store/types";
 
 /** Metadata sidebar form; saves through the public /api/v1 surface. */
-export function FeatureMetaForm({ feature }: { feature: FeatureDetail }) {
+export function FeatureMetaForm({
+  feature,
+  canEdit = true,
+}: {
+  feature: FeatureDetail;
+  canEdit?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +49,15 @@ export function FeatureMetaForm({ feature }: { feature: FeatureDetail }) {
         setError(err instanceof Error ? err.message : "Save failed.");
       }
     });
+  }
+
+  if (!canEdit) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        You have view-only access — ask an admin for an editor role to change
+        metadata.
+      </p>
+    );
   }
 
   return (

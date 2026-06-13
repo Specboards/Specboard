@@ -8,6 +8,7 @@ import type {
   FeaturePatch,
   FeatureRecord,
   FeatureStore,
+  WorkspaceScope,
 } from "./types";
 
 interface LocalMetadata {
@@ -102,16 +103,24 @@ export class LocalFileStore implements FeatureStore {
     return features;
   }
 
-  async listFeatures(): Promise<FeatureRecord[]> {
+  // The local store has a single implicit workspace, so `scope` is ignored.
+  async listFeatures(_scope?: WorkspaceScope): Promise<FeatureRecord[]> {
     return this.loadAll();
   }
 
-  async getFeature(specId: string): Promise<FeatureDetail | null> {
+  async getFeature(
+    specId: string,
+    _scope?: WorkspaceScope,
+  ): Promise<FeatureDetail | null> {
     const all = await this.loadAll();
     return all.find((f) => f.specId === specId) ?? null;
   }
 
-  async updateFeature(specId: string, patch: FeaturePatch): Promise<void> {
+  async updateFeature(
+    specId: string,
+    patch: FeaturePatch,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
     const meta = await this.readMetadata();
     meta[specId] = { ...meta[specId], ...patch };
     await this.writeMetadata(meta);

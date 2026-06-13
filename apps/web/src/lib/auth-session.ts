@@ -1,8 +1,20 @@
 import { headers } from "next/headers";
 
 import { getAuth } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import type { WorkspaceScope } from "@/lib/store/types";
+import { canWrite, getMembership } from "@/lib/workspace";
 
 export type SessionUser = { id: string; email: string; name: string };
+
+/**
+ * Outcome of resolving the tenant scope for an API request. `scope` is `null`
+ * in local file mode (auth disabled) — callers pass it straight to the store,
+ * which ignores it. On denial, `response` is the ready-to-return error.
+ */
+export type ScopeResult =
+  | { ok: true; scope: WorkspaceScope | null }
+  | { ok: false; response: Response };
 
 /** Session user resolved from a server component / page request context. */
 export async function getServerSessionUser(): Promise<SessionUser | null> {
@@ -29,19 +41,60 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
 }
 
 /**
- * Guard for write routes. Returns a 401 `Response` when auth is enabled and the
- * request carries no valid session; returns `null` (proceed) otherwise.
+ * Resolve the tenant scope for an API request, enforcing authorization.
  *
- * When auth is disabled — local file mode, `getAuth()` is `null` — writes stay
- * open, matching single-workspace self-host where there is no one to sign in.
+ * In local file mode (auth disabled) everything is allowed with a `null`
+ * scope. Otherwise the caller must have a session and belong to a workspace;
+ * write requests additionally require a non-`viewer` role.
  */
-export async function requireWriteAccess(req: Request): Promise<Response | null> {
+async function resolveScope(
+  req: Request,
+  opts: { write: boolean },
+): Promise<ScopeResult> {
   const auth = getAuth();
-  if (!auth) return null;
+  const db = getDb();
+  if (!auth || !db) return { ok: true, scope: null };
 
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
+    return {
+      ok: false,
+      response: Response.json({ error: "Authentication required." }, { status: 401 }),
+    };
   }
-  return null;
+
+  const membership = await getMembership(db, session.user.id);
+  if (!membership) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: "You do not belong to a workspace." },
+        { status: 403 },
+      ),
+    };
+  }
+  if (opts.write && !canWrite(membership.role)) {
+    return {
+      ok: false,
+      response: Response.json(
+        { error: "Your role does not permit this action." },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    scope: { userId: session.user.id, workspaceId: membership.workspaceId },
+  };
+}
+
+/** Scope for a read request: requires a workspace member (any role). */
+export function resolveReadScope(req: Request): Promise<ScopeResult> {
+  return resolveScope(req, { write: false });
+}
+
+/** Scope for a write request: requires a member with a non-`viewer` role. */
+export function authorizeWrite(req: Request): Promise<ScopeResult> {
+  return resolveScope(req, { write: true });
 }

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
-import { patchFeature } from "@/lib/api-client";
+import { AuthRequiredError, patchFeature } from "@/lib/api-client";
 import { Select } from "@/components/ui/select";
 import { statusLabel, statusOptions } from "@/lib/feature-helpers";
 
@@ -12,22 +12,34 @@ export function StatusSelect({
   specId,
   status,
   className,
+  canEdit = true,
 }: {
   specId: string;
   status: string;
   className?: string;
+  canEdit?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   return (
     <Select
       value={status}
-      disabled={pending}
+      disabled={pending || !canEdit}
       className={className}
       onChange={(e) => {
         const next = e.target.value;
         startTransition(async () => {
-          await patchFeature(specId, { status: next });
+          try {
+            await patchFeature(specId, { status: next });
+          } catch (err) {
+            if (err instanceof AuthRequiredError) {
+              router.push(
+                `/sign-in?from=${encodeURIComponent(window.location.pathname)}`,
+              );
+              return;
+            }
+            // Reverts the optimistic value by re-rendering from the server.
+          }
           router.refresh();
         });
       }}

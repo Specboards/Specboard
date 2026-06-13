@@ -1,6 +1,11 @@
 import { canTransition } from "@specboard/core";
 
-import { getStore, type FeatureDetail, type FeaturePatch } from "@/lib/store";
+import {
+  getStore,
+  type FeatureDetail,
+  type FeaturePatch,
+  type WorkspaceScope,
+} from "@/lib/store";
 
 /**
  * Domain operations behind the public /api/v1 surface. Route handlers stay
@@ -60,9 +65,10 @@ export function parseFeaturePatch(body: unknown): FeaturePatch {
 export async function patchFeature(
   specId: string,
   patch: FeaturePatch,
+  scope?: WorkspaceScope,
 ): Promise<FeatureDetail> {
   const store = await getStore();
-  const feature = await store.getFeature(specId);
+  const feature = await store.getFeature(specId, scope);
   if (!feature) throw new FeatureNotFoundError(specId);
 
   if (patch.status !== undefined && !canTransition(feature.status, patch.status)) {
@@ -71,7 +77,7 @@ export async function patchFeature(
     );
   }
 
-  await store.updateFeature(specId, patch);
-  const updated = await store.getFeature(specId);
+  await store.updateFeature(specId, patch, scope);
+  const updated = await store.getFeature(specId, scope);
   return updated ?? feature;
 }

@@ -12,6 +12,7 @@ import {
   statusLabel,
 } from "@/lib/feature-helpers";
 import { getStore } from "@/lib/store";
+import { canWrite } from "@/lib/workspace";
 import { requireWorkspaceAccess } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +21,10 @@ const COLUMNS = DEFAULT_STATUSES.filter((s) => s !== "archived");
 
 /** Kanban board: features grouped by status, moved via legal transitions. */
 export default async function BoardPage() {
-  await requireWorkspaceAccess();
+  const access = await requireWorkspaceAccess();
+  const canEdit = !access || canWrite(access.role);
   const store = await getStore();
-  const features = sortFeatures(await store.listFeatures());
+  const features = sortFeatures(await store.listFeatures(access ?? undefined));
 
   return (
     <section className="space-y-4">
@@ -79,6 +81,7 @@ export default async function BoardPage() {
                         specId={f.specId}
                         status={f.status}
                         className="h-7 text-xs"
+                        canEdit={canEdit}
                       />
                     </CardContent>
                   </Card>

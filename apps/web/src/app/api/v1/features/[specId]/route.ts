@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 
-import { requireWriteAccess } from "@/lib/auth-session";
+import { authorizeWrite, resolveReadScope } from "@/lib/auth-session";
 import {
   FeatureNotFoundError,
   InvalidPatchError,
@@ -14,10 +14,13 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ specId: string }> };
 
 /** GET /api/v1/features/:specId — full feature detail (metadata + spec content). */
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(req: Request, { params }: Params) {
+  const authz = await resolveReadScope(req);
+  if (!authz.ok) return authz.response;
+
   const { specId } = await params;
   const store = await getStore();
-  const feature = await store.getFeature(specId);
+  const feature = await store.getFeature(specId, authz.scope ?? undefined);
   if (!feature) {
     return Response.json({ error: `Unknown feature: ${specId}` }, { status: 404 });
   }
@@ -30,8 +33,8 @@ export async function GET(_req: Request, { params }: Params) {
  * against the workflow state machine.
  */
 export async function PATCH(req: Request, { params }: Params) {
-  const denied = await requireWriteAccess(req);
-  if (denied) return denied;
+  const authz = await authorizeWrite(req);
+  if (!authz.ok) return authz.response;
 
   const { specId } = await params;
 
@@ -43,7 +46,11 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   try {
-    const feature = await patchFeature(specId, parseFeaturePatch(body));
+    const feature = await patchFeature(
+      specId,
+      parseFeaturePatch(body),
+      authz.scope ?? undefined,
+    );
     for (const path of ["/backlog", "/board", "/roadmap"]) revalidatePath(path);
     revalidatePath("/feature/[id]", "page");
     return Response.json({ feature });

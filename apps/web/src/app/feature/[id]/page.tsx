@@ -8,6 +8,7 @@ import { FeatureMetaForm } from "@/components/feature-meta-form";
 import { StatusDot } from "@/components/status-dot";
 import { statusLabel } from "@/lib/feature-helpers";
 import { getStore } from "@/lib/store";
+import { canWrite } from "@/lib/workspace";
 import { requireWorkspaceAccess } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +22,10 @@ export default async function FeaturePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireWorkspaceAccess();
+  const access = await requireWorkspaceAccess();
   const { id } = await params;
   const store = await getStore();
-  const feature = await store.getFeature(id);
+  const feature = await store.getFeature(id, access ?? undefined);
   if (!feature) notFound();
 
   return (
@@ -55,7 +56,10 @@ export default async function FeaturePage({
           {statusLabel(feature.status)}
         </div>
         <Separator />
-        <FeatureMetaForm feature={feature} />
+        <FeatureMetaForm
+          feature={feature}
+          canEdit={!access || canWrite(access.role)}
+        />
         <Separator />
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1">

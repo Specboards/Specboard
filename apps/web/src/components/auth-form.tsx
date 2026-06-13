@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { signIn, signUp } from "@/lib/auth-client";
+import { safeRedirectPath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -48,8 +49,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const t = copy[mode];
 
   // After auth, return to wherever the user was headed (set by the redirect
-  // that bounced them here), defaulting to the backlog.
-  const redirectTo = searchParams.get("from") || "/backlog";
+  // that bounced them here), defaulting to the backlog. Sanitized so a crafted
+  // `?from=` can't turn the sign-in link into an open redirect.
+  const redirectTo = safeRedirectPath(searchParams.get("from"));
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
