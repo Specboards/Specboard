@@ -48,6 +48,9 @@ importers:
       '@specboard/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@specboard/git':
+        specifier: workspace:*
+        version: link:../../packages/git
       '@specboard/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -144,10 +147,19 @@ importers:
       octokit:
         specifier: ^4.0.2
         version: 4.1.4
+      picomatch:
+        specifier: ^4.0.2
+        version: 4.0.4
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.20
+      '@types/picomatch':
+        specifier: ^4.0.0
+        version: 4.0.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)(lightningcss@1.32.0)
 
   packages/ui: {}
 
@@ -1471,6 +1483,9 @@ packages:
   '@types/node@22.19.20':
     resolution: {integrity: sha512-6tELRwSDYWW9EdZhbeZmYGZ1/7Djkt+Ah3/ScEYT9cDord7UJzasR/4D3VONg9tQI5CDp+/CZC1AXj2pCFOvpw==}
 
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
+
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
     peerDependencies:
@@ -2380,6 +2395,10 @@ packages:
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
+
+  picomatch@4.0.4:
+    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
+    engines: {node: '>=12'}
 
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
@@ -3658,6 +3677,8 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/picomatch@4.0.3': {}
+
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
       '@types/react': 19.2.17
@@ -4642,6 +4663,8 @@ snapshots:
   pathval@2.0.1: {}
 
   picocolors@1.1.1: {}
+
+  picomatch@4.0.4: {}
 
   pkce-challenge@5.0.1: {}
 
