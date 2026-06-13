@@ -1,4 +1,9 @@
 import {
+  parseRepoConfigYaml,
+  safeParseRepoConfig,
+  type RepoConfig,
+} from "@specboard/core";
+import {
   and,
   eq,
   features,
@@ -10,9 +15,13 @@ import {
   createGitHubRepoClient,
   githubAppFromEnv,
   reconcileSpecs,
+  type GitRepoClient,
 } from "@specboard/git";
 
 export type RepoRecord = typeof repositories.$inferSelect;
+
+/** Path of the per-repo config file, relative to the repo root. */
+const CONFIG_PATH = ".specboard/config.yml";
 
 /** Default when a repo has no `.specboard/config.yml` glob override yet. */
 const DEFAULT_SPEC_GLOBS = ["specs/**/spec.md"];
@@ -35,6 +44,38 @@ export function repoGlobs(repo: RepoRecord): string[] {
     return globs as string[];
   }
   return DEFAULT_SPEC_GLOBS;
+}
+
+/**
+ * Read and validate `.specboard/config.yml` from the repo, or `null` if it's
+ * absent/unreadable (a repo without one falls back to defaults).
+ */
+async function readRepoConfigFromGit(client: GitRepoClient): Promise<RepoConfig | null> {
+  try {
+    const file = await client.readFile(CONFIG_PATH);
+    return parseRepoConfigYaml(file.raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The RepoConfig for a workspace's connected repo (the first one carrying a
+ * stored config), or `null`. Drives config-derived UI such as custom fields.
+ */
+export async function getWorkspaceRepoConfig(
+  db: Database,
+  workspaceId: string,
+): Promise<RepoConfig | null> {
+  const rows = await db
+    .select({ config: repositories.config })
+    .from(repositories)
+    .where(eq(repositories.workspaceId, workspaceId));
+  for (const row of rows) {
+    const config = safeParseRepoConfig(row.config);
+    if (config) return config;
+  }
+  return null;
 }
 
 /** Find a connected repository by owner + name (case-sensitive, as GitHub stores them). */
@@ -76,7 +117,18 @@ export async function syncRepository(db: Database, repo: RepoRecord): Promise<Sy
     ref: repo.defaultBranch,
   });
 
-  const reconciled = await reconcileSpecs(client, repoGlobs(repo));
+  // Refresh the repo's config from git so glob/field changes take effect, and
+  // resolve the globs to scan from it (falling back to the stored/default).
+  const config = await readRepoConfigFromGit(client);
+  if (config) {
+    await db
+      .update(repositories)
+      .set({ config })
+      .where(eq(repositories.id, repo.id));
+  }
+  const globs = config?.specGlobs ?? repoGlobs(repo);
+
+  const reconciled = await reconcileSpecs(client, globs);
 
   // Existing blobShas keyed by specId, to skip unchanged files.
   const existingRows = await db

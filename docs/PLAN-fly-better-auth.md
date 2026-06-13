@@ -416,19 +416,36 @@ Rough priority order; the first three unblock real multi-user usage.
    the signature and reconciles a connected repo's specs into `features` +
    `spec_index` (owner connection, `blobSha` drift-skip); `GET/POST
    /api/v1/repositories` lists/registers repos (admin-only, runs an initial
-   import). Production already runs `min_machines_running = 1` so deliveries
-   won't hit cold starts. _Still open (owner/follow-up):_ create the GitHub App
-   and set the three `GITHUB_*` secrets; read `.specboard/config.yml` from the
-   repo to source globs (registration takes explicit `specGlobs` for now,
-   defaulting to `specs/**/spec.md`); a management UI for connecting repos; and
-   handling spec **deletion** (a removed file currently leaves its feature row).
-6. **Remote MCP server** — second process group in the Fly apps or its own
+   import). Each sync reads `.specboard/config.yml` from the repo (via the App)
+   and stores the parsed `RepoConfig` on the `repositories` row, so spec globs
+   and custom-field definitions track git. Production already runs
+   `min_machines_running = 1` so deliveries won't hit cold starts. **Owner
+   action to go live:** follow `docs/RUNBOOK-github-sync.md` — create the GitHub
+   App, set the three `GITHUB_*` secrets, install on the repo, and register it.
+   _Still open (follow-up):_ a management UI for connecting repos (registration
+   is curl-only today), and handling spec **deletion** (a removed file currently
+   leaves its feature row to avoid nuking user comments/metadata).
+6. ~~**First-run onboarding choice.**~~ **Done 2026-06-13.** `/setup` now asks
+   the first user to either seed a starter board (sample data baked into the app
+   — `lib/sample-data.ts`, seeded into a synthetic "sample" repo) or start empty;
+   `POST /api/v1/workspaces` takes `seedSampleData` and only seeds when the
+   caller actually became admin. The board/backlog/roadmap render a shared
+   `EmptyState` (prompting a repo connection) when there are no features, and the
+   header nav is hidden from signed-out visitors.
+7. ~~**Assignee + custom-field editing.**~~ **Done 2026-06-13.** The metadata
+   form (`feature-meta-form.tsx`) now edits the assignee (from workspace members)
+   and any config-defined custom fields; `parseFeaturePatch` validates
+   `assigneeId`/`customFields`, the stores read/write them, and field definitions
+   come from the synced `RepoConfig.fields`. _Still open:_ richer roles
+   (`pm`/`ux`/`eng`) and a member-management UI — everyone past the first user is
+   still a `viewer`.
+8. **Remote MCP server** — second process group in the Fly apps or its own
    app; should consume `/api/v1` (or the shared service layer), not the DB
    directly.
-7. **Cost check-in:** two MPG basic clusters run $76/mo. If that's heavy
+9. **Cost check-in:** two MPG basic clusters run $76/mo. If that's heavy
    pre-launch, both environments can share one cluster (~$38/mo) with
    separate databases — revisit before the bill matters.
-8. SSO/SAML/SCIM (commercial tier) — Better Auth has plugins for this later.
+10. SSO/SAML/SCIM (commercial tier) — Better Auth has plugins for this later.
 
 ### Operational reference (as deployed)
 
