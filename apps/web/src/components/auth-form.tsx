@@ -63,6 +63,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
     const password = String(data.get("password") ?? "");
     const name = String(data.get("name") ?? "").trim();
 
+    if (mode === "sign-up" && password !== String(data.get("confirmPassword") ?? "")) {
+      setError("Passwords don't match.");
+      return;
+    }
+
     startTransition(async () => {
       setError(null);
       if (mode === "sign-up") {
@@ -124,7 +129,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
             <Input name="email" type="email" autoComplete="email" required />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Password</span>
+            <span className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+              Password
+              {mode === "sign-in" ? (
+                <Link
+                  href="/forgot-password"
+                  className="font-normal text-foreground underline-offset-4 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              ) : null}
+            </span>
             <Input
               name="password"
               type="password"
@@ -132,6 +147,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
               required
             />
           </label>
+          {mode === "sign-up" ? (
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Confirm password</span>
+              <Input name="confirmPassword" type="password" autoComplete="new-password" required />
+            </label>
+          ) : null}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "…" : t.submit}

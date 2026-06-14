@@ -54,3 +54,55 @@ export async function createWorkspace(
   }
   return body.workspace;
 }
+
+/** Summary returned by an initial/repeat spec import. */
+export interface SyncResult {
+  upserted: number;
+  skipped: number;
+  idsInjected: number;
+}
+
+export interface ConnectRepoInput {
+  installationId: string;
+  owner: string;
+  name: string;
+  defaultBranch?: string;
+}
+
+/**
+ * Connect (or re-sync) a GitHub repository and run an import. Admin-only on the
+ * server. The repository upsert always succeeds when the input is valid; the
+ * import may still fail (e.g. the App isn't installed yet), surfaced as
+ * `sync.error` rather than a thrown error.
+ */
+export async function connectRepository(
+  input: ConnectRepoInput,
+): Promise<{ sync: SyncResult | { error: string } }> {
+  const res = await fetch("/api/v1/repositories", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { sync?: SyncResult | { error: string }; error?: string }
+    | null;
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Connect failed with ${res.status}`);
+  }
+  return { sync: body?.sync ?? { error: "No sync summary returned." } };
+}
+
+/** Update the organization ("company") name. Admin-only on the server. */
+export async function updateWorkspace(name: string): Promise<void> {
+  const res = await fetch("/api/v1/workspace", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Update failed with ${res.status}`);
+  }
+}

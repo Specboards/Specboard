@@ -50,8 +50,17 @@ secrets triggers a redeploy.
 
 ## 4. Register the repository
 
-No management UI yet — register through the API as a workspace **admin**. The
-endpoint needs your session cookie; grab it from the browser devtools
+**From the UI (recommended):** sign in as a workspace **admin** and open
+**Repositories** in the top nav (or click "Connect a repository" on an empty
+board). Enter the owner, repository name, and the `<INSTALLATION_ID>` from
+step 2, then **Connect** — the page runs the initial import and shows the sync
+summary. Connected repos get a **Re-sync** button.
+
+> Optional: set `NEXT_PUBLIC_GITHUB_APP_SLUG` (the App's slug, e.g.
+> `specboard-test`) so the form shows a direct "install the GitHub App" link.
+
+**From the API (alternative):** register through the endpoint as a workspace
+**admin**. It needs your session cookie; grab it from the browser devtools
 (Application → Cookies → `better-auth.session_token`) while signed in.
 
 ```sh

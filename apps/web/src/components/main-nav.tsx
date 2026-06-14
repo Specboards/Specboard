@@ -10,6 +10,7 @@ const items = [
   { href: "/backlog", label: "Backlog" },
   { href: "/board", label: "Board" },
   { href: "/roadmap", label: "Roadmap" },
+  { href: "/repositories", label: "Repositories" },
 ];
 
 export function MainNav() {

@@ -1,3 +1,6 @@
+import Link from "next/link";
+
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
@@ -16,12 +19,17 @@ export function EmptyState({ canConnect = false }: { canConnect?: boolean }) {
           GitHub repository.
         </CardDescription>
       </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
+      <CardContent className="space-y-4 text-sm text-muted-foreground">
         <p>
           {canConnect
             ? "Connect the repository where your specs live — SpecBoard imports every spec and keeps the board in sync on each push."
             : "Once an admin connects the repository where your specs live, features will appear here automatically."}
         </p>
+        {canConnect ? (
+          <Link href="/repositories" className={buttonVariants({ size: "sm" })}>
+            Connect a repository
+          </Link>
+        ) : null}
       </CardContent>
     </Card>
   );

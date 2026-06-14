@@ -42,9 +42,12 @@ export function AccountControl() {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="hidden text-sm text-muted-foreground sm:inline">
+      <Link
+        href="/settings"
+        className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline"
+      >
         {data.user.email}
-      </span>
+      </Link>
       <Button size="sm" variant="ghost" onClick={onSignOut} disabled={pending}>
         Sign out
       </Button>
