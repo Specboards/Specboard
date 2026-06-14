@@ -61,6 +61,33 @@ export async function getActiveWorkspace(db: Database): Promise<Workspace | null
   return rows[0] ?? null;
 }
 
+/** Fetch a single workspace by id, or null if it doesn't exist. */
+export async function getWorkspaceById(
+  db: Database,
+  workspaceId: string,
+): Promise<Workspace | null> {
+  const rows = await db
+    .select()
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Rename a workspace ("company"). Returns the updated row, or null if gone. */
+export async function updateWorkspace(
+  db: Database,
+  workspaceId: string,
+  patch: { name: string },
+): Promise<Workspace | null> {
+  const rows = await db
+    .update(workspaces)
+    .set({ name: patch.name })
+    .where(eq(workspaces.id, workspaceId))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function getMembership(
   db: Database,
   userId: string,

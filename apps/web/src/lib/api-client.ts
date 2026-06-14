@@ -54,3 +54,17 @@ export async function createWorkspace(
   }
   return body.workspace;
 }
+
+/** Update the organization ("company") name. Admin-only on the server. */
+export async function updateWorkspace(name: string): Promise<void> {
+  const res = await fetch("/api/v1/workspace", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Update failed with ${res.status}`);
+  }
+}

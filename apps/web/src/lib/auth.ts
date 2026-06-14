@@ -5,7 +5,7 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { isBlockedEmailDomain } from "@specboard/core";
 import { createDb, schema } from "@specboard/db";
 
-import { sendEmail } from "@/lib/email";
+import { renderActionEmail, sendEmail } from "@/lib/email";
 
 /**
  * Reject sign-ups from consumer email providers (gmail.com, outlook.com, …)
@@ -35,11 +35,50 @@ function createAuth(url: string) {
       // first-user admin slot could be claimed without mailbox control.
       requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
+        const { textBody, htmlBody } = renderActionEmail({
+          name: user.name,
+          intro: "We received a request to reset your SpecBoard password. Click the button below to choose a new one.",
+          action: "Reset password",
+          url,
+          footer: "If you didn't request this, you can safely ignore this email.",
+        });
         await sendEmail({
           to: user.email,
           subject: "Reset your SpecBoard password",
-          textBody: `Hi ${user.name},\n\nReset your SpecBoard password here:\n${url}\n\nIf you didn't request this, you can ignore this email.`,
+          textBody,
+          htmlBody,
         });
+      },
+    },
+    user: {
+      // Let users change their email from the account page. Because their
+      // current address is verified, Better Auth sends a confirmation link to
+      // the *existing* inbox; the change only takes effect once that's clicked.
+      changeEmail: {
+        enabled: true,
+        sendChangeEmailVerification: async ({
+          user,
+          newEmail,
+          url,
+        }: {
+          user: { name: string; email: string };
+          newEmail: string;
+          url: string;
+        }) => {
+          const { textBody, htmlBody } = renderActionEmail({
+            name: user.name,
+            intro: `Confirm that you want to change your SpecBoard email address to ${newEmail}. The change takes effect once you click the button below.`,
+            action: "Confirm email change",
+            url,
+            footer: "If you didn't request this, you can safely ignore this email and your address stays the same.",
+          });
+          await sendEmail({
+            to: user.email,
+            subject: "Confirm your SpecBoard email change",
+            textBody,
+            htmlBody,
+          });
+        },
       },
     },
     emailVerification: {
@@ -50,10 +89,17 @@ function createAuth(url: string) {
       // Land verified users back in the app rather than on a bare API 200.
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
+        const { textBody, htmlBody } = renderActionEmail({
+          name: user.name,
+          intro: "Confirm your email address to finish setting up your SpecBoard account.",
+          action: "Verify email",
+          url,
+        });
         await sendEmail({
           to: user.email,
           subject: "Verify your SpecBoard email",
-          textBody: `Hi ${user.name},\n\nConfirm your email address to finish setting up SpecBoard:\n${url}`,
+          textBody,
+          htmlBody,
         });
       },
     },
