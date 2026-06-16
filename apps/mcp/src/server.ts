@@ -106,6 +106,15 @@ server.tool(
           push(blockedBy, l.toFeatureId, fromSpec);
         }
       }
+      // Hierarchy roll-up from the same row set.
+      const childCount = new Map<string, number>();
+      const childDone = new Map<string, number>();
+      for (const r of rows) {
+        if (!r.parentId) continue;
+        childCount.set(r.parentId, (childCount.get(r.parentId) ?? 0) + 1);
+        if (r.status === "done")
+          childDone.set(r.parentId, (childDone.get(r.parentId) ?? 0) + 1);
+      }
       return text(
         rows
           .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
@@ -117,6 +126,9 @@ server.tool(
             tags: f.tags,
             roadmapQuarter: f.roadmapQuarter,
             path: f.index?.path,
+            parentSpecId: f.parentId ? (specById.get(f.parentId) ?? null) : null,
+            childCount: childCount.get(f.id) ?? 0,
+            childDoneCount: childDone.get(f.id) ?? 0,
             blocks: blocks.get(f.id) ?? [],
             blockedBy: blockedBy.get(f.id) ?? [],
           })),
@@ -139,6 +151,18 @@ server.tool(
       });
       if (!row)
         return errorResult(new Error(`No feature with spec id ${specId}`));
+      let parentSpecId: string | null = null;
+      if (row.parentId) {
+        const parent = await db().query.features.findFirst({
+          where: eq(features.id, row.parentId),
+          columns: { specId: true },
+        });
+        parentSpecId = parent?.specId ?? null;
+      }
+      const children = await db()
+        .select({ specId: features.specId, title: features.title, status: features.status })
+        .from(features)
+        .where(eq(features.parentId, row.id));
       return text({
         specId: row.specId,
         title: row.title,
@@ -147,6 +171,8 @@ server.tool(
         tags: row.tags,
         roadmapQuarter: row.roadmapQuarter,
         path: row.index?.path,
+        parentSpecId,
+        children,
         content: row.index?.content ?? "",
       });
     } catch (err) {

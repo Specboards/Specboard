@@ -31,6 +31,26 @@ export default async function BacklogPage() {
     (f) => f.status !== "archived",
   );
 
+  // Order rows as a hierarchy: each top-level feature followed by its children.
+  const bySpec = new Map(features.map((f) => [f.specId, f]));
+  const childrenOf = new Map<string, typeof features>();
+  const topLevel: typeof features = [];
+  for (const f of features) {
+    const parent = f.parentSpecId ? bySpec.get(f.parentSpecId) : undefined;
+    if (parent) {
+      const arr = childrenOf.get(parent.specId) ?? [];
+      arr.push(f);
+      childrenOf.set(parent.specId, arr);
+    } else {
+      topLevel.push(f);
+    }
+  }
+  const rows: { f: (typeof features)[number]; depth: number }[] = [];
+  for (const f of topLevel) {
+    rows.push({ f, depth: 0 });
+    for (const c of childrenOf.get(f.specId) ?? []) rows.push({ f: c, depth: 1 });
+  }
+
   return (
     <section className="space-y-4">
       <div>
@@ -54,19 +74,34 @@ export default async function BacklogPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {features.map((f) => (
+            {rows.map(({ f, depth }) => (
               <TableRow key={f.specId}>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {priorityLabel(f.priority)}
                 </TableCell>
                 <TableCell>
-                  <span className="flex items-center gap-2">
+                  <span
+                    className="flex items-center gap-2"
+                    style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}
+                  >
+                    {depth > 0 ? (
+                      <span className="text-muted-foreground">↳</span>
+                    ) : null}
                     <Link
                       href={`/feature/${f.specId}`}
                       className="font-medium hover:underline"
                     >
                       {f.title}
                     </Link>
+                    {f.childCount > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px]"
+                        title={`${f.childDoneCount} of ${f.childCount} children done`}
+                      >
+                        epic {f.childDoneCount}/{f.childCount}
+                      </Badge>
+                    )}
                     {f.blockedByCount > 0 && (
                       <Badge
                         variant="destructive"

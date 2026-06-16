@@ -8,6 +8,7 @@ import {
   patchFeature,
 } from "@/lib/features-service";
 import { getStore } from "@/lib/store";
+import { RelationError } from "@/lib/store/types";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ export async function PATCH(req: Request, { params }: Params) {
     if (err instanceof FeatureNotFoundError) {
       return Response.json({ error: err.message }, { status: 404 });
     }
-    if (err instanceof InvalidPatchError) {
+    if (err instanceof InvalidPatchError || err instanceof RelationError) {
       return Response.json({ error: err.message }, { status: 422 });
     }
     throw err;

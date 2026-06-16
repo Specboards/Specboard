@@ -33,6 +33,13 @@ interface LocalMetadata {
   customFields?: Record<string, CustomFieldValue>;
   /** Outgoing relations from this spec (see ./types FeatureRelation). */
   links?: LocalLink[];
+  /** Parent feature (epic) spec id, or null when top-level. */
+  parentSpecId?: string | null;
+}
+
+/** The terminal status used for hierarchy roll-up progress. */
+function isDone(status: string): boolean {
+  return status === "done";
 }
 
 type MetadataFile = Record<string, LocalMetadata>;
@@ -161,10 +168,33 @@ export class LocalFileStore implements FeatureStore {
         relations: [],
         blocksCount: 0,
         blockedByCount: 0,
+        parentSpecId: m.parentSpecId ?? null,
+        parentTitle: null,
+        children: [],
+        childCount: 0,
+        childDoneCount: 0,
       });
     }
     this.attachRelations(features, meta);
+    this.attachHierarchy(features);
     return features;
+  }
+
+  /** Resolve parent titles + direct children + roll-up counts. */
+  private attachHierarchy(features: FeatureDetail[]): void {
+    const bySpec = new Map(features.map((f) => [f.specId, f]));
+    for (const f of features) {
+      // Drop a parent pointer to a spec that no longer exists.
+      const parent = f.parentSpecId ? bySpec.get(f.parentSpecId) : undefined;
+      if (!parent) {
+        f.parentSpecId = null;
+        continue;
+      }
+      f.parentTitle = parent.title;
+      parent.children.push({ specId: f.specId, title: f.title, status: f.status });
+      parent.childCount += 1;
+      if (isDone(f.status)) parent.childDoneCount += 1;
+    }
   }
 
   /** Resolve stored edges into per-feature relations + blocked counts. */

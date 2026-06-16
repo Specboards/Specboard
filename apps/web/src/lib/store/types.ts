@@ -23,6 +23,19 @@ export interface FeatureRecord {
   blockedByCount: number;
   /** Number of features this one blocks. */
   blocksCount: number;
+  /** Parent feature (epic) spec id, or null when top-level. */
+  parentSpecId: string | null;
+  /** Direct children count (this feature is an epic when > 0). */
+  childCount: number;
+  /** Direct children that are done (for roll-up progress). */
+  childDoneCount: number;
+}
+
+/** A child feature summarized on its parent's detail view. */
+export interface ChildRef {
+  specId: string;
+  title: string;
+  status: string;
 }
 
 /**
@@ -68,12 +81,22 @@ export interface FeatureDetail extends FeatureRecord {
   sections: SpecSection[];
   /** Typed relations to other features, from this feature's perspective. */
   relations: FeatureRelation[];
+  /** Title of the parent feature, or null when top-level. */
+  parentTitle: string | null;
+  /** Direct children of this feature (epic contents). */
+  children: ChildRef[];
 }
 
 export type FeaturePatch = Partial<
   Pick<
     FeatureRecord,
-    "status" | "priority" | "tags" | "roadmapQuarter" | "assigneeId" | "customFields"
+    | "status"
+    | "priority"
+    | "tags"
+    | "roadmapQuarter"
+    | "assigneeId"
+    | "customFields"
+    | "parentSpecId"
   >
 >;
 

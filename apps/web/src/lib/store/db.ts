@@ -46,6 +46,11 @@ function directionFor(link: LinkRow, featureId: string): RelationDirection {
   }
 }
 
+/** The terminal status used for hierarchy roll-up progress. */
+function isDone(status: string): boolean {
+  return status === "done";
+}
+
 /** Normalize the jsonb custom-fields column into the UI's value map. */
 function toCustomFields(value: unknown): Record<string, CustomFieldValue> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -109,6 +114,16 @@ export class DbStore implements FeatureStore {
         blocks.set(l.fromFeatureId, (blocks.get(l.fromFeatureId) ?? 0) + 1);
         blockedBy.set(l.toFeatureId, (blockedBy.get(l.toFeatureId) ?? 0) + 1);
       }
+      // Hierarchy roll-up from the full workspace set (no extra query).
+      const specById = new Map(rows.map((r) => [r.id, r.specId]));
+      const childCount = new Map<string, number>();
+      const childDone = new Map<string, number>();
+      for (const r of rows) {
+        if (!r.parentId) continue;
+        childCount.set(r.parentId, (childCount.get(r.parentId) ?? 0) + 1);
+        if (isDone(r.status))
+          childDone.set(r.parentId, (childDone.get(r.parentId) ?? 0) + 1);
+      }
       return rows.map((row) => ({
         specId: row.specId,
         title: row.title,
@@ -121,6 +136,9 @@ export class DbStore implements FeatureStore {
         path: row.index?.path ?? "",
         blocksCount: blocks.get(row.id) ?? 0,
         blockedByCount: blockedBy.get(row.id) ?? 0,
+        parentSpecId: row.parentId ? (specById.get(row.parentId) ?? null) : null,
+        childCount: childCount.get(row.id) ?? 0,
+        childDoneCount: childDone.get(row.id) ?? 0,
       }));
     });
   }
@@ -197,6 +215,26 @@ export class DbStore implements FeatureStore {
         })
         .filter((r): r is FeatureRelation => r !== null);
 
+      // Parent (one lookup) + direct children for the hierarchy view.
+      let parentSpecId: string | null = null;
+      let parentTitle: string | null = null;
+      if (row.parentId) {
+        const parent = await tx.query.features.findFirst({
+          where: eq(features.id, row.parentId),
+          columns: { specId: true, title: true },
+        });
+        parentSpecId = parent?.specId ?? null;
+        parentTitle = parent?.title ?? null;
+      }
+      const childRows = await tx
+        .select({
+          specId: features.specId,
+          title: features.title,
+          status: features.status,
+        })
+        .from(features)
+        .where(eq(features.parentId, row.id));
+
       return {
         specId: row.specId,
         title: row.title,
@@ -214,6 +252,11 @@ export class DbStore implements FeatureStore {
         blocksCount: relations.filter((r) => r.direction === "blocks").length,
         blockedByCount: relations.filter((r) => r.direction === "blocked_by")
           .length,
+        parentSpecId,
+        parentTitle,
+        children: childRows,
+        childCount: childRows.length,
+        childDoneCount: childRows.filter((c) => isDone(c.status)).length,
       };
     });
   }
@@ -223,10 +266,31 @@ export class DbStore implements FeatureStore {
     patch: FeaturePatch,
     scope?: WorkspaceScope,
   ): Promise<void> {
+    // `parentSpecId` isn't a column — translate it to the parent row's `parentId`.
+    const { parentSpecId, ...rest } = patch;
     await this.scoped(scope, async (tx) => {
+      const set: Record<string, unknown> = { ...rest, updatedAt: new Date() };
+      if (parentSpecId !== undefined) {
+        if (parentSpecId === null) {
+          set.parentId = null;
+        } else {
+          const parent = await tx
+            .select({ id: features.id })
+            .from(features)
+            .where(
+              and(
+                eq(features.specId, parentSpecId),
+                eq(features.workspaceId, scope!.workspaceId),
+              ),
+            );
+          if (!parent[0])
+            throw new RelationError(`Unknown parent feature: ${parentSpecId}`);
+          set.parentId = parent[0].id;
+        }
+      }
       await tx
         .update(features)
-        .set({ ...patch, updatedAt: new Date() })
+        .set(set)
         .where(
           and(
             eq(features.specId, specId),

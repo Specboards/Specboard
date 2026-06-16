@@ -78,6 +78,24 @@ export default async function BoardPage() {
                             Blocked
                           </Badge>
                         )}
+                        {f.childCount > 0 && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px]"
+                            title={`${f.childDoneCount} of ${f.childCount} children done`}
+                          >
+                            epic {f.childDoneCount}/{f.childCount}
+                          </Badge>
+                        )}
+                        {f.parentSpecId && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px]"
+                            title="Has a parent epic"
+                          >
+                            ↳ sub
+                          </Badge>
+                        )}
                         {f.tags.map((tag) => (
                           <Badge
                             key={tag}

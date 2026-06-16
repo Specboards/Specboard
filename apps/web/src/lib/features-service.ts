@@ -68,10 +68,16 @@ export function parseFeaturePatch(body: unknown): FeaturePatch {
   if ("customFields" in raw) {
     patch.customFields = parseCustomFields(raw.customFields);
   }
+  if ("parentSpecId" in raw) {
+    if (raw.parentSpecId !== null && !isUuid(raw.parentSpecId)) {
+      throw new InvalidPatchError("parentSpecId must be a UUID or null.");
+    }
+    patch.parentSpecId = raw.parentSpecId as string | null;
+  }
 
   if (Object.keys(patch).length === 0) {
     throw new InvalidPatchError(
-      "Patch must set at least one of: status, priority, roadmapQuarter, tags, assigneeId, customFields.",
+      "Patch must set at least one of: status, priority, roadmapQuarter, tags, assigneeId, customFields, parentSpecId.",
     );
   }
   return patch;
@@ -123,9 +129,45 @@ export async function patchFeature(
     );
   }
 
+  if (patch.parentSpecId) {
+    await assertNoParentCycle(specId, patch.parentSpecId, scope);
+  }
+
   await store.updateFeature(specId, patch, scope);
   const updated = await store.getFeature(specId, scope);
   return updated ?? feature;
+}
+
+/**
+ * Reject parenting `specId` under `parentSpecId` if it would form a cycle
+ * (parent is the feature itself or one of its descendants). Walks up the
+ * parent chain via the store, so it's store-agnostic.
+ */
+async function assertNoParentCycle(
+  specId: string,
+  parentSpecId: string,
+  scope?: WorkspaceScope,
+): Promise<void> {
+  if (parentSpecId === specId) {
+    throw new InvalidPatchError("A feature cannot be its own parent.");
+  }
+  const store = await getStore();
+  const seen = new Set<string>();
+  let cur: string | null = parentSpecId;
+  while (cur) {
+    if (cur === specId) {
+      throw new InvalidPatchError(
+        "That parent would create a circular hierarchy.",
+      );
+    }
+    if (seen.has(cur)) break; // pre-existing cycle guard; don't loop forever
+    seen.add(cur);
+    const node = await store.getFeature(cur, scope);
+    if (!node) {
+      throw new InvalidPatchError(`Unknown parent feature: ${parentSpecId}`);
+    }
+    cur = node.parentSpecId;
+  }
 }
 
 /** Parse and validate an untrusted relation-create body. */

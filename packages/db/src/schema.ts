@@ -10,6 +10,7 @@ import {
   timestamp,
   unique,
   uuid,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -101,6 +102,14 @@ export const features = pgTable(
     title: text("title").notNull(),
     status: text("status").notNull().default("backlog"),
     assigneeId: uuid("assignee_id"),
+    /**
+     * Optional parent feature (an "epic" is just a feature with children).
+     * `set null` on delete so removing a parent orphans children rather than
+     * cascade-deleting their metadata.
+     */
+    parentId: uuid("parent_id").references((): AnyPgColumn => features.id, {
+      onDelete: "set null",
+    }),
     priority: integer("priority"),
     /** Fractional/lexical rank for manual backlog ordering. */
     rank: text("rank"),
@@ -114,6 +123,7 @@ export const features = pgTable(
   (t) => [
     unique("features_repo_spec_uq").on(t.repoId, t.specId),
     index("features_workspace_status_idx").on(t.workspaceId, t.status),
+    index("features_parent_idx").on(t.parentId),
   ],
 );
 

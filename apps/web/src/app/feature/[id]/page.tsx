@@ -75,9 +75,50 @@ export default async function FeaturePage({
           feature={feature}
           members={members}
           customFields={customFields}
+          candidates={candidates}
           canEdit={!access || canWrite(access.role)}
         />
         <Separator />
+        {feature.parentSpecId || feature.children.length > 0 ? (
+          <>
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted-foreground">
+                Hierarchy
+              </span>
+              {feature.parentSpecId ? (
+                <p className="text-sm">
+                  <span className="text-muted-foreground">Parent: </span>
+                  <Link
+                    href={`/feature/${feature.parentSpecId}`}
+                    className="hover:underline"
+                  >
+                    {feature.parentTitle ?? feature.parentSpecId}
+                  </Link>
+                </p>
+              ) : null}
+              {feature.children.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    Children · {feature.childDoneCount}/{feature.childCount} done
+                  </p>
+                  {feature.children.map((c) => (
+                    <div key={c.specId} className="flex items-center gap-2 text-sm">
+                      <StatusDot status={c.status} />
+                      <Link
+                        href={`/feature/${c.specId}`}
+                        className="flex-1 truncate hover:underline"
+                        title={c.title}
+                      >
+                        {c.title}
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <Separator />
+          </>
+        ) : null}
         <FeatureRelations
           specId={feature.specId}
           relations={feature.relations}
