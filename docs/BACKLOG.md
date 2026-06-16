@@ -18,6 +18,13 @@ GitHub sync · MCP server for agents.
 
 The backlog below is the **gap** between that and what the four reference tools treat as baseline.
 
+## Progress
+
+- ✅ **#16 Dependencies & relations** — shipped (typed `feature_links`: blocks /
+  blocked-by / relates-to / duplicates; feature-detail editor; "Blocked" badge on
+  board & backlog; `get_relations` + `blocks`/`blockedBy` in MCP). Migration
+  `0004` applied to **test** and **prod**. Rows below are marked ✅ when done.
+
 ## Prioritization tiers
 
 - **Tier 1 — Core PM table stakes.** Most essential to the prioritize/define-specs use case; the
@@ -32,7 +39,7 @@ The backlog below is the **gap** between that and what the four reference tools 
 | # | Feature | Why it's core | Seen in |
 |---|---------|---------------|---------|
 | [#15](https://github.com/StudioPalouse/SpecBoard/issues/15) | **Spec hierarchy** — group features under epics/initiatives with roll-up progress | Flat lists don't scale; organizing specs is foundational | Linear sub-issues, Jira epics, Aha! master features, PB components |
-| [#16](https://github.com/StudioPalouse/SpecBoard/issues/16) | **Dependencies & relations** (blocks / blocked-by / relates-to) | Encodes the *sequence* agents must follow — the most use-case-critical gap | All four |
+| [#16](https://github.com/StudioPalouse/SpecBoard/issues/16) ✅ | **Dependencies & relations** (blocks / blocked-by / relates-to) | Encodes the *sequence* agents must follow — the most use-case-critical gap | All four |
 | [#17](https://github.com/StudioPalouse/SpecBoard/issues/17) | **Filtering & saved custom views** | Navigating a growing backlog is impossible without it | All four (Jira JQL, Linear views) |
 | [#18](https://github.com/StudioPalouse/SpecBoard/issues/18) | **Customizable workflow statuses** per workspace | Fixed 5 statuses don't fit real definition/review processes | All four |
 | [#19](https://github.com/StudioPalouse/SpecBoard/issues/19) | **@mentions + notification inbox** | PM/UX/Eng collaboration breaks down without it | All four |
