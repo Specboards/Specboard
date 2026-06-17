@@ -43,19 +43,24 @@ The backlog below is the **gap** between that and what the four reference tools 
   store methods on db + local, `/api/v1/views` GET/POST/DELETE, SavedViews chip
   bar; local mode persists to gitignored `.specboard/local-views.json`).
   Migration `0007` applied to **test** and **prod**.
+- ✅ **#18 Customizable workflow statuses** — shipped (config-driven via
+  `.specboard/config.yml` `statuses`/`transitions`, which RepoConfig already
+  carried; `resolveWorkflow` in core; board columns, backlog status filter,
+  inline status selects, and transition validation on both the web service and
+  MCP `update_status` all honor the workspace workflow; custom statuses get a
+  stable dot color). **No DB migration** — the default workflow applies when a
+  repo sets nothing, so existing data is unaffected.
 - Rows below are marked ✅ when done.
 
 ## Next steps
 
-**Recommended implementation order** (next up first). #15, #16, #17, and #20 are
-done, so the remaining Tier 1 work:
+**Recommended implementation order** (next up first). #15, #16, #17, #18, and #20
+are done, so the remaining Tier 1 work:
 
-1. **#18 Customizable workflow statuses** — unblocks realistic processes; touches
-   schema, board columns, MCP `update_status` validation, and needs a data migration
-   mapping the current 5 statuses.
-2. **#19 @mentions + notification inbox** — last Tier 1 item; collaboration glue.
-3. **#24 Bulk operations** — leans on #15 (bulk reparent) and #17 (select-all-in-filter).
-4. **#21 Prioritization scoring** — best after #20 (uses estimate as the effort term).
+1. **#19 @mentions + notification inbox** — last Tier 1 item; collaboration glue.
+   New `notifications` table + mention parsing on comments + an inbox UI.
+2. **#24 Bulk operations** — leans on #15 (bulk reparent) and #17 (select-all-in-filter).
+3. **#21 Prioritization scoring** — best after #20 (uses estimate as the effort term).
 
 Then proceed down Tiers 2–3 in the tables below. Re-confirm priority with the team
 before starting each item.
@@ -68,6 +73,9 @@ before starting each item.
 - **#17** — none outstanding; migration `0007` applied to test + prod. Possible
   follow-ups (not blocking): multi-select filters; extend the filter bar to the
   board; shared (team) views in addition to personal.
+- **#18** — none outstanding. Possible follow-ups (not blocking): a Settings UI
+  to edit statuses without hand-editing `config.yml`; make the roll-up "done"
+  status configurable (it currently keys on the literal `done`).
 
 **Build pattern to follow** (used for #15/#16/#20; keeps changes green and reviewable):
 `packages/db` schema + generated migration (add RLS for any new tenant table) →
@@ -92,7 +100,7 @@ not auto-applied on deploy, so per cluster (test `z7y24od8vemrgqd1`, prod
 - The #15/#16/#20 work now lives on the dedicated `feat/pm-table-stakes` branch
   (the old `feat/email-verification-github-sync` branch is redundant — its auth/
   GitHub-sync namesake is already on `main` — and can be deleted on the remote).
-  **Close issues #15, #16, #17, and #20 on merge.**
+  **Close issues #15, #16, #17, #18, and #20 on merge.**
 - `pnpm lint` is broken environment-wide (`eslint` not installed) — run `pnpm install`
   to restore it; build/typecheck/test are the working gates today.
 
@@ -112,7 +120,7 @@ not auto-applied on deploy, so per cluster (test `z7y24od8vemrgqd1`, prod
 | [#15](https://github.com/StudioPalouse/SpecBoard/issues/15) ✅ | **Spec hierarchy** — group features under epics/initiatives with roll-up progress | Flat lists don't scale; organizing specs is foundational | Linear sub-issues, Jira epics, Aha! master features, PB components |
 | [#16](https://github.com/StudioPalouse/SpecBoard/issues/16) ✅ | **Dependencies & relations** (blocks / blocked-by / relates-to) | Encodes the *sequence* agents must follow — the most use-case-critical gap | All four |
 | [#17](https://github.com/StudioPalouse/SpecBoard/issues/17) ✅ | **Filtering & saved custom views** | Navigating a growing backlog is impossible without it | All four (Jira JQL, Linear views) |
-| [#18](https://github.com/StudioPalouse/SpecBoard/issues/18) | **Customizable workflow statuses** per workspace | Fixed 5 statuses don't fit real definition/review processes | All four |
+| [#18](https://github.com/StudioPalouse/SpecBoard/issues/18) ✅ | **Customizable workflow statuses** per workspace | Fixed 5 statuses don't fit real definition/review processes | All four |
 | [#19](https://github.com/StudioPalouse/SpecBoard/issues/19) | **@mentions + notification inbox** | PM/UX/Eng collaboration breaks down without it | All four |
 | [#20](https://github.com/StudioPalouse/SpecBoard/issues/20) ✅ | **First-class estimate/effort field** with roll-up | Underpins capacity reasoning and prioritization | Linear/Jira points, Aha!/PB effort |
 
