@@ -171,6 +171,27 @@ function renderField(
           {f.roadmapQuarter}
         </Badge>
       ) : null;
+    case "github": {
+      const g = f.githubSummary;
+      if (g.total === 0) return null;
+      if (g.mergedPrs > 0)
+        return (
+          <Badge key="github" variant="default" className="text-[10px]" title="Has a merged PR">
+            PR merged
+          </Badge>
+        );
+      if (g.openPrs > 0)
+        return (
+          <Badge key="github" variant="secondary" className="text-[10px]" title="Has an open PR">
+            PR open
+          </Badge>
+        );
+      return (
+        <Badge key="github" variant="outline" className="text-[10px]" title="Linked GitHub artifacts">
+          🔗 {g.total}
+        </Badge>
+      );
+    }
     case "tags":
       return f.tags.length > 0
         ? f.tags.map((tag) => (

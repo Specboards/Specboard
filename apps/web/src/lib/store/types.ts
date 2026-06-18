@@ -38,6 +38,8 @@ export interface FeatureRecord {
   childCount: number;
   /** Direct children that are done (for roll-up progress). */
   childDoneCount: number;
+  /** GitHub link counts rolled up over this feature's subtree (board badge). */
+  githubSummary: GithubLinkAggregate;
 }
 
 /** A child feature summarized on its parent's detail view. */
@@ -68,6 +70,55 @@ export const RELATION_DIRECTIONS = [
 ] as const;
 export type CreatableRelationDirection = (typeof RELATION_DIRECTIONS)[number];
 
+export type GithubLinkKind = "pull_request" | "issue" | "branch";
+
+/** A GitHub link as the UI sees it, resolved to a feature's perspective. */
+export interface GithubLink {
+  /** Opaque link id used to delete it. */
+  id: string;
+  kind: GithubLinkKind;
+  /** PR/issue number, or null for a branch. */
+  number: number | null;
+  /** Branch name, or null for a PR/issue. */
+  branch: string | null;
+  url: string;
+  title: string | null;
+  /** Cached state: open / closed / merged; null for a branch. */
+  state: string | null;
+  /** The item the link is stored on (the spec it implements). */
+  sourceSpecId: string;
+  sourceTitle: string;
+  /** True when rolled up from a descendant (vs a direct link on this item). */
+  inherited: boolean;
+}
+
+/** Rolled-up GitHub link counts over a feature's subtree (for board badges). */
+export interface GithubLinkAggregate {
+  openPrs: number;
+  mergedPrs: number;
+  issues: number;
+  branches: number;
+  total: number;
+}
+
+/** What the user supplies to create a link; metadata is resolved server-side. */
+export interface GithubLinkInput {
+  kind: GithubLinkKind;
+  number?: number | null;
+  branch?: string | null;
+}
+
+/** A link with its GitHub metadata already resolved, ready to persist. */
+export interface ResolvedGithubLink {
+  repoId: string;
+  kind: GithubLinkKind;
+  number: number | null;
+  branch: string | null;
+  url: string;
+  title: string | null;
+  state: string | null;
+}
+
 export interface FeatureRelation {
   /** Opaque link id used to delete the relation (uuid in db mode). */
   id: string;
@@ -94,6 +145,8 @@ export interface FeatureDetail extends FeatureRecord {
   parentTitle: string | null;
   /** Direct children of this feature (epic contents). */
   children: ChildRef[];
+  /** GitHub links: direct on this item + rolled up from descendants. */
+  githubLinks: GithubLink[];
 }
 
 export type FeaturePatch = Partial<
@@ -175,6 +228,18 @@ export interface FeatureStore {
   ): Promise<void>;
   /** Remove a relation by its opaque id (as returned in FeatureRelation.id). */
   removeRelation(
+    specId: string,
+    linkId: string,
+    scope?: WorkspaceScope,
+  ): Promise<void>;
+  /** Persist a resolved GitHub link on the feature `specId`. */
+  addGithubLink(
+    specId: string,
+    link: ResolvedGithubLink,
+    scope?: WorkspaceScope,
+  ): Promise<void>;
+  /** Remove a GitHub link by its opaque id. */
+  removeGithubLink(
     specId: string,
     linkId: string,
     scope?: WorkspaceScope,

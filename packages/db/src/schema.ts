@@ -250,6 +250,55 @@ export const featureLinks = pgTable(
   ],
 );
 
+export const githubLinkKind = pgEnum("github_link_kind", [
+  "pull_request",
+  "issue",
+  "branch",
+]);
+
+/**
+ * A link from a feature/work-item to a GitHub artifact (PR, issue, or branch).
+ * Stored on the item it implements (the spec/leaf); the feature/epic above
+ * rolls these up for display by walking `features.parent_id`. `featureId`
+ * references any level, so the model is hierarchy-agnostic. `title`/`state` are
+ * cached from GitHub on create and refreshed by the webhook.
+ */
+export const featureGithubLinks = pgTable(
+  "feature_github_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    featureId: uuid("feature_id")
+      .notNull()
+      .references(() => features.id, { onDelete: "cascade" }),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => repositories.id, { onDelete: "cascade" }),
+    kind: githubLinkKind("kind").notNull(),
+    /** PR/issue number; null for a branch link. */
+    number: integer("number"),
+    /** Branch name; null for a PR/issue link. */
+    branch: text("branch"),
+    url: text("url").notNull(),
+    /** Cached title from GitHub (refreshed by the webhook). */
+    title: text("title"),
+    /** Cached state: open / closed / merged; null for a branch. */
+    state: text("state"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("feature_github_links_uq").on(t.featureId, t.url),
+    index("feature_github_links_feature_idx").on(t.featureId),
+    index("feature_github_links_repo_kind_number_idx").on(
+      t.repoId,
+      t.kind,
+      t.number,
+    ),
+  ],
+);
+
 /**
  * Auth tables (Better Auth). Postgres mints UUID ids (Better Auth runs with
  * `generateId: false`) so they line up with the existing uuid user references

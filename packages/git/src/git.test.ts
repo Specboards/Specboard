@@ -11,6 +11,8 @@ import {
 import {
   affectedSpecs,
   matchesAnyGlob,
+  parseIssuesEvent,
+  parsePullRequestEvent,
   parsePushEvent,
   verifyWebhookSignature,
 } from "./webhook.js";
@@ -93,6 +95,49 @@ describe("parsePushEvent", () => {
     expect(parsePushEvent({ ref: "refs/tags/v1", repository: { name: "r", owner: { login: "o" } } })).toBeNull();
     expect(parsePushEvent({ ref: "refs/heads/main", repository: { owner: { login: "o" } } })).toBeNull();
     expect(parsePushEvent({})).toBeNull();
+  });
+});
+
+describe("parsePullRequestEvent", () => {
+  const repo = { name: "repo", owner: { login: "acme" } };
+
+  it("normalizes an open PR", () => {
+    expect(
+      parsePullRequestEvent({
+        repository: repo,
+        pull_request: { number: 7, state: "open", merged: false, title: "Add SSO" },
+      }),
+    ).toEqual({ owner: "acme", name: "repo", kind: "pull_request", number: 7, state: "open", title: "Add SSO" });
+  });
+
+  it("surfaces a merged PR as state 'merged' (not 'closed')", () => {
+    const event = parsePullRequestEvent({
+      repository: repo,
+      pull_request: { number: 7, state: "closed", merged: true, title: "Add SSO" },
+    });
+    expect(event?.state).toBe("merged");
+  });
+
+  it("returns null when fields are missing", () => {
+    expect(parsePullRequestEvent({ repository: repo })).toBeNull();
+    expect(parsePullRequestEvent({ pull_request: { number: 1, state: "open" } })).toBeNull();
+    expect(parsePullRequestEvent({})).toBeNull();
+  });
+});
+
+describe("parseIssuesEvent", () => {
+  it("normalizes an issue", () => {
+    expect(
+      parseIssuesEvent({
+        repository: { name: "repo", owner: { login: "acme" } },
+        issue: { number: 12, state: "closed", title: "Bug" },
+      }),
+    ).toEqual({ owner: "acme", name: "repo", kind: "issue", number: 12, state: "closed", title: "Bug" });
+  });
+
+  it("returns null when fields are missing", () => {
+    expect(parseIssuesEvent({ issue: { number: 1, state: "open" } })).toBeNull();
+    expect(parseIssuesEvent({})).toBeNull();
   });
 });
 

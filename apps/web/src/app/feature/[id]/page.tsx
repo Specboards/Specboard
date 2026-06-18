@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { FeatureGithubLinks } from "@/components/feature-github-links";
 import { FeatureMetaForm } from "@/components/feature-meta-form";
 import { FeatureRelations } from "@/components/feature-relations";
 import { StatusDot } from "@/components/status-dot";
@@ -137,6 +138,12 @@ export default async function FeaturePage({
           specId={feature.specId}
           relations={feature.relations}
           candidates={candidates}
+          canEdit={!access || canWrite(access.role)}
+        />
+        <Separator />
+        <FeatureGithubLinks
+          specId={feature.specId}
+          links={feature.githubLinks}
           canEdit={!access || canWrite(access.role)}
         />
         <Separator />

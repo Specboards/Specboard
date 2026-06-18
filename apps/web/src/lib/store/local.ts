@@ -13,12 +13,19 @@ import {
   type FeatureRecord,
   type FeatureRelation,
   type FeatureStore,
+  type GithubLinkAggregate,
+  type ResolvedGithubLink,
   type RelationDirection,
   type RelationInput,
   type SavedView,
   type SavedViewInput,
   type WorkspaceScope,
 } from "./types";
+
+/** Zero GitHub-link aggregate; file mode has no GitHub connection. */
+function emptyGithubSummary(): GithubLinkAggregate {
+  return { openPrs: 0, mergedPrs: 0, issues: 0, branches: 0, total: 0 };
+}
 
 type LocalLinkType = "blocks" | "relates_to" | "duplicates";
 
@@ -190,6 +197,8 @@ export class LocalFileStore implements FeatureStore {
         children: [],
         childCount: 0,
         childDoneCount: 0,
+        githubSummary: emptyGithubSummary(),
+        githubLinks: [],
       });
     }
     this.attachRelations(features, meta);
@@ -335,6 +344,26 @@ export class LocalFileStore implements FeatureStore {
       links: links.filter((l) => !(l.to === toSpec && l.type === type)),
     };
     await this.writeMetadata(meta);
+  }
+
+  // GitHub linking requires a connected GitHub App, which file mode doesn't
+  // have. Reads return nothing (see loadAll); writes are rejected clearly.
+  async addGithubLink(
+    _specId: string,
+    _link: ResolvedGithubLink,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
+    throw new RelationError(
+      "GitHub linking requires a connected repository (not available in local file mode).",
+    );
+  }
+
+  async removeGithubLink(
+    _specId: string,
+    _linkId: string,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
+    // Nothing to remove in file mode.
   }
 
   // Saved views persist to `.specboard/local-views.json`. There's a single

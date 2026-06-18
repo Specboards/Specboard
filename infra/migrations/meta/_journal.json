@@ -64,6 +64,13 @@
       "when": 1781801644264,
       "tag": "0008_exotic_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781805344218,
+      "tag": "0009_dry_risque",
+      "breakpoints": true
     }
   ]
 }

@@ -91,3 +91,66 @@ export function parsePushEvent(payload: unknown): PushEvent | null {
     changedPaths: [...changed],
   };
 }
+
+/** A normalized pull_request / issues webhook event for link state updates. */
+export interface GithubEntityEvent {
+  owner: string;
+  name: string;
+  kind: "pull_request" | "issue";
+  number: number;
+  /** open / closed / merged. */
+  state: string;
+  title: string | null;
+}
+
+/** Shape of the slice of a pull_request / issues webhook payload we read. */
+interface GitHubEntityPayload {
+  repository?: { name?: string; owner?: { login?: string; name?: string } };
+  pull_request?: { number?: number; state?: string; merged?: boolean; title?: string };
+  issue?: { number?: number; state?: string; title?: string };
+}
+
+function repoCoords(body: GitHubEntityPayload): { owner: string; name: string } | null {
+  const owner = body.repository?.owner?.login ?? body.repository?.owner?.name;
+  const name = body.repository?.name;
+  if (!owner || !name) return null;
+  return { owner, name };
+}
+
+/**
+ * Normalize a `pull_request` webhook payload into a {@link GithubEntityEvent}.
+ * A merged PR reports state "closed", so surface "merged" explicitly. Returns
+ * `null` when the payload is missing the fields we need.
+ */
+export function parsePullRequestEvent(payload: unknown): GithubEntityEvent | null {
+  const body = payload as GitHubEntityPayload;
+  const coords = repoCoords(body);
+  const pr = body.pull_request;
+  if (!coords || !pr || typeof pr.number !== "number" || typeof pr.state !== "string") {
+    return null;
+  }
+  return {
+    ...coords,
+    kind: "pull_request",
+    number: pr.number,
+    state: pr.merged ? "merged" : pr.state,
+    title: pr.title ?? null,
+  };
+}
+
+/** Normalize an `issues` webhook payload into a {@link GithubEntityEvent}. */
+export function parseIssuesEvent(payload: unknown): GithubEntityEvent | null {
+  const body = payload as GitHubEntityPayload;
+  const coords = repoCoords(body);
+  const issue = body.issue;
+  if (!coords || !issue || typeof issue.number !== "number" || typeof issue.state !== "string") {
+    return null;
+  }
+  return {
+    ...coords,
+    kind: "issue",
+    number: issue.number,
+    state: issue.state,
+    title: issue.title ?? null,
+  };
+}

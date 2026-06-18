@@ -1,10 +1,43 @@
-import { affectedSpecs, parsePushEvent, verifyWebhookSignature } from "@specboard/git";
+import {
+  affectedSpecs,
+  parseIssuesEvent,
+  parsePullRequestEvent,
+  parsePushEvent,
+  verifyWebhookSignature,
+  type GithubEntityEvent,
+} from "@specboard/git";
+import { and, eq, featureGithubLinks, type Database } from "@specboard/db";
 
 import { getDb } from "@/lib/db";
 import { getWebhookSecret } from "@/lib/github-app";
 import { repoGlobs, resolveRepository, syncRepository } from "@/lib/github-sync";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Refresh the cached state/title of any links to the PR/issue this event
+ * describes. Owner-side write (no RLS) keyed by repo + kind + number. No-op
+ * when the repo isn't connected or nothing links to the entity.
+ */
+async function updateLinksFromEntityEvent(
+  db: Database,
+  evt: GithubEntityEvent,
+): Promise<number> {
+  const repo = await resolveRepository(db, evt.owner, evt.name);
+  if (!repo) return 0;
+  const updated = await db
+    .update(featureGithubLinks)
+    .set({ state: evt.state, title: evt.title })
+    .where(
+      and(
+        eq(featureGithubLinks.repoId, repo.id),
+        eq(featureGithubLinks.kind, evt.kind),
+        eq(featureGithubLinks.number, evt.number),
+      ),
+    )
+    .returning({ id: featureGithubLinks.id });
+  return updated.length;
+}
 
 /**
  * GitHub App webhook sink. Verifies the HMAC signature against
@@ -35,13 +68,31 @@ export async function POST(req: Request) {
 
   const event = req.headers.get("x-github-event");
   if (event === "ping") return Response.json({ ok: true });
-  if (event !== "push") return Response.json({ ignored: event ?? "unknown" }, { status: 202 });
+  if (event !== "push" && event !== "pull_request" && event !== "issues") {
+    return Response.json({ ignored: event ?? "unknown" }, { status: 202 });
+  }
 
   let payload: unknown;
   try {
     payload = JSON.parse(raw);
   } catch {
     return Response.json({ error: "Malformed JSON body." }, { status: 400 });
+  }
+
+  // pull_request / issues: refresh cached link state (open → merged/closed).
+  if (event === "pull_request" || event === "issues") {
+    const entity =
+      event === "pull_request"
+        ? parsePullRequestEvent(payload)
+        : parseIssuesEvent(payload);
+    if (!entity) return Response.json({ ignored: `malformed ${event}` }, { status: 202 });
+    try {
+      const updated = await updateLinksFromEntityEvent(db, entity);
+      return Response.json({ ok: true, updated });
+    } catch (err) {
+      console.error(`[webhooks/github] ${event} update failed:`, err);
+      return Response.json({ error: "Link update failed." }, { status: 500 });
+    }
   }
 
   const push = parsePushEvent(payload);

@@ -6,6 +6,8 @@ import type {
   FeatureDetail,
   FeaturePatch,
   FeatureRelation,
+  GithubLink,
+  GithubLinkInput,
   SavedView,
   SavedViewInput,
 } from "@/lib/store/types";
@@ -109,6 +111,48 @@ export async function saveBoardPreferences(
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `Save preferences failed with ${res.status}`);
   }
+}
+
+/** Link a GitHub artifact to a feature; returns its refreshed links. */
+export async function addGithubLink(
+  specId: string,
+  input: GithubLinkInput,
+): Promise<GithubLink[]> {
+  const res = await fetch(
+    `/api/v1/features/${encodeURIComponent(specId)}/github-links`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { githubLinks?: GithubLink[]; error?: string }
+    | null;
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Add GitHub link failed with ${res.status}`);
+  }
+  return body?.githubLinks ?? [];
+}
+
+/** Remove a GitHub link by id; returns the feature's refreshed links. */
+export async function removeGithubLink(
+  specId: string,
+  linkId: string,
+): Promise<GithubLink[]> {
+  const res = await fetch(
+    `/api/v1/features/${encodeURIComponent(specId)}/github-links/${encodeURIComponent(linkId)}`,
+    { method: "DELETE" },
+  );
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { githubLinks?: GithubLink[]; error?: string }
+    | null;
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Remove GitHub link failed with ${res.status}`);
+  }
+  return body?.githubLinks ?? [];
 }
 
 /** Save the current backlog filters as a named view. */

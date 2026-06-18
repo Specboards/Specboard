@@ -5,6 +5,7 @@ import {
   createDb,
   desc,
   eq,
+  featureGithubLinks,
   featureLinks,
   features,
   inArray,
@@ -25,8 +26,12 @@ import {
   type FeatureRecord,
   type FeatureRelation,
   type FeatureStore,
+  type GithubLink,
+  type GithubLinkAggregate,
+  type GithubLinkKind,
   type RelationDirection,
   type RelationInput,
+  type ResolvedGithubLink,
   type SavedView,
   type SavedViewFilters,
   type SavedViewInput,
@@ -74,6 +79,23 @@ function toCustomFields(value: unknown): Record<string, CustomFieldValue> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, CustomFieldValue>)
     : {};
+}
+
+function emptyAgg(): GithubLinkAggregate {
+  return { openPrs: 0, mergedPrs: 0, issues: 0, branches: 0, total: 0 };
+}
+
+/** Tally one link into an aggregate (closed-not-merged PRs count in total only). */
+function tallyLink(
+  agg: GithubLinkAggregate,
+  kind: GithubLinkKind,
+  state: string | null,
+): void {
+  agg.total += 1;
+  if (kind === "issue") agg.issues += 1;
+  else if (kind === "branch") agg.branches += 1;
+  else if (state === "merged") agg.mergedPrs += 1;
+  else if (state === "open") agg.openPrs += 1;
 }
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -149,6 +171,30 @@ export class DbStore implements FeatureStore {
           estimate: r.estimate,
         })),
       );
+      // GitHub link aggregate, rolled up over each feature's subtree. Tally each
+      // link onto its own feature, then propagate up the parent chain.
+      const ghLinks = await tx
+        .select({
+          featureId: featureGithubLinks.featureId,
+          kind: featureGithubLinks.kind,
+          state: featureGithubLinks.state,
+        })
+        .from(featureGithubLinks)
+        .where(eq(featureGithubLinks.workspaceId, scope!.workspaceId));
+      const parentOf = new Map(rows.map((r) => [r.id, r.parentId]));
+      const ghAgg = new Map<string, GithubLinkAggregate>();
+      for (const r of rows) ghAgg.set(r.id, emptyAgg());
+      for (const link of ghLinks) {
+        // Add this link to its own feature and every ancestor (subtree roll-up).
+        const seen = new Set<string>();
+        let cur: string | null = link.featureId;
+        while (cur && !seen.has(cur)) {
+          seen.add(cur);
+          const agg = ghAgg.get(cur);
+          if (agg) tallyLink(agg, link.kind, link.state);
+          cur = parentOf.get(cur) ?? null;
+        }
+      }
       return rows.map((row) => ({
         specId: row.specId,
         title: row.title,
@@ -167,6 +213,7 @@ export class DbStore implements FeatureStore {
         parentSpecId: row.parentId ? (specById.get(row.parentId) ?? null) : null,
         childCount: childCount.get(row.id) ?? 0,
         childDoneCount: childDone.get(row.id) ?? 0,
+        githubSummary: ghAgg.get(row.id) ?? emptyAgg(),
       }));
     });
   }
@@ -281,6 +328,64 @@ export class DbStore implements FeatureStore {
         })),
       );
 
+      // GitHub links: this item's own + all descendants' (rolled up). Walk the
+      // parent map down from `row.id` to collect the subtree feature ids.
+      const childrenOf = new Map<string, string[]>();
+      for (const r of estimateRows) {
+        if (!r.parentId) continue;
+        (childrenOf.get(r.parentId) ?? childrenOf.set(r.parentId, []).get(r.parentId)!).push(r.id);
+      }
+      const subtree = new Set<string>([row.id]);
+      const queue = [row.id];
+      while (queue.length) {
+        const cur = queue.shift()!;
+        for (const child of childrenOf.get(cur) ?? []) {
+          if (!subtree.has(child)) {
+            subtree.add(child);
+            queue.push(child);
+          }
+        }
+      }
+      const ghRows = await tx
+        .select({
+          id: featureGithubLinks.id,
+          featureId: featureGithubLinks.featureId,
+          kind: featureGithubLinks.kind,
+          number: featureGithubLinks.number,
+          branch: featureGithubLinks.branch,
+          url: featureGithubLinks.url,
+          title: featureGithubLinks.title,
+          state: featureGithubLinks.state,
+        })
+        .from(featureGithubLinks)
+        .where(
+          and(
+            eq(featureGithubLinks.workspaceId, scope!.workspaceId),
+            inArray(featureGithubLinks.featureId, [...subtree]),
+          ),
+        );
+      const sourceInfo = ghRows.length
+        ? await tx
+            .select({ id: features.id, specId: features.specId, title: features.title })
+            .from(features)
+            .where(inArray(features.id, [...new Set(ghRows.map((l) => l.featureId))]))
+        : [];
+      const sourceById = new Map(sourceInfo.map((s) => [s.id, s]));
+      const githubLinks: GithubLink[] = ghRows.map((l) => ({
+        id: l.id,
+        kind: l.kind,
+        number: l.number,
+        branch: l.branch,
+        url: l.url,
+        title: l.title,
+        state: l.state,
+        sourceSpecId: sourceById.get(l.featureId)?.specId ?? row.specId,
+        sourceTitle: sourceById.get(l.featureId)?.title ?? row.title,
+        inherited: l.featureId !== row.id,
+      }));
+      const githubSummary = emptyAgg();
+      for (const l of ghRows) tallyLink(githubSummary, l.kind, l.state);
+
       return {
         specId: row.specId,
         title: row.title,
@@ -306,6 +411,8 @@ export class DbStore implements FeatureStore {
         children: childRows,
         childCount: childRows.length,
         childDoneCount: childRows.filter((c) => isDone(c.status)).length,
+        githubSummary,
+        githubLinks,
       };
     });
   }
@@ -430,6 +537,56 @@ export class DbStore implements FeatureStore {
           and(
             eq(featureLinks.id, linkId),
             eq(featureLinks.workspaceId, scope!.workspaceId),
+          ),
+        );
+    });
+  }
+
+  async addGithubLink(
+    specId: string,
+    link: ResolvedGithubLink,
+    scope?: WorkspaceScope,
+  ): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const feat = await tx
+        .select({ id: features.id })
+        .from(features)
+        .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)));
+      if (!feat[0]) throw new RelationError(`Unknown feature: ${specId}`);
+      await tx
+        .insert(featureGithubLinks)
+        .values({
+          workspaceId: ws,
+          featureId: feat[0].id,
+          repoId: link.repoId,
+          kind: link.kind,
+          number: link.number,
+          branch: link.branch,
+          url: link.url,
+          title: link.title,
+          state: link.state,
+        })
+        // Re-linking the same url refreshes the cached title/state.
+        .onConflictDoUpdate({
+          target: [featureGithubLinks.featureId, featureGithubLinks.url],
+          set: { title: link.title, state: link.state },
+        });
+    });
+  }
+
+  async removeGithubLink(
+    _specId: string,
+    linkId: string,
+    scope?: WorkspaceScope,
+  ): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      await tx
+        .delete(featureGithubLinks)
+        .where(
+          and(
+            eq(featureGithubLinks.id, linkId),
+            eq(featureGithubLinks.workspaceId, scope!.workspaceId),
           ),
         );
     });

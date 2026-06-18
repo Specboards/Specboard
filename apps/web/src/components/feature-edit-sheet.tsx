@@ -6,7 +6,9 @@ import { toast } from "sonner";
 
 import type { EstimateConfig, RepoConfig, StatusWorkflow } from "@specboard/core";
 
+import { FeatureGithubLinks } from "@/components/feature-github-links";
 import { FeatureMetaForm } from "@/components/feature-meta-form";
+import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -90,19 +92,27 @@ export function FeatureEditSheet({
         {error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : feature ? (
-          <FeatureMetaForm
-            feature={feature}
-            members={members}
-            customFields={customFields}
-            candidates={candidates.filter((c) => c.specId !== feature.specId)}
-            estimate={estimate}
-            workflow={workflow}
-            canEdit={canEdit}
-            onSaved={() => {
-              toast.success("Saved");
-              onClose();
-            }}
-          />
+          <>
+            <FeatureMetaForm
+              feature={feature}
+              members={members}
+              customFields={customFields}
+              candidates={candidates.filter((c) => c.specId !== feature.specId)}
+              estimate={estimate}
+              workflow={workflow}
+              canEdit={canEdit}
+              onSaved={() => {
+                toast.success("Saved");
+                onClose();
+              }}
+            />
+            <Separator />
+            <FeatureGithubLinks
+              specId={feature.specId}
+              links={feature.githubLinks}
+              canEdit={canEdit}
+            />
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}

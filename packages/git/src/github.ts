@@ -3,6 +3,14 @@ import { App, type Octokit } from "octokit";
 import { compileGlobs } from "./webhook.js";
 import type { GitRepoClient, SpecFile, WriteFileInput } from "./index.js";
 
+/** Cached-display metadata for a linked GitHub artifact (PR/issue/branch). */
+export interface GithubArtifactMeta {
+  title: string | null;
+  /** open / closed / merged for PRs/issues; null for a branch. */
+  state: string | null;
+  url: string;
+}
+
 /** Identifies a single connected repository at a given ref. */
 export interface GitHubRepoConfig {
   installationId: string;
@@ -178,6 +186,45 @@ export class GitHubRepoClient implements GitRepoClient {
     }
 
     return result;
+  }
+
+  /** Fetch a pull request's cached-display metadata (title/state/url). */
+  async getPullRequest(number: number): Promise<GithubArtifactMeta> {
+    const { data } = await this.octokit.rest.pulls.get({
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: number,
+    });
+    return {
+      title: data.title,
+      // A merged PR reports state "closed"; surface "merged" explicitly.
+      state: data.merged_at ? "merged" : data.state,
+      url: data.html_url,
+    };
+  }
+
+  /** Fetch an issue's metadata. (Note: PRs are issues; pass real issues here.) */
+  async getIssue(number: number): Promise<GithubArtifactMeta> {
+    const { data } = await this.octokit.rest.issues.get({
+      owner: this.owner,
+      repo: this.repo,
+      issue_number: number,
+    });
+    return { title: data.title, state: data.state, url: data.html_url };
+  }
+
+  /** Verify a branch exists and return a link to it (branches have no state). */
+  async getBranch(name: string): Promise<GithubArtifactMeta> {
+    await this.octokit.rest.repos.getBranch({
+      owner: this.owner,
+      repo: this.repo,
+      branch: name,
+    });
+    return {
+      title: name,
+      state: null,
+      url: `https://github.com/${this.owner}/${this.repo}/tree/${encodeURIComponent(name)}`,
+    };
   }
 
   private async readBlob(sha: string): Promise<string> {

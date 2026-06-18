@@ -22,6 +22,7 @@ export const BUILTIN_CARD_FIELDS: CardFieldDef[] = [
   { key: "sub", label: "Sub-feature badge" },
   { key: "tags", label: "Tags" },
   { key: "quarter", label: "Roadmap quarter" },
+  { key: "github", label: "GitHub" },
 ];
 
 /** Fields shown when a user hasn't customized (matches the original board). */

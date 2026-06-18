@@ -62,9 +62,10 @@ export async function GET(req: Request) {
     default_permissions: {
       contents: "write",
       pull_requests: "write",
+      issues: "read",
       metadata: "read",
     },
-    default_events: ["push"],
+    default_events: ["push", "pull_request", "issues"],
   };
 
   const action = org
