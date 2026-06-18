@@ -57,6 +57,13 @@
       "when": 1781665112034,
       "tag": "0007_next_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781801644264,
+      "tag": "0008_exotic_raza",
+      "breakpoints": true
     }
   ]
 }

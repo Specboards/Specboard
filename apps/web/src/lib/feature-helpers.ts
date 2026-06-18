@@ -1,3 +1,5 @@
+import { generateKeyBetween } from "fractional-indexing";
+
 import { defaultWorkflow, type StatusWorkflow } from "@specboard/core";
 
 import type { FeatureRecord } from "./store/types";
@@ -66,4 +68,33 @@ export function sortFeatures(features: FeatureRecord[]): FeatureRecord[] {
     if (pa !== pb) return pa - pb;
     return a.title.localeCompare(b.title);
   });
+}
+
+/**
+ * Order cards within a board column: manually-ranked cards first (by lexical
+ * rank), then unranked cards by the default priority/title order. Cards gain a
+ * rank lazily the first time they're dragged, so a fresh board keeps today's
+ * ordering and converges on manual order as it's used.
+ */
+export function sortBoardCards(features: FeatureRecord[]): FeatureRecord[] {
+  return [...features].sort((a, b) => {
+    if (a.rank !== null && b.rank !== null) return a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0;
+    if (a.rank !== null) return -1;
+    if (b.rank !== null) return 1;
+    const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
+    const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
+    if (pa !== pb) return pa - pb;
+    return a.title.localeCompare(b.title);
+  });
+}
+
+/**
+ * A fractional rank that sorts between `prev` and `next` (either may be null
+ * for an open boundary). Used to persist a card's new position after a drag.
+ */
+export function rankBetween(
+  prev: string | null,
+  next: string | null,
+): string {
+  return generateKeyBetween(prev, next);
 }

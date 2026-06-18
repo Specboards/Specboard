@@ -1,6 +1,7 @@
 import { extractSections, rollUpEstimates } from "@specboard/core";
 import {
   and,
+  boardPreferences,
   createDb,
   desc,
   eq,
@@ -17,6 +18,7 @@ import {
 
 import {
   RelationError,
+  type BoardPreferences,
   type CustomFieldValue,
   type FeatureDetail,
   type FeaturePatch,
@@ -154,6 +156,7 @@ export class DbStore implements FeatureStore {
         priority: row.priority,
         estimate: row.estimate,
         rolledEstimate: rolled.get(row.id) ?? null,
+        rank: row.rank,
         tags: row.tags,
         roadmapQuarter: row.roadmapQuarter,
         assigneeId: row.assigneeId,
@@ -285,6 +288,7 @@ export class DbStore implements FeatureStore {
         priority: row.priority,
         estimate: row.estimate,
         rolledEstimate: rolled.get(row.id) ?? null,
+        rank: row.rank,
         tags: row.tags,
         roadmapQuarter: row.roadmapQuarter,
         assigneeId: row.assigneeId,
@@ -498,6 +502,50 @@ export class DbStore implements FeatureStore {
             eq(savedViews.userId, scope!.userId),
           ),
         );
+    });
+  }
+
+  async getBoardPreferences(
+    scope?: WorkspaceScope,
+  ): Promise<BoardPreferences | null> {
+    return this.scoped(scope, async (tx) => {
+      const row = await tx.query.boardPreferences.findFirst({
+        where: and(
+          eq(boardPreferences.workspaceId, scope!.workspaceId),
+          eq(boardPreferences.userId, scope!.userId),
+        ),
+      });
+      if (!row) return null;
+      return {
+        cardFields: Array.isArray(row.cardFields)
+          ? (row.cardFields as string[])
+          : null,
+        featured: row.featured,
+      };
+    });
+  }
+
+  async setBoardPreferences(
+    prefs: BoardPreferences,
+    scope?: WorkspaceScope,
+  ): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      await tx
+        .insert(boardPreferences)
+        .values({
+          workspaceId: scope!.workspaceId,
+          userId: scope!.userId,
+          cardFields: prefs.cardFields ?? [],
+          featured: prefs.featured,
+        })
+        .onConflictDoUpdate({
+          target: [boardPreferences.workspaceId, boardPreferences.userId],
+          set: {
+            cardFields: prefs.cardFields ?? [],
+            featured: prefs.featured,
+            updatedAt: new Date(),
+          },
+        });
     });
   }
 }

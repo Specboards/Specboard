@@ -1,7 +1,9 @@
 "use client";
 
 import type {
+  BoardPreferences,
   CreatableRelationDirection,
+  FeatureDetail,
   FeaturePatch,
   FeatureRelation,
   SavedView,
@@ -20,6 +22,19 @@ export class AuthRequiredError extends Error {
     super("Authentication required.");
     this.name = "AuthRequiredError";
   }
+}
+
+/** Load a feature's full detail (metadata + spec content) for in-context edit. */
+export async function getFeature(specId: string): Promise<FeatureDetail> {
+  const res = await fetch(`/api/v1/features/${encodeURIComponent(specId)}`);
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { feature?: FeatureDetail; error?: string }
+    | null;
+  if (!res.ok || !body?.feature) {
+    throw new Error(body?.error ?? `Failed to load feature (${res.status}).`);
+  }
+  return body.feature;
 }
 
 export async function patchFeature(
@@ -78,6 +93,22 @@ export async function removeRelation(
     throw new Error(body?.error ?? `Remove relation failed with ${res.status}`);
   }
   return body?.relations ?? [];
+}
+
+/** Persist the acting user's board display preferences. */
+export async function saveBoardPreferences(
+  prefs: BoardPreferences,
+): Promise<void> {
+  const res = await fetch("/api/v1/board-preferences", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(prefs),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Save preferences failed with ${res.status}`);
+  }
 }
 
 /** Save the current backlog filters as a named view. */

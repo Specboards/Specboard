@@ -13,6 +13,8 @@ export interface FeatureRecord {
   priority: number | null;
   /** Effort estimate in points (against RepoConfig.estimate.scale), or null. */
   estimate: number | null;
+  /** Fractional/lexical rank for manual board ordering; null until first dragged. */
+  rank: string | null;
   /**
    * Estimate rolled up over this feature's subtree (itself + all descendants).
    * Equals `estimate` for a leaf; null when nothing in the subtree is estimated.
@@ -100,6 +102,7 @@ export type FeaturePatch = Partial<
     | "status"
     | "priority"
     | "estimate"
+    | "rank"
     | "tags"
     | "roadmapQuarter"
     | "assigneeId"
@@ -139,6 +142,17 @@ export interface SavedViewInput {
 }
 
 /**
+ * A user's personal board display preferences: which field keys render on a
+ * card (ordered) and which custom field is featured. `cardFields: null` means
+ * "use the default set"; an empty array means "show no badges".
+ */
+export interface BoardPreferences {
+  cardFields: string[] | null;
+  /** Custom-field key (no `cf:` prefix) to emphasize on the card, or null. */
+  featured: string | null;
+}
+
+/**
  * Storage boundary for the web app. Two implementations:
  * - `local`: reads specs from the filesystem, metadata in a JSON file —
  *   zero-setup local testing (scope ignored; single implicit workspace).
@@ -174,6 +188,13 @@ export interface FeatureStore {
   ): Promise<SavedView>;
   /** Delete one of the acting user's saved views by id. */
   deleteSavedView(id: string, scope?: WorkspaceScope): Promise<void>;
+  /** The acting user's board preferences, or null when none are saved. */
+  getBoardPreferences(scope?: WorkspaceScope): Promise<BoardPreferences | null>;
+  /** Persist the acting user's board preferences (upsert). */
+  setBoardPreferences(
+    prefs: BoardPreferences,
+    scope?: WorkspaceScope,
+  ): Promise<void>;
 }
 
 /** Raised when a relation can't be created (self-link, cycle, unknown target). */

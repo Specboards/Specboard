@@ -6,6 +6,7 @@ import { parseSpec, rollUpEstimates } from "@specboard/core";
 
 import {
   RelationError,
+  type BoardPreferences,
   type CustomFieldValue,
   type FeatureDetail,
   type FeaturePatch,
@@ -31,6 +32,7 @@ interface LocalMetadata {
   status?: string;
   priority?: number | null;
   estimate?: number | null;
+  rank?: string | null;
   tags?: string[];
   roadmapQuarter?: string | null;
   assigneeId?: string | null;
@@ -109,6 +111,10 @@ export class LocalFileStore implements FeatureStore {
     return path.join(this.root, ".specboard", "local-views.json");
   }
 
+  private get boardPrefsPath() {
+    return path.join(this.root, ".specboard", "local-board-prefs.json");
+  }
+
   private async readMetadata(): Promise<MetadataFile> {
     try {
       return JSON.parse(
@@ -167,6 +173,7 @@ export class LocalFileStore implements FeatureStore {
         priority: m.priority ?? null,
         estimate: m.estimate ?? null,
         rolledEstimate: null, // filled in by attachHierarchy
+        rank: m.rank ?? null,
         tags: m.tags ?? [],
         roadmapQuarter: m.roadmapQuarter ?? null,
         assigneeId: m.assigneeId ?? null,
@@ -371,6 +378,32 @@ export class LocalFileStore implements FeatureStore {
   async deleteSavedView(id: string, _scope?: WorkspaceScope): Promise<void> {
     const views = await this.readViews();
     await this.writeViews(views.filter((v) => v.id !== id));
+  }
+
+  // Board preferences persist to `.specboard/local-board-prefs.json`. Single
+  // implicit user in local mode, so no per-user scoping.
+  async getBoardPreferences(
+    _scope?: WorkspaceScope,
+  ): Promise<BoardPreferences | null> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.boardPrefsPath, "utf8"),
+      ) as BoardPreferences;
+    } catch {
+      return null;
+    }
+  }
+
+  async setBoardPreferences(
+    prefs: BoardPreferences,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(this.boardPrefsPath), { recursive: true });
+    await fs.writeFile(
+      this.boardPrefsPath,
+      JSON.stringify(prefs, null, 2) + "\n",
+      "utf8",
+    );
   }
 }
 

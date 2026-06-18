@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Toaster } from "sonner";
 
 import { AccountControl } from "@/components/account-control";
 import { MainNav } from "@/components/main-nav";
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <Toaster position="bottom-right" richColors closeButton />
       </body>
     </html>
   );
