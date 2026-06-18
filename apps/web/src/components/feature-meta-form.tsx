@@ -24,6 +24,7 @@ export function FeatureMetaForm({
   estimate,
   workflow,
   canEdit = true,
+  onSaved,
 }: {
   feature: FeatureDetail;
   members?: WorkspaceMember[];
@@ -35,6 +36,8 @@ export function FeatureMetaForm({
   /** Workspace status workflow (custom statuses/transitions); default if omitted. */
   workflow?: StatusWorkflow;
   canEdit?: boolean;
+  /** Called after a successful save (e.g. to close a drawer / toast). */
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -68,6 +71,7 @@ export function FeatureMetaForm({
             : {}),
         });
         router.refresh();
+        onSaved?.();
       } catch (err) {
         if (err instanceof AuthRequiredError) {
           router.push(

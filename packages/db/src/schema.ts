@@ -178,6 +178,29 @@ export const savedViews = pgTable(
   (t) => [index("saved_views_ws_user_idx").on(t.workspaceId, t.userId)],
 );
 
+/**
+ * A user's personal board display preferences: which fields render on a card
+ * and which custom field is "featured". Personal — scoped to the creating user
+ * within their workspace, one row per (workspace, user).
+ */
+export const boardPreferences = pgTable(
+  "board_preferences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    /** Ordered list of field keys to show on a card (see apps/web card-fields). */
+    cardFields: jsonb("card_fields").notNull().default([]),
+    /** Custom-field key to feature prominently, or null. */
+    featured: text("featured"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("board_preferences_ws_user_uq").on(t.workspaceId, t.userId)],
+);
+
 export const activityLog = pgTable("activity_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id")
