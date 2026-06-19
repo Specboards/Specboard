@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { useOrgPath } from "@/lib/use-org";
+import { useOrgProductPath } from "@/lib/use-org";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -18,7 +18,7 @@ const TABS = [
  */
 export function WorkViewTabs() {
   const pathname = usePathname();
-  const orgHref = useOrgPath();
+  const orgHref = useOrgProductPath();
   return (
     <div className="inline-flex items-center rounded-md border bg-background p-0.5 text-sm">
       {TABS.map((tab) => {

@@ -53,7 +53,7 @@ export async function PATCH(req: Request, { params }: Params) {
       parseFeaturePatch(body),
       authz.scope ?? undefined,
     );
-    for (const path of ["/[org]/backlog", "/[org]/board", "/[org]/roadmap"]) revalidatePath(path, "page");
+    for (const path of ["/[org]/[product]/backlog", "/[org]/[product]/board", "/[org]/[product]/roadmap"]) revalidatePath(path, "page");
     revalidatePath("/[org]/feature/[id]", "page");
     return Response.json({ feature });
   } catch (err) {
@@ -79,7 +79,7 @@ export async function DELETE(req: Request, { params }: Params) {
   const { specId } = await params;
   try {
     await deleteWorkItem(specId, authz.scope ?? undefined);
-    for (const path of ["/[org]/backlog", "/[org]/board", "/[org]/roadmap"]) revalidatePath(path, "page");
+    for (const path of ["/[org]/[product]/backlog", "/[org]/[product]/board", "/[org]/[product]/roadmap"]) revalidatePath(path, "page");
     revalidatePath("/[org]/feature/[id]", "page");
     return Response.json({ ok: true });
   } catch (err) {

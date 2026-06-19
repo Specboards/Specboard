@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSessionUser } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
 import { LOCAL_ORG_SLUG } from "@/lib/org-path";
-import type { WorkspaceScope } from "@/lib/store/types";
+import { getStore } from "@/lib/store";
+import type { ProductRecord, WorkspaceScope } from "@/lib/store/types";
 import {
   getWorkspaceById,
   listMembershipsForUser,
@@ -44,6 +45,26 @@ export async function listSidebarOrgs(): Promise<
     }),
   );
   return orgs.filter((o): o is { slug: string; name: string } => o !== null);
+}
+
+/**
+ * Products of the active org, for the sidebar product switcher. Resolves the
+ * org from the `x-org-slug` header (validated against membership), so it only
+ * ever returns products the caller may see. `[]` outside an org context.
+ */
+export async function listSidebarProducts(): Promise<ProductRecord[]> {
+  const db = getDb();
+  const store = await getStore();
+  if (!db) return store.listProducts(); // file mode — unscoped
+  const user = await getServerSessionUser();
+  if (!user) return [];
+  const orgSlug = (await headers()).get("x-org-slug") || undefined;
+  const membership = await resolveActiveWorkspace(db, user.id, { orgSlug });
+  if (!membership) return [];
+  return store.listProducts({
+    userId: user.id,
+    workspaceId: membership.workspaceId,
+  });
 }
 
 /**

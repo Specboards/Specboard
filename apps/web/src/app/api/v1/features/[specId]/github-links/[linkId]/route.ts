@@ -22,7 +22,7 @@ export async function DELETE(req: Request, { params }: Params) {
       decodeURIComponent(linkId),
       authz.scope ?? undefined,
     );
-    for (const path of ["/[org]/backlog", "/[org]/board", "/[org]/roadmap"]) revalidatePath(path, "page");
+    for (const path of ["/[org]/[product]/backlog", "/[org]/[product]/board", "/[org]/[product]/roadmap"]) revalidatePath(path, "page");
     revalidatePath("/[org]/feature/[id]", "page");
     return Response.json({ githubLinks });
   } catch (err) {

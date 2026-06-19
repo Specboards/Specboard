@@ -11,7 +11,7 @@ import {
   deleteWorkItem,
   patchFeature,
 } from "@/lib/api-client";
-import { useOrgPath } from "@/lib/use-org";
+import { useOrgProductPath } from "@/lib/use-org";
 
 /**
  * Manage controls for a DB-native work item (initiative/epic): rename it
@@ -29,7 +29,7 @@ export function WorkItemControls({
   levelLabel: string;
 }) {
   const router = useRouter();
-  const orgHref = useOrgPath();
+  const orgHref = useOrgProductPath();
   const [value, setValue] = useState(title);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
