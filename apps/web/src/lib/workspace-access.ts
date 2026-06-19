@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSessionUser } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
 import type { WorkspaceScope } from "@/lib/store/types";
-import { ensureMembership, type MemberRole } from "@/lib/workspace";
+import { resolveActiveWorkspace, type MemberRole } from "@/lib/workspace";
 
 /** Tenant scope plus the caller's role, as resolved for a content page. */
 export type PageAccess = WorkspaceScope & { role: MemberRole };
@@ -31,7 +31,9 @@ export async function requireWorkspaceAccess(): Promise<PageAccess | null> {
   if (!db) return null; // file mode — no auth, no gating
   if (!user) redirect("/sign-in");
 
-  const membership = await ensureMembership(db, user.id);
+  // The active org will come from the URL slug in Phase 2 (ADR 0001, D3);
+  // today (single-tenant) this resolves to the one workspace, auto-joined.
+  const membership = await resolveActiveWorkspace(db, user.id);
   if (!membership) redirect("/setup");
 
   return {
