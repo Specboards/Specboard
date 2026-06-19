@@ -11,9 +11,11 @@ import {
 } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
+import { ProductSwitcher } from "@/components/product-switcher";
 import { StatusDot } from "@/components/status-dot";
 import { WorkItemCreate } from "@/components/work-item-create";
 import { resolveActiveLevel } from "@/lib/active-level";
+import { resolveActiveProduct } from "@/lib/active-product";
 import {
   priorityLabel,
   sortFeatures,
@@ -33,18 +35,26 @@ export default async function RoadmapPage({
 }) {
   const access = await requireWorkspaceAccess();
   const canEdit = !access || canWrite(access.role);
+  const params = await searchParams;
   const store = await getStore();
   const allFeatures = sortFeatures(
     await store.listFeatures(access ?? undefined),
   ).filter((f) => f.status !== "archived");
 
-  // Roadmap shows one hierarchy level at a time (default: the leaf/specs).
+  // Roadmap scopes to one product at a time (default: all products) and shows
+  // one hierarchy level at a time (default: the leaf/specs).
+  const products = await store.listProducts(access ?? undefined);
+  const activeProduct = resolveActiveProduct(products, params.product);
+  const scoped = activeProduct
+    ? allFeatures.filter((f) => f.productId === activeProduct.id)
+    : allFeatures;
+
   const levels = await store.listLevels(access ?? undefined);
-  const activeLevel = resolveActiveLevel(levels, (await searchParams).level);
-  const features = allFeatures.filter((f) => f.level === activeLevel.key);
+  const activeLevel = resolveActiveLevel(levels, params.level);
+  const features = scoped.filter((f) => f.level === activeLevel.key);
   const parentKey = parentLevelKey(activeLevel.key, levels);
   const parents = parentKey
-    ? allFeatures
+    ? scoped
         .filter((f) => f.level === parentKey)
         .map((f) => ({ specId: f.specId, title: f.title }))
     : [];
@@ -65,6 +75,7 @@ export default async function RoadmapPage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Roadmap</h1>
+          <ProductSwitcher products={products} active={activeProduct?.key ?? "all"} />
           <LevelSwitcher levels={levels} active={activeLevel.key} />
         </div>
         {canEdit && !activeLevel.isLeaf ? (
@@ -73,6 +84,7 @@ export default async function RoadmapPage({
             levelLabel={activeLevel.label}
             parentLabel={parentLabel}
             parents={parents}
+            productId={activeProduct?.id ?? null}
           />
         ) : null}
       </div>

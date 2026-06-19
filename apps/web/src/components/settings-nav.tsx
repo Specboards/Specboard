@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/settings/profile", label: "Profile" },
   { href: "/settings/repositories", label: "Repositories" },
   { href: "/settings/company", label: "Company & Team" },
+  { href: "/settings/products", label: "Products" },
   { href: "/settings/work-cards", label: "Work cards" },
   { href: "/settings/hierarchy", label: "Hierarchy" },
   { href: "/settings/branding", label: "Branding" },

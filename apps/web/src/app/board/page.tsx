@@ -4,9 +4,11 @@ import { BoardClient } from "@/app/board/board-client";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
 import { EmptyState } from "@/components/empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
+import { ProductSwitcher } from "@/components/product-switcher";
 import { WorkItemCreate } from "@/components/work-item-create";
 import { WorkViewTabs } from "@/components/work-view-tabs";
 import { resolveActiveLevel } from "@/lib/active-level";
+import { resolveActiveProduct } from "@/lib/active-product";
 import { getBoardPreferences } from "@/lib/board-preferences-service";
 import { cardFieldCatalog, resolveCardFields } from "@/lib/card-fields";
 import { getDb } from "@/lib/db";
@@ -32,16 +34,24 @@ export default async function BoardPage({
   const customFields = repoConfig?.fields ?? [];
   const columns = workflow.statuses.filter((s) => s !== "archived");
 
+  const params = await searchParams;
   const store = await getStore();
   const allFeatures = await store.listFeatures(access ?? undefined);
 
-  // The board shows one hierarchy level at a time (default: the leaf/specs).
+  // The board scopes to one product at a time (default: all products) and shows
+  // one hierarchy level at a time (default: the leaf/specs).
+  const products = await store.listProducts(access ?? undefined);
+  const activeProduct = resolveActiveProduct(products, params.product);
+  const scoped = activeProduct
+    ? allFeatures.filter((f) => f.productId === activeProduct.id)
+    : allFeatures;
+
   const levels = await store.listLevels(access ?? undefined);
-  const activeLevel = resolveActiveLevel(levels, (await searchParams).level);
-  const features = allFeatures.filter((f) => f.level === activeLevel.key);
+  const activeLevel = resolveActiveLevel(levels, params.level);
+  const features = scoped.filter((f) => f.level === activeLevel.key);
   const parentKey = parentLevelKey(activeLevel.key, levels);
   const parents = parentKey
-    ? allFeatures
+    ? scoped
         .filter((f) => f.level === parentKey)
         .map((f) => ({ specId: f.specId, title: f.title }))
     : [];
@@ -65,6 +75,7 @@ export default async function BoardPage({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <WorkViewTabs />
+          <ProductSwitcher products={products} active={activeProduct?.key ?? "all"} />
           <LevelSwitcher levels={levels} active={activeLevel.key} />
         </div>
         <div className="flex items-center gap-2">
@@ -74,6 +85,7 @@ export default async function BoardPage({
               levelLabel={activeLevel.label}
               parentLabel={parentLabel}
               parents={parents}
+              productId={activeProduct?.id ?? null}
             />
           ) : null}
           {features.length > 0 && canEdit ? (

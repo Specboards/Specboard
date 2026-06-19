@@ -26,12 +26,15 @@ export function WorkItemCreate({
   levelLabel,
   parentLabel,
   parents,
+  productId,
 }: {
   levelKey: string;
   levelLabel: string;
   /** Label of the parent level (e.g. "Initiative"), or null when top-level. */
   parentLabel: string | null;
   parents: { specId: string; title: string }[];
+  /** Product the new item belongs to; null defers to the default product. */
+  productId?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -50,7 +53,7 @@ export function WorkItemCreate({
     startTransition(async () => {
       setError(null);
       try {
-        await createWorkItem({ title, level: levelKey, parentSpecId });
+        await createWorkItem({ title, level: levelKey, parentSpecId, productId });
         toast.success(`${levelLabel} created`);
         setOpen(false);
         router.refresh();
