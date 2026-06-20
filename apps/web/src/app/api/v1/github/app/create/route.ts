@@ -8,6 +8,7 @@ import {
   newSetupNonce,
 } from "@/lib/github-install";
 import { orgPath } from "@/lib/org-path";
+import { isMultiTenant } from "@/lib/tenancy";
 import { getMembership, workspaceSlug } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,15 @@ export async function GET(req: Request) {
     return htmlRedirect(repos("?error=forbidden"));
   }
 
+  // On the hosted (multi-tenant) deployment, GitHub is a single shared App that
+  // SpecBoard owns and configures via env — tenants install it, never create
+  // one. Creating here would both hit GitHub's reserved-name wall ("SpecBoard"
+  // is reserved for @specboard) and overwrite the deployment-wide singleton
+  // credentials. The manifest flow is self-host only.
+  if (isMultiTenant()) {
+    return htmlRedirect(repos("?error=hosted"));
+  }
+
   const org = new URL(req.url).searchParams.get("org")?.trim() ?? "";
   if (org && !isValidOwner(org)) {
     return htmlRedirect(repos("?error=org"));
@@ -55,8 +65,12 @@ export async function GET(req: Request) {
   const origin = appOriginFromRequest(req);
   const nonce = newSetupNonce();
 
+  // GitHub App names are globally unique and GitHub reserves the bare name
+  // "SpecBoard" for the @specboard account, so every self-host App must carry a
+  // distinguishing suffix. Prefer the admin-supplied org name, falling back to
+  // this workspace's slug.
   const manifest = {
-    name: org ? `SpecBoard (${org})` : "SpecBoard",
+    name: `SpecBoard (${org || slug})`,
     url: origin,
     hook_attributes: { url: `${origin}/api/webhooks/github`, active: true },
     redirect_url: `${origin}/api/v1/github/app/callback`,
