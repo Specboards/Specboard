@@ -5,6 +5,7 @@ import { getDb } from "@/lib/db";
 import { saveCredentials } from "@/lib/github-app";
 import { APP_SETUP_COOKIE } from "@/lib/github-install";
 import { orgPath } from "@/lib/org-path";
+import { isMultiTenant } from "@/lib/tenancy";
 import { getMembership, workspaceSlug } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,12 @@ export async function GET(req: Request) {
   const repos = (q = "") => orgPath(slug, `/settings/repositories${q}`);
   if (membership.role !== "admin") {
     return redirectTo(repos("?error=forbidden"));
+  }
+
+  // Manifest creation is self-host only (see app/create); never persist
+  // per-tenant credentials over the hosted deployment's shared App.
+  if (isMultiTenant()) {
+    return redirectTo(repos("?error=hosted"));
   }
 
   // CSRF: the state must match the nonce we set when starting the flow.

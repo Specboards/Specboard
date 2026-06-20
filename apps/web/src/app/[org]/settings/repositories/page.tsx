@@ -3,6 +3,7 @@ import { eq, repositories } from "@specboard/db";
 import { getDb } from "@/lib/db";
 import { getGithubAppSlug, isGithubConfigured } from "@/lib/github-app";
 import { installUrlFromSlug } from "@/lib/github-install";
+import { isSingleTenant } from "@/lib/tenancy";
 import { requireWorkspaceAccess } from "@/lib/workspace-access";
 import { RepositoriesManager, type SetupNotice } from "@/components/repositories-manager";
 
@@ -23,6 +24,7 @@ function noticeFor(params: Record<string, string | string[] | undefined>): Setup
     exchange: "GitHub couldn't finish creating the app. Please try again.",
     store: "Couldn't save the GitHub credentials. Please try again.",
     install: "The installation didn't complete. Please try again.",
+    hosted: "GitHub is managed by SpecBoard on the hosted plan — just install the app below.",
   };
   const err = typeof params.error === "string" ? errors[params.error] : undefined;
   return err ? { kind: "error", message: err } : null;
@@ -69,6 +71,7 @@ export default async function RepositoriesSettingsPage({
       repos={rows}
       canConnect={access.role === "admin"}
       configured={configured}
+      selfHosted={isSingleTenant()}
       installUrl={installUrlFromSlug(slug)}
       notice={noticeFor(await searchParams)}
     />

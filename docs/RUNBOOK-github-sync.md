@@ -1,17 +1,31 @@
 # Runbook — GitHub App + spec sync
 
 How to connect a repository so SpecBoard imports its `specs/**/spec.md` and keeps
-the board in sync on every push. One GitHub App per environment (test, prod);
-the steps are identical, just swap the host.
+the board in sync on every push.
 
-| Env | App host | Webhook URL |
-| --- | --- | --- |
-| test | `https://test.specboard.ai` | `https://test.specboard.ai/api/webhooks/github` |
-| prod | `https://app.specboard.ai` | `https://app.specboard.ai/api/webhooks/github` |
+## Two deployment models — pick the right one
 
-The recommended path is the **in-app one-click setup** (no GitHub form-filling,
-no secrets to copy). The manual env-based path is kept as an appendix for
-air-gapped or scripted setups.
+A GitHub App registration hard-codes one webhook URL and one OAuth callback URL,
+so a single App can only ever serve one SpecBoard instance. That splits setup
+into two paths, keyed off `SPECBOARD_MULTI_TENANT`:
+
+| Model | Flag | GitHub App | How tenants connect |
+| --- | --- | --- | --- |
+| **Hosted** (test, prod) | `SPECBOARD_MULTI_TENANT=true` | One **shared** App SpecBoard owns under `@specboard`, configured via env | Click **Install** — never create |
+| **Self-host** | unset (default) | Each install creates its **own** App via the one-click manifest flow | One-click setup, then install |
+
+On the hosted deployment the in-app "create App" flow is **disabled** (it would
+hit GitHub's reserved-name wall — `SpecBoard` is reserved for `@specboard` — and
+overwrite the deployment-wide singleton credentials). Tenants only install the
+shared App. The one-click manifest flow below is the **self-host** path.
+
+| Env | Model | App host | Webhook URL |
+| --- | --- | --- | --- |
+| test | hosted | `https://test.specboard.ai` | `https://test.specboard.ai/api/webhooks/github` |
+| prod | hosted | `https://app.specboard.ai` | `https://app.specboard.ai/api/webhooks/github` |
+
+→ **Hosted setup is in [§ Hosted: one shared App](#hosted-one-shared-app).**
+The rest of this runbook (steps 1–3) is the **self-host** one-click path.
 
 ## Prerequisites
 
@@ -21,7 +35,46 @@ air-gapped or scripted setups.
   Migrations don't run automatically on deploy; apply with
   `DATABASE_URL=<the deployment's db> pnpm db:migrate` from the repo root.
 
-## 1. Create the GitHub App (one click)
+## Hosted: one shared App
+
+For the hosted deployments (test, prod) you register **one** GitHub App that
+SpecBoard owns and provide its credentials via env. Tenants never create an App;
+they only install this one. Do this once per environment.
+
+1. **Register the App** under the `@specboard` org: GitHub → org **Settings** →
+   Developer settings → **New GitHub App**. Set Homepage = app host; Webhook URL
+   = `<host>/api/webhooks/github` + a generated secret; **Setup URL** =
+   `<host>/api/v1/github/setup` (tick *Redirect on update*); Callback URL =
+   `<host>/api/v1/github/app/callback`; permissions Contents R/W, Pull requests
+   R/W, Issues RO, Metadata RO; subscribe to **Push**, **Pull request**, and
+   **Issues**. Under **Where can this GitHub App be installed?** choose **Any
+   account** so other orgs can install it. Generate a private key; note the App
+   ID and slug.
+2. **Set the secrets** (per env), including the multi-tenant flag so the in-app
+   create flow is disabled and tenants get the Install button:
+
+   ```sh
+   fly secrets set -a specboard-test \
+     SPECBOARD_MULTI_TENANT=true \
+     GITHUB_APP_ID=123456 \
+     GITHUB_WEBHOOK_SECRET=<hex> \
+     GITHUB_APP_PRIVATE_KEY="$(cat ~/Downloads/app.private-key.pem)" \
+     NEXT_PUBLIC_GITHUB_APP_SLUG=<app-slug>
+   ```
+
+3. **Tenants connect** by opening **Repositories** → **Connect GitHub**, which
+   installs the shared App on their repos; the picker then lists those repos to
+   connect (same as self-host step 2 below). Each install is a distinct
+   `installation_id` scoped to that tenant — one App, many installations.
+
+> Without `SPECBOARD_MULTI_TENANT=true` the deployment behaves as self-host and
+> exposes the per-tenant create flow — on a shared deployment that lets one
+> tenant's "create App" overwrite another's stored credentials. Always set the
+> flag on hosted.
+
+---
+
+## 1. Create the GitHub App (one click) — self-host
 
 Sign in as a workspace **admin**, open **Repositories**, and under "Connect
 SpecBoard to GitHub" optionally enter your **GitHub organization** (e.g.
@@ -29,8 +82,10 @@ SpecBoard to GitHub" optionally enter your **GitHub organization** (e.g.
 
 SpecBoard sends you to GitHub with the App pre-defined (name, permissions —
 Contents R/W, Pull requests R/W, Issues RO, Metadata RO — webhook, the **Push**,
-**Pull request**, and **Issues** events, and the post-install Setup URL). Review
-and **Create GitHub App**. GitHub redirects you back and SpecBoard stores the
+**Pull request**, and **Issues** events, and the post-install Setup URL). The
+name is suffixed with your org/workspace (e.g. `SpecBoard (acme)`) because App
+names are globally unique and the bare `SpecBoard` is reserved for `@specboard`.
+Review and **Create GitHub App**. GitHub redirects you back and SpecBoard stores the
 App's id, slug, private key, and webhook secret — **encrypted in the database**.
 No `.pem` download, no secrets to paste.
 

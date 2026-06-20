@@ -35,6 +35,9 @@ interface RepositoriesManagerProps {
   canConnect: boolean;
   /** Whether the deployment has a GitHub App configured yet. */
   configured: boolean;
+  /** Self-host (single-tenant) deployment: admins create their own GitHub App.
+   *  On hosted (multi-tenant), the App is shared and managed by SpecBoard. */
+  selfHosted: boolean;
   /** GitHub App "install" URL once the App exists, else null. */
   installUrl: string | null;
   /** One-time banner from the setup/callback round-trip. */
@@ -55,6 +58,7 @@ export function RepositoriesManager({
   repos,
   canConnect,
   configured,
+  selfHosted,
   installUrl,
   notice,
 }: RepositoriesManagerProps) {
@@ -90,8 +94,10 @@ export function RepositoriesManager({
         </p>
       ) : configured ? (
         <ConnectSection installUrl={installUrl} connected={repos} />
-      ) : (
+      ) : selfHosted ? (
         <SetupGitHubCard />
+      ) : (
+        <HostedNotConfiguredCard />
       )}
     </div>
   );
@@ -126,6 +132,25 @@ function SetupGitHubCard() {
           <Button type="submit">Set up GitHub App</Button>
         </form>
       </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Hosted (multi-tenant) deployment with no GitHub App credentials configured.
+ * Tenants don't create their own App here — it's a shared App SpecBoard owns —
+ * so the right action is to reach support, not run the manifest flow.
+ */
+function HostedNotConfiguredCard() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>GitHub isn&apos;t available yet</CardTitle>
+        <CardDescription>
+          GitHub is managed by SpecBoard on the hosted plan. If you don&apos;t see the option to
+          install it, please contact support and we&apos;ll get you connected.
+        </CardDescription>
+      </CardHeader>
     </Card>
   );
 }
