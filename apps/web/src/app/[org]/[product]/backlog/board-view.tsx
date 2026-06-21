@@ -53,6 +53,14 @@ export async function BoardView({
     ? allFeatures.filter((f) => f.productId === activeProduct.id)
     : allFeatures;
 
+  // In the cross-product ("All products") view, tag each card with its owning
+  // product; scoped to one product the badge would be redundant, so omit it.
+  const productsById = activeProduct
+    ? undefined
+    : Object.fromEntries(
+        products.map((p) => [p.id, { name: p.name, key: p.key, color: p.color }]),
+      );
+
   const levels = await store.listLevels(access ?? undefined);
   const activeLevel = resolveActiveLevel(levels, sp.level);
   const features = scoped.filter((f) => f.level === activeLevel.key);
@@ -131,6 +139,7 @@ export async function BoardView({
           members={members}
           customFields={customFields}
           estimate={estimate}
+          productsById={productsById}
         />
       )}
     </section>

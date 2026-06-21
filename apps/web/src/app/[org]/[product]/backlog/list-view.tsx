@@ -48,6 +48,13 @@ export async function ListView({
     .filter((f) => f.status !== "archived")
     .filter((f) => !activeProduct || f.productId === activeProduct.id);
 
+  // Cross-product view: show a Product column tagging each row's owner.
+  const productsById = activeProduct
+    ? undefined
+    : Object.fromEntries(
+        products.map((p) => [p.id, { name: p.name, key: p.key, color: p.color }]),
+      );
+
   // Assignee options come from the workspace roster (DB mode only).
   const db = getDb();
   const members =
@@ -98,7 +105,12 @@ export async function ListView({
               No features match these filters.
             </p>
           ) : (
-            <BacklogTable rows={rows} canEdit={canEdit} workflow={workflow} />
+            <BacklogTable
+              rows={rows}
+              canEdit={canEdit}
+              workflow={workflow}
+              productsById={productsById}
+            />
           )}
         </>
       )}

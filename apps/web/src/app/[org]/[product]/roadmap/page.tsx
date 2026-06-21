@@ -22,7 +22,9 @@ import {
   sortFeatures,
   statusLabel,
 } from "@/lib/feature-helpers";
+import { productColorClasses } from "@/lib/product-color";
 import { getStore } from "@/lib/store";
+import { cn } from "@/lib/utils";
 import { canWrite } from "@/lib/workspace";
 import { canConnectRepos, requireWorkspaceAccess } from "@/lib/workspace-access";
 
@@ -54,6 +56,13 @@ export default async function RoadmapPage({
   const scoped = activeProduct
     ? allFeatures.filter((f) => f.productId === activeProduct.id)
     : allFeatures;
+
+  // Cross-product view: tag each card with its owning product.
+  const productsById = activeProduct
+    ? undefined
+    : Object.fromEntries(
+        products.map((p) => [p.id, { name: p.name, key: p.key, color: p.color }]),
+      );
 
   const levels = await store.listLevels(access ?? undefined);
   const activeLevel = resolveActiveLevel(levels, sp.level);
@@ -111,9 +120,20 @@ export default async function RoadmapPage({
               <h2 className="text-sm font-medium text-muted-foreground">
                 {label}
               </h2>
-              {items.map((f) => (
+              {items.map((f) => {
+                const product =
+                  productsById && f.productId ? productsById[f.productId] : undefined;
+                return (
                 <Card key={f.specId} className="rounded-lg shadow-none">
                   <CardHeader className="space-y-1 p-3">
+                    {product ? (
+                      <Badge
+                        variant="secondary"
+                        className={cn("w-fit border-transparent text-[10px]", productColorClasses(product).badge)}
+                      >
+                        {product.name}
+                      </Badge>
+                    ) : null}
                     <CardTitle className="text-sm">
                       <Link
                         href={itemPath(org, productSlug, f)}
@@ -134,7 +154,8 @@ export default async function RoadmapPage({
                     </CardDescription>
                   </CardHeader>
                 </Card>
-              ))}
+                );
+              })}
               {items.length === 0 && (
                 <p className="text-xs text-muted-foreground">Empty</p>
               )}
