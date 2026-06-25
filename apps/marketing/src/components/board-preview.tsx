@@ -6,24 +6,27 @@ import { ArrowLeft, GitBranch } from "lucide-react";
 /**
  * Interactive product preview for the hero. Renders as a stylized board, and
  * clicking a card navigates (inside the fake browser chrome) to that item's
- * detail view — spec content beside a metadata sidebar — mirroring the real
- * app's feature-detail layout. No screenshots or asset files to keep in sync;
- * the data below is illustrative.
+ * detail view — a Spec Kit-style spec beside a metadata sidebar — mirroring the
+ * real app's feature-detail layout. No screenshots or asset files to keep in
+ * sync; the data below is illustrative. Every item is a Feature with its own
+ * spec, so the spec rendering stays representative of the real output.
  */
 
 type Status = "backlog" | "in_progress" | "in_review" | "done";
 
-type Block = { type: "p"; text: string } | { type: "ul"; items: string[] };
+type Block =
+  | { type: "p"; text: string }
+  | { type: "ul"; items: string[] }
+  | { type: "reqs"; items: { id: string; text: string }[] }
+  | { type: "scenarios"; items: { given: string; when: string; then: string }[] };
+
 type Section = { heading: string; blocks: Block[] };
 
 type Person = { name: string; initials: string; tone: string };
 
-type Child = { title: string; status: Status };
-
 type Card = {
   id: string;
   title: string;
-  level: "Feature" | "Epic";
   tag: string;
   status: Status;
   priority: string;
@@ -31,10 +34,10 @@ type Card = {
   quarter?: string;
   tags: string[];
   specId: string;
-  /** Spec-backed items have a path + sections; grouping items have children. */
-  specPath?: string;
-  sections?: Section[];
-  children?: Child[];
+  specPath: string;
+  branch: string;
+  created: string;
+  sections: Section[];
 };
 
 const STATUS_META: Record<Status, { label: string; dot: string }> = {
@@ -57,7 +60,6 @@ const CARDS: Card[] = [
   {
     id: "idea-portal",
     title: "Public idea portal",
-    level: "Feature",
     tag: "feature",
     status: "backlog",
     priority: "P2",
@@ -66,34 +68,62 @@ const CARDS: Card[] = [
     tags: ["portal", "feedback"],
     specId: "f3a9c1e2",
     specPath: "specs/idea-portal/spec.md",
+    branch: "feat/idea-portal",
+    created: "2026-05-12",
     sections: [
       {
-        heading: "Summary",
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "A public board where customers submit and upvote ideas. Submissions land in the backlog as work items, linked back to the requester.",
+            text: "As a customer, I want to submit and upvote ideas so the team can see what matters most to me.",
           },
         ],
       },
       {
-        heading: "Requirements",
+        heading: "Acceptance Scenarios",
         blocks: [
           {
-            type: "ul",
+            type: "scenarios",
             items: [
-              "Anonymous and signed-in submission",
-              "Upvotes roll up into a priority signal",
-              "Triage queue to accept, merge, or decline",
-              "Status changes notify subscribers",
+              {
+                given: "a signed-in customer",
+                when: "they submit an idea",
+                then: "it lands in the triage queue linked to their account",
+              },
+              {
+                given: "an idea on the portal",
+                when: "another user upvotes it",
+                then: "its priority signal increases on the backlog",
+              },
             ],
           },
         ],
       },
       {
-        heading: "Out of scope",
+        heading: "Functional Requirements",
         blocks: [
-          { type: "p", text: "Custom branding and portal SSO ship in a later phase." },
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "System MUST accept submissions from anonymous and signed-in users." },
+              { id: "FR-002", text: "System MUST roll upvotes into a priority signal on the backlog." },
+              { id: "FR-003", text: "Triage MUST allow accepting, merging, or declining a submission." },
+              { id: "FR-004", text: "System MUST notify subscribers when an idea's status changes." },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Edge Cases",
+        blocks: [
+          {
+            type: "ul",
+            items: [
+              "Duplicate submissions are surfaced for merge before they reach the backlog.",
+              "Declined ideas stay visible with a reason.",
+            ],
+          },
         ],
       },
     ],
@@ -101,7 +131,6 @@ const CARDS: Card[] = [
   {
     id: "saved-views",
     title: "Saved board views",
-    level: "Feature",
     tag: "feature",
     status: "backlog",
     priority: "P2",
@@ -109,25 +138,168 @@ const CARDS: Card[] = [
     tags: ["backlog", "filters"],
     specId: "b71d40aa",
     specPath: "specs/saved-views/spec.md",
+    branch: "feat/saved-views",
+    created: "2026-05-20",
     sections: [
       {
-        heading: "Summary",
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "Save a named bundle of filters and sort order, then switch between views from the backlog header.",
+            text: "As a product lead, I want to save filter sets so I can switch between the views I check daily.",
           },
         ],
       },
       {
-        heading: "Behaviour",
+        heading: "Acceptance Scenarios",
         blocks: [
           {
-            type: "ul",
+            type: "scenarios",
             items: [
-              "Views are per-user, scoped to a product",
-              "Capture status, owner, tag, and quarter filters",
-              "Pick a default view that loads on open",
+              {
+                given: "an active set of filters",
+                when: "the user saves it with a name",
+                then: "it appears in the view switcher",
+              },
+              {
+                given: "a chosen default view",
+                when: "the user opens the backlog",
+                then: "that view loads automatically",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "System MUST persist views per user, scoped to a product." },
+              { id: "FR-002", text: "A view MUST capture status, owner, tag, and quarter filters." },
+              { id: "FR-003", text: "Users MUST be able to set one view as the default." },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Out of Scope",
+        blocks: [{ type: "p", text: "Sharing views across a team ships in a later phase." }],
+      },
+    ],
+  },
+  {
+    id: "bulk-status",
+    title: "Bulk status updates",
+    tag: "feature",
+    status: "backlog",
+    priority: "P3",
+    assignee: PEOPLE.ada,
+    tags: ["backlog", "bulk"],
+    specId: "a82f5d61",
+    specPath: "specs/bulk-status/spec.md",
+    branch: "feat/bulk-status",
+    created: "2026-06-02",
+    sections: [
+      {
+        heading: "Primary User Story",
+        blocks: [
+          {
+            type: "p",
+            text: "As a maintainer, I want to move several items at once so grooming the backlog isn't one click at a time.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "multiple selected cards",
+                when: "the user picks a new status",
+                then: "every selected item moves and the board updates",
+              },
+              {
+                given: "one invalid transition in the selection",
+                when: "the bulk action runs",
+                then: "valid items move and the rest are reported",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "Users MUST be able to multi-select cards on the board." },
+              { id: "FR-002", text: "System MUST apply status, owner, or tag changes across the selection." },
+              {
+                id: "FR-003",
+                text: "System MUST validate each change against the workflow. [NEEDS CLARIFICATION: behavior on partial failure?]",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "slack-notify",
+    title: "Slack notifications",
+    tag: "feature",
+    status: "backlog",
+    priority: "P2",
+    assignee: PEOPLE.sam,
+    tags: ["slack", "notifications"],
+    specId: "d4b1907c",
+    specPath: "specs/slack-notify/spec.md",
+    branch: "feat/slack-notify",
+    created: "2026-06-10",
+    sections: [
+      {
+        heading: "Primary User Story",
+        blocks: [
+          {
+            type: "p",
+            text: "As a team member, I want status changes in Slack so I don't have to watch the board.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "a connected workspace",
+                when: "an item moves to In review",
+                then: "its reviewers get a Slack message",
+              },
+              {
+                given: "a muted product",
+                when: "its items change status",
+                then: "no messages are sent",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "System MUST post to a channel when subscribed items change status." },
+              { id: "FR-002", text: "Users MUST be able to subscribe per product or per item." },
+              { id: "FR-003", text: "Messages MUST deep-link to the work-item permalink." },
             ],
           },
         ],
@@ -137,25 +309,65 @@ const CARDS: Card[] = [
   {
     id: "org-tenancy",
     title: "Org tenancy & product switcher",
-    level: "Epic",
-    tag: "epic",
+    tag: "feature",
     status: "in_progress",
     priority: "P1",
     assignee: PEOPLE.maya,
     quarter: "2026 Q3",
     tags: ["multi-tenant"],
     specId: "9c2e77b4",
-    children: [
-      { title: "Org URL routing /{org}/{product}", status: "done" },
-      { title: "Product switcher in the sidebar", status: "in_progress" },
-      { title: "Per-product accent colors", status: "done" },
-      { title: "Private product enforcement", status: "backlog" },
+    specPath: "specs/org-tenancy/spec.md",
+    branch: "feat/org-tenancy",
+    created: "2026-04-18",
+    sections: [
+      {
+        heading: "Primary User Story",
+        blocks: [
+          {
+            type: "p",
+            text: "As an admin, I want one org with multiple products so teams share a workspace but keep separate boards.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "a user in an org",
+                when: "they open the switcher",
+                then: "they see every product they can access",
+              },
+              {
+                given: "a private product",
+                when: "a non-member opens its URL",
+                then: "access is denied",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "URLs MUST be scoped as /{org}/{product}." },
+              { id: "FR-002", text: "The sidebar MUST offer a switcher across a user's products." },
+              { id: "FR-003", text: "Each product MUST carry its own accent color." },
+              { id: "FR-004", text: "Private products MUST be hidden from non-members." },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
     id: "github-sync",
     title: "GitHub spec sync",
-    level: "Feature",
     tag: "feature",
     status: "in_progress",
     priority: "P0",
@@ -164,36 +376,115 @@ const CARDS: Card[] = [
     tags: ["git", "github"],
     specId: "1ad5e9f0",
     specPath: "specs/github-sync/spec.md",
+    branch: "feat/github-sync",
+    created: "2026-04-30",
     sections: [
       {
-        heading: "Summary",
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "Connect a repo through the GitHub App, import every spec, and reconcile on each push so the board never drifts from git.",
+            text: "As a developer, I want the board to mirror specs in git so it never drifts from the source of truth.",
           },
         ],
       },
       {
-        heading: "Flow",
+        heading: "Acceptance Scenarios",
         blocks: [
           {
-            type: "ul",
+            type: "scenarios",
             items: [
-              "One-click App setup, no secrets to paste",
-              "Import scans specs/** per .specboard/config.yml",
-              "A push webhook re-parses changed specs",
-              "blob sha detects drift and conflicts",
+              {
+                given: "a connected repo",
+                when: "specs are imported",
+                then: "each spec.md becomes a work item",
+              },
+              {
+                given: "a push to the default branch",
+                when: "a spec changes",
+                then: "the matching item re-parses",
+              },
             ],
           },
         ],
       },
       {
-        heading: "Open questions",
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "Setup MUST use the GitHub App with no secrets to paste." },
+              { id: "FR-002", text: "Import MUST scan specs/** per .specboard/config.yml." },
+              { id: "FR-003", text: "A push webhook MUST re-parse changed specs." },
+              { id: "FR-004", text: "System MUST detect drift via blob sha." },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Open Questions",
         blocks: [
           {
             type: "p",
-            text: "Monorepos with multiple spec roots are still under discussion.",
+            text: "Monorepos with multiple spec roots are [NEEDS CLARIFICATION: one product or many?].",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "command-palette",
+    title: "Keyboard command palette",
+    tag: "feature",
+    status: "in_progress",
+    priority: "P2",
+    assignee: PEOPLE.theo,
+    tags: ["shortcuts", "ux"],
+    specId: "6fe2c83a",
+    specPath: "specs/command-palette/spec.md",
+    branch: "feat/command-palette",
+    created: "2026-06-08",
+    sections: [
+      {
+        heading: "Primary User Story",
+        blocks: [
+          {
+            type: "p",
+            text: "As a power user, I want a command palette so I can jump and act without the mouse.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "any screen",
+                when: "the user presses Cmd-K",
+                then: "a searchable palette opens",
+              },
+              {
+                given: "a typed query",
+                when: "the user selects a command",
+                then: "it runs in the current context",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "Palette MUST open from a global shortcut." },
+              { id: "FR-002", text: "Palette MUST search work items, products, and actions." },
+              { id: "FR-003", text: "Recent and contextual commands MUST rank first." },
+            ],
           },
         ],
       },
@@ -202,7 +493,6 @@ const CARDS: Card[] = [
   {
     id: "permalinks",
     title: "Work-item permalinks",
-    level: "Feature",
     tag: "feature",
     status: "in_review",
     priority: "P1",
@@ -211,22 +501,162 @@ const CARDS: Card[] = [
     tags: ["routing"],
     specId: "47c0b8d3",
     specPath: "specs/permalinks/spec.md",
+    branch: "feat/permalinks",
+    created: "2026-05-02",
     sections: [
       {
-        heading: "Summary",
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "Stable, type-segmented URLs for every work item, so links survive renames and moves.",
+            text: "As a user, I want stable links to items so they survive renames and moves.",
           },
         ],
       },
       {
-        heading: "Shape",
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "an item",
+                when: "it is renamed",
+                then: "its existing links still resolve",
+              },
+              {
+                given: "a moved item",
+                when: "an old link is opened",
+                then: "it redirects to the new location",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "Permalinks MUST be /{org}/{product}/backlog/{level}/{specId}." },
+              { id: "FR-002", text: "The spec id MUST be the durable identity, not the title." },
+              { id: "FR-003", text: "Renames and moves MUST NOT break existing links." },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "spec-diff",
+    title: "Spec diff viewer",
+    tag: "feature",
+    status: "in_review",
+    priority: "P2",
+    assignee: PEOPLE.maya,
+    tags: ["git", "review"],
+    specId: "3c90ab47",
+    specPath: "specs/spec-diff/spec.md",
+    branch: "feat/spec-diff",
+    created: "2026-05-28",
+    sections: [
+      {
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "Permalinks are /{org}/{product}/backlog/{level}/{specId}. The level makes the item type legible; the spec id is the identity.",
+            text: "As a reviewer, I want to see what changed in a spec so I can approve with context.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "an item synced from git",
+                when: "its spec changes",
+                then: "the detail view shows a diff against the last version",
+              },
+              {
+                given: "a reviewer",
+                when: "they open the diff",
+                then: "additions and removals are highlighted inline",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "System MUST render a section-aware diff between spec versions." },
+              { id: "FR-002", text: "Diffs MUST link to the originating commit." },
+              { id: "FR-003", text: "Requirement-level changes MUST be called out." },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "export",
+    title: "CSV / JSON export",
+    tag: "feature",
+    status: "in_review",
+    priority: "P3",
+    assignee: PEOPLE.sam,
+    tags: ["export", "reporting"],
+    specId: "e15d762b",
+    specPath: "specs/export/spec.md",
+    branch: "feat/export",
+    created: "2026-06-01",
+    sections: [
+      {
+        heading: "Primary User Story",
+        blocks: [
+          {
+            type: "p",
+            text: "As an analyst, I want to export the backlog so I can report outside the tool.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "a filtered board",
+                when: "the user exports",
+                then: "the file matches the current filters",
+              },
+              {
+                given: "an export file",
+                when: "it is opened",
+                then: "it includes status, owner, tags, and spec id",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "System MUST export the current view as CSV and JSON." },
+              { id: "FR-002", text: "Exports MUST respect active filters." },
+              { id: "FR-003", text: "Export MUST include stable spec ids for joins." },
+            ],
           },
         ],
       },
@@ -235,7 +665,6 @@ const CARDS: Card[] = [
   {
     id: "mcp-tools",
     title: "MCP tools for agents",
-    level: "Feature",
     tag: "feature",
     status: "done",
     priority: "P1",
@@ -244,26 +673,48 @@ const CARDS: Card[] = [
     tags: ["mcp", "agents"],
     specId: "5e8a216c",
     specPath: "specs/mcp-tools/spec.md",
+    branch: "feat/mcp-tools",
+    created: "2026-03-15",
     sections: [
       {
-        heading: "Summary",
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "An MCP server that exposes prioritized, status-aware specs to coding agents.",
+            text: "As a coding agent, I want prioritized, status-aware specs so I can pick up the right work.",
           },
         ],
       },
       {
-        heading: "Tools",
+        heading: "Acceptance Scenarios",
         blocks: [
           {
-            type: "ul",
+            type: "scenarios",
             items: [
-              "list_features, with each item's blocks and blockedBy",
-              "read_spec for the full spec markdown",
-              "update_status, validated against the workflow",
-              "get_relations for typed dependencies",
+              {
+                given: "the MCP server",
+                when: "an agent lists features",
+                then: "each carries its blocks and blockedBy",
+              },
+              {
+                given: "an item",
+                when: "an agent updates status",
+                then: "the change is validated against the workflow",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "Server MUST expose list_features with blocks and blockedBy." },
+              { id: "FR-002", text: "Server MUST expose read_spec for the full spec markdown." },
+              { id: "FR-003", text: "update_status MUST validate against the workflow." },
+              { id: "FR-004", text: "get_relations MUST return typed dependencies." },
             ],
           },
         ],
@@ -273,7 +724,6 @@ const CARDS: Card[] = [
   {
     id: "auth",
     title: "Email auth + reset",
-    level: "Feature",
     tag: "feature",
     status: "done",
     priority: "P2",
@@ -282,26 +732,105 @@ const CARDS: Card[] = [
     tags: ["auth"],
     specId: "c0f4937e",
     specPath: "specs/auth/spec.md",
+    branch: "feat/auth",
+    created: "2026-02-20",
     sections: [
       {
-        heading: "Summary",
+        heading: "Primary User Story",
         blocks: [
           {
             type: "p",
-            text: "Email and password auth with verification and password reset, built on Better Auth.",
+            text: "As a new user, I want to sign up and recover my account so I can get in and stay in.",
           },
         ],
       },
       {
-        heading: "Includes",
+        heading: "Acceptance Scenarios",
         blocks: [
           {
-            type: "ul",
+            type: "scenarios",
             items: [
-              "Sign-up, sign-in, and sign-out",
-              "Email verification before the first write",
-              "Password reset over a tokenized link",
-              "Account and company settings",
+              {
+                given: "a new email",
+                when: "the user signs up",
+                then: "they must verify before the first write",
+              },
+              {
+                given: "a forgotten password",
+                when: "the user requests a reset",
+                then: "a tokenized link lets them set a new one",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "System MUST support sign-up, sign-in, and sign-out." },
+              { id: "FR-002", text: "Email MUST be verified before the first write." },
+              { id: "FR-003", text: "Password reset MUST use a tokenized, expiring link." },
+              { id: "FR-004", text: "Users MUST be able to manage account and company settings." },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "spec-editor",
+    title: "Markdown spec editor",
+    tag: "feature",
+    status: "done",
+    priority: "P2",
+    assignee: PEOPLE.ada,
+    tags: ["editor", "git"],
+    specId: "82a4f0d9",
+    specPath: "specs/spec-editor/spec.md",
+    branch: "feat/spec-editor",
+    created: "2026-03-02",
+    sections: [
+      {
+        heading: "Primary User Story",
+        blocks: [
+          {
+            type: "p",
+            text: "As an author, I want to edit specs in the app so I don't have to leave for small changes.",
+          },
+        ],
+      },
+      {
+        heading: "Acceptance Scenarios",
+        blocks: [
+          {
+            type: "scenarios",
+            items: [
+              {
+                given: "an item with a spec",
+                when: "the author edits and saves",
+                then: "the change writes back to git",
+              },
+              {
+                given: "a saved edit",
+                when: "the commit lands",
+                then: "the board reflects the new content",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        heading: "Functional Requirements",
+        blocks: [
+          {
+            type: "reqs",
+            items: [
+              { id: "FR-001", text: "Editor MUST render and edit spec markdown in place." },
+              { id: "FR-002", text: "Saves MUST commit back to the connected repo." },
+              { id: "FR-003", text: "Concurrent edits MUST be detected via blob sha." },
             ],
           },
         ],
@@ -315,7 +844,7 @@ export function BoardPreview() {
   const selected = CARDS.find((c) => c.id === selectedId) ?? null;
 
   const urlPath = selected
-    ? `app.specboard.ai/acme/web/backlog/${selected.level.toLowerCase()}/${selected.specId}`
+    ? `app.specboard.ai/acme/web/backlog/feature/${selected.specId}`
     : "app.specboard.ai/acme/web/backlog";
 
   return (
@@ -364,6 +893,7 @@ function BoardView({ onSelect }: { onSelect: (id: string) => void }) {
             <div className="mb-2 flex items-center gap-2 px-1 text-xs font-medium text-gray-600">
               <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
               {meta.label}
+              <span className="text-gray-400">{cards.length}</span>
             </div>
             <div className="space-y-2">
               {cards.map((card) => (
@@ -371,7 +901,7 @@ function BoardView({ onSelect }: { onSelect: (id: string) => void }) {
                   key={card.id}
                   type="button"
                   onClick={() => onSelect(card.id)}
-                  className="w-full rounded-lg border border-gray-200 bg-white p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  className="w-full cursor-pointer rounded-lg border border-gray-200 bg-white p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   <p className="text-xs font-medium text-gray-900">{card.title}</p>
                   <div className="mt-1.5 flex items-center justify-between">
@@ -403,7 +933,7 @@ function DetailView({ card, onBack }: { card: Card; onBack: () => void }) {
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-900"
+          className="inline-flex cursor-pointer items-center gap-1 text-xs text-gray-500 transition-colors hover:text-gray-900"
         >
           <ArrowLeft className="h-3 w-3" />
           Backlog
@@ -411,52 +941,40 @@ function DetailView({ card, onBack }: { card: Card; onBack: () => void }) {
 
         <div className="mt-2 flex items-center gap-2">
           <span className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-            {card.level}
+            Feature
           </span>
           <h3 className="text-base font-semibold tracking-tight text-gray-900">
-            {card.title}
+            Feature Specification: {card.title}
           </h3>
         </div>
-        {card.specPath ? (
-          <p className="mt-1 flex items-center gap-1 font-mono text-[11px] text-gray-400">
-            <GitBranch className="h-3 w-3" />
-            {card.specPath}
-          </p>
-        ) : null}
+        <p className="mt-1 flex items-center gap-1 font-mono text-[11px] text-gray-400">
+          <GitBranch className="h-3 w-3" />
+          {card.specPath}
+        </p>
+
+        {/* Spec Kit-style frontmatter */}
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border border-gray-200 bg-white px-3 py-2 font-mono text-[11px] leading-relaxed">
+          <dt className="text-gray-400">Feature Branch</dt>
+          <dd className="text-gray-700">{card.branch}</dd>
+          <dt className="text-gray-400">Created</dt>
+          <dd className="text-gray-700">{card.created}</dd>
+          <dt className="text-gray-400">Status</dt>
+          <dd className="text-gray-700">{meta.label}</dd>
+        </dl>
 
         <div className="mt-4 space-y-4">
-          {card.sections ? (
-            card.sections.map((section) => (
-              <section key={section.heading}>
-                <h4 className="text-[13px] font-semibold text-gray-900">
-                  {section.heading}
-                </h4>
-                <div className="mt-1 space-y-2">
-                  {section.blocks.map((block, i) =>
-                    block.type === "p" ? (
-                      <p key={i} className="text-[13px] leading-relaxed text-gray-600">
-                        {block.text}
-                      </p>
-                    ) : (
-                      <ul key={i} className="space-y-1">
-                        {block.items.map((item) => (
-                          <li
-                            key={item}
-                            className="flex gap-2 text-[13px] leading-relaxed text-gray-600"
-                          >
-                            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    ),
-                  )}
-                </div>
-              </section>
-            ))
-          ) : (
-            <ChildrenList card={card} />
-          )}
+          {card.sections.map((section) => (
+            <section key={section.heading}>
+              <h4 className="text-[13px] font-semibold text-gray-900">
+                {section.heading}
+              </h4>
+              <div className="mt-1 space-y-2">
+                {section.blocks.map((block, i) => (
+                  <SpecBlock key={i} block={block} />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       </article>
 
@@ -494,34 +1012,88 @@ function DetailView({ card, onBack }: { card: Card; onBack: () => void }) {
             ))}
           </div>
         </div>
-        <p className="font-mono text-[10px] text-gray-400">
-          {card.specPath ? "spec id" : "id"}: {card.specId}
-        </p>
+        <p className="font-mono text-[10px] text-gray-400">spec id: {card.specId}</p>
       </aside>
     </div>
   );
 }
 
-function ChildrenList({ card }: { card: Card }) {
-  const children = card.children ?? [];
-  const done = children.filter((c) => c.status === "done").length;
-  return (
-    <div className="space-y-3">
-      <p className="rounded-lg border border-dashed border-gray-300 p-3 text-[13px] text-gray-500">
-        This {card.level.toLowerCase()} groups work and has no spec of its own.
+function SpecBlock({ block }: { block: Block }) {
+  if (block.type === "p") {
+    return (
+      <p className="text-[13px] leading-relaxed text-gray-600">
+        <Annotated text={block.text} />
       </p>
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-medium text-gray-400">
-          Children · {done}/{children.length} done
-        </p>
-        {children.map((child) => (
-          <div key={child.title} className="flex items-center gap-2 text-[13px] text-gray-700">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_META[child.status].dot}`} />
-            <span className="truncate">{child.title}</span>
-          </div>
+    );
+  }
+  if (block.type === "ul") {
+    return (
+      <ul className="space-y-1">
+        {block.items.map((item) => (
+          <li
+            key={item}
+            className="flex gap-2 text-[13px] leading-relaxed text-gray-600"
+          >
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+            <span>
+              <Annotated text={item} />
+            </span>
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    );
+  }
+  if (block.type === "reqs") {
+    return (
+      <ul className="space-y-1">
+        {block.items.map((req) => (
+          <li
+            key={req.id}
+            className="flex gap-2 text-[13px] leading-relaxed text-gray-600"
+          >
+            <span className="mt-px shrink-0 font-mono text-[11px] font-semibold text-brand">
+              {req.id}
+            </span>
+            <span>
+              <Annotated text={req.text} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ol className="space-y-1.5">
+      {block.items.map((s, i) => (
+        <li key={i} className="text-[13px] leading-relaxed text-gray-600">
+          <span className="font-semibold text-gray-400">{i + 1}.</span>{" "}
+          <span className="font-semibold text-gray-700">Given</span> {s.given},{" "}
+          <span className="font-semibold text-gray-700">When</span> {s.when},{" "}
+          <span className="font-semibold text-gray-700">Then</span> {s.then}.
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** Highlights Spec Kit `[NEEDS CLARIFICATION: ...]` markers like the real tool. */
+function Annotated({ text }: { text: string }) {
+  const parts = text.split(/(\[NEEDS CLARIFICATION:[^\]]*\])/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("[NEEDS CLARIFICATION") ? (
+          <mark
+            key={i}
+            className="rounded bg-amber-100 px-1 py-px font-medium text-amber-700"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
 
