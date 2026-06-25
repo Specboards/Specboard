@@ -33,7 +33,7 @@ directory; otherwise it ships only in the hosted product.
 - **Advanced analytics:** cross-product reporting, cycle-time, and roadmap
   insight dashboards.
 - **Premium integrations:** managed connectors beyond the open GitHub sync.
-- **Audit logs** — tamper-evident, exportable activity history.
+- **Audit logs:** tamper-evident, exportable activity history.
 
 These features power the hosted service at
 [specboard.ai](https://specboard.ai). For a commercial or self-managed
