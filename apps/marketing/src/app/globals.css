@@ -21,3 +21,27 @@
     font-family: var(--font-sans);
   }
 }
+
+@layer utilities {
+  /* Subtle fade/slide when the interactive board preview swaps between the
+   * board and an item's detail view. */
+  @keyframes preview-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .animate-preview {
+    animation: preview-fade-in 200ms ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-preview {
+    animation: none;
+  }
+}

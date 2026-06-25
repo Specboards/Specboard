@@ -11,6 +11,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { BoardPreview } from "@/components/board-preview";
 import { ButtonLink } from "@/components/button-link";
 import { GithubIcon } from "@/components/icons";
 import { SiteFooter } from "@/components/site-footer";
@@ -84,81 +85,6 @@ function Hero() {
         <BoardPreview />
       </div>
     </section>
-  );
-}
-
-/** CSS-only stylized board so the hero has a product visual with no image
- * assets to ship or keep in sync. */
-function BoardPreview() {
-  const columns: { title: string; tone: string; cards: { title: string; tag: string }[] }[] = [
-    {
-      title: "Backlog",
-      tone: "bg-gray-400",
-      cards: [
-        { title: "Public idea portal", tag: "feature" },
-        { title: "Saved board views", tag: "feature" },
-      ],
-    },
-    {
-      title: "In progress",
-      tone: "bg-amber-400",
-      cards: [
-        { title: "Org tenancy & product switcher", tag: "epic" },
-        { title: "GitHub spec sync", tag: "feature" },
-      ],
-    },
-    {
-      title: "In review",
-      tone: "bg-pink-400",
-      cards: [{ title: "Work-item permalinks", tag: "feature" }],
-    },
-    {
-      title: "Done",
-      tone: "bg-emerald-400",
-      cards: [
-        { title: "MCP tools for agents", tag: "feature" },
-        { title: "Email auth + reset", tag: "feature" },
-      ],
-    },
-  ];
-
-  return (
-    <div className="mx-auto mt-16 max-w-5xl">
-      <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl shadow-indigo-100/60 ring-1 ring-black/5">
-        {/* fake window chrome */}
-        <div className="flex items-center gap-1.5 px-3 py-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-          <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-          <span className="h-2.5 w-2.5 rounded-full bg-gray-200" />
-          <span className="ml-3 rounded-md bg-gray-50 px-2 py-0.5 text-xs text-gray-400">
-            app.specboard.ai
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-3 sm:grid-cols-4">
-          {columns.map((col) => (
-            <div key={col.title} className="min-w-0">
-              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-medium text-gray-600">
-                <span className={`h-2 w-2 rounded-full ${col.tone}`} />
-                {col.title}
-              </div>
-              <div className="space-y-2">
-                {col.cards.map((card) => (
-                  <div
-                    key={card.title}
-                    className="rounded-lg border border-gray-200 bg-white p-2.5 text-left shadow-sm"
-                  >
-                    <p className="text-xs font-medium text-gray-900">{card.title}</p>
-                    <span className="mt-1.5 inline-block rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                      {card.tag}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
