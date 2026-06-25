@@ -120,6 +120,12 @@ docker compose -f infra/docker-compose.yml up   # web (infra/web.Dockerfile) + P
 
 ## License
 
-Apache-2.0 for the open-core. Commercial SaaS-only features (multi-tenant
-hosting, SSO/SAML/SCIM, advanced analytics, premium integrations, audit logs)
-are licensed separately.
+SpecBoard is **open-core**. The core product — the web app, marketing site,
+shared packages, MCP server, and single-org (`N=1`) self-hosting — is licensed
+under the [Apache License 2.0](./LICENSE). You may run, modify, and self-host it
+for any purpose, including commercially.
+
+A small set of SaaS-oriented features are licensed separately: multi-tenant
+hosting (`N>1`), SSO/SAML/SCIM, advanced analytics, premium integrations, and
+audit logs. See [LICENSING.md](./LICENSING.md) for the full breakdown, or contact
+**licensing@specboard.ai** for a commercial license.
