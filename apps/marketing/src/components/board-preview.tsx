@@ -6,7 +6,7 @@ import { ArrowLeft, GitBranch } from "lucide-react";
 /**
  * Interactive product preview for the hero. Renders as a stylized board, and
  * clicking a card navigates (inside the fake browser chrome) to that item's
- * detail view — a Spec Kit-style spec beside a metadata sidebar — mirroring the
+ * detail view (a Spec Kit-style spec beside a metadata sidebar) mirroring the
  * real app's feature-detail layout. No screenshots or asset files to keep in
  * sync; the data below is illustrative. Every item is a Feature with its own
  * spec, so the spec rendering stays representative of the real output.
