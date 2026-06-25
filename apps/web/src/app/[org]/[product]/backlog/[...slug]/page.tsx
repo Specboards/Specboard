@@ -141,7 +141,7 @@ export default async function ItemPage({
         </div>
         {feature.isDbNative ? (
           <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-            {`This ${levelLabel.toLowerCase()} groups work — it has no spec of its own.`}
+            {`This ${levelLabel.toLowerCase()} groups work and has no spec of its own.`}
             {childLabel
               ? ` Add ${childLabel.toLowerCase()} items beneath it to build it out.`
               : ""}

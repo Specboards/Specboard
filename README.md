@@ -3,9 +3,9 @@
 A lightweight, spec-based product-management layer for **spec-driven development**.
 
 Your specs stay canonical in git (versioned with code, read by AI coding agents).
-SpecBoard layers the product metadata — status, assignment, priority, backlog
-order, roadmap, dependencies, epic/sub-feature hierarchy — **on top** of them,
-so PM, UX, and engineering collaborate without editing files in a terminal and
+SpecBoard layers the product metadata **on top** of them: status, assignment,
+priority, backlog order, roadmap, dependencies, and epic/sub-feature hierarchy.
+PM, UX, and engineering collaborate without editing files in a terminal and
 without duplicating work into JIRA/Aha.
 
 Open-core: self-host the core for free, or use the hosted SaaS.
@@ -50,14 +50,14 @@ feature: checkout # optional: groups this spec under a named Feature (else its f
 ---
 ```
 
-On import each spec is homed under a **Feature** grouping — by its `feature:` value
+On import each spec is homed under a **Feature** grouping, by its `feature:` value
 when set, otherwise by its folder (specs in the same directory share a Feature). The
 hierarchy above the leaf (Feature → Epic → Initiative) is managed in the app, not git.
 
 Per-repo config (which globs are specs, workflow, custom fields, write mode)
 lives in [`.specboard/config.yml`](./.specboard/config.yml).
 
-## Local testing — quick start
+## Local testing: quick start
 
 Requires Node 22+ and pnpm 10+. No database needed:
 

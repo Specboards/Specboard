@@ -593,7 +593,7 @@ export class LocalFileStore implements FeatureStore {
     const items = await this.readItems();
     if (!items.some((i) => i.id === specId))
       throw new FeatureError(
-        "Spec-backed items can't be deleted here — remove the spec in git.",
+        "Spec-backed items can't be deleted here. Remove the spec in git.",
       );
     await this.writeItems(items.filter((i) => i.id !== specId));
   }

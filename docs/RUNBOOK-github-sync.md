@@ -1,9 +1,9 @@
-# Runbook — GitHub App + spec sync
+# Runbook: GitHub App + spec sync
 
 How to connect a repository so SpecBoard imports its `specs/**/spec.md` and keeps
 the board in sync on every push.
 
-## Two deployment models — pick the right one
+## Two deployment models: pick the right one
 
 A GitHub App registration hard-codes one webhook URL and one OAuth callback URL,
 so a single App can only ever serve one SpecBoard instance. That splits setup
@@ -11,12 +11,12 @@ into two paths, keyed off `SPECBOARD_MULTI_TENANT`:
 
 | Model | Flag | GitHub App | How tenants connect |
 | --- | --- | --- | --- |
-| **Hosted** (test, prod) | `SPECBOARD_MULTI_TENANT=true` | One **shared** App SpecBoard owns under `@specboard`, configured via env | Click **Install** — never create |
+| **Hosted** (test, prod) | `SPECBOARD_MULTI_TENANT=true` | One **shared** App SpecBoard owns under `@specboard`, configured via env | Click **Install**, never create |
 | **Self-host** | unset (default) | Each install creates its **own** App via the one-click manifest flow | One-click setup, then install |
 
-On the hosted deployment the in-app "create App" flow is **disabled** (it would
-hit GitHub's reserved-name wall — `SpecBoard` is reserved for `@specboard` — and
-overwrite the deployment-wide singleton credentials). Tenants only install the
+On the hosted deployment the in-app "create App" flow is **disabled**: it would
+hit GitHub's reserved-name wall (`SpecBoard` is reserved for `@specboard`) and
+overwrite the deployment-wide singleton credentials. Tenants only install the
 shared App. The one-click manifest flow below is the **self-host** path.
 
 | Env | Model | App host | Webhook URL |
@@ -31,7 +31,7 @@ The rest of this runbook (steps 1–3) is the **self-host** one-click path.
 
 - `DATABASE_URL` and `BETTER_AUTH_SECRET` are set (already true wherever auth
   works). `BETTER_AUTH_SECRET` also encrypts the stored App credentials.
-- The DB migrations are applied (the `github_app` table — migration `0003`).
+- The DB migrations are applied (the `github_app` table, migration `0003`).
   Migrations don't run automatically on deploy; apply with
   `DATABASE_URL=<the deployment's db> pnpm db:migrate` from the repo root.
 
@@ -67,10 +67,10 @@ its own App because a GitHub App binds to a single host's webhook/callback URLs
 3. **Tenants connect** by opening **Repositories** → **Connect GitHub**, which
    installs the shared App on their repos; the picker then lists those repos to
    connect (same as self-host step 2 below). Each install is a distinct
-   `installation_id` scoped to that tenant — one App, many installations.
+   `installation_id` scoped to that tenant: one App, many installations.
 
 > Without `SPECBOARD_MULTI_TENANT=true` the deployment behaves as self-host and
-> exposes the per-tenant create flow — on a shared deployment that lets one
+> exposes the per-tenant create flow. On a shared deployment that lets one
 > tenant's "create App" overwrite another's stored credentials. Always set the
 > flag on hosted.
 
@@ -84,19 +84,19 @@ its own App because a GitHub App binds to a single host's webhook/callback URLs
 
 ---
 
-## 1. Create the GitHub App (one click) — self-host
+## 1. Create the GitHub App (one click): self-host
 
 Sign in as a workspace **admin**, open **Repositories**, and under "Connect
 SpecBoard to GitHub" optionally enter your **GitHub organization** (e.g.
 `Specboards`; leave blank for a personal account), then **Set up GitHub App**.
 
-SpecBoard sends you to GitHub with the App pre-defined (name, permissions —
-Contents R/W, Pull requests R/W, Issues RO, Metadata RO — webhook, the **Push**,
-**Pull request**, and **Issues** events, and the post-install Setup URL). The
+SpecBoard sends you to GitHub with the App pre-defined: name; permissions
+Contents R/W, Pull requests R/W, Issues RO, Metadata RO; webhook; the **Push**,
+**Pull request**, and **Issues** events; and the post-install Setup URL. The
 name is suffixed with your org/workspace (e.g. `SpecBoard (acme)`) because App
 names are globally unique and the bare `SpecBoard` is reserved for `@specboard`.
 Review and **Create GitHub App**. GitHub redirects you back and SpecBoard stores the
-App's id, slug, private key, and webhook secret — **encrypted in the database**.
+App's id, slug, private key, and webhook secret, all **encrypted in the database**.
 No `.pem` download, no secrets to paste.
 
 > **Upgrading an App created before GitHub feature linking (migration `0009`):**
@@ -120,7 +120,7 @@ Nothing to copy by hand.
   board now lists the repo's specs (as **Work Items**, the spec-backed leaf).
 - **Feature grouping:** the summary's `featuresCreated` counts Feature groupings
   auto-created to home new work items. Each spec lands under a Feature chosen by a
-  stable key — its `feature:` frontmatter when set, else its folder path (so specs
+  stable key: its `feature:` frontmatter when set, else its folder path (so specs
   in the same directory share a Feature). Sync only assigns a Feature when the work
   item has none, so re-syncs never override a parent you set in the app.
 - **Stable ids:** specs that lacked an `id` get a `chore(specboard): assign
@@ -135,17 +135,17 @@ On the Repositories page each connected repo has a **Disconnect** button (admin
 only) next to **Re-sync**; it asks for an inline confirm before acting.
 
 Disconnect **detaches, it does not delete your board.** The imported work items
-stay on the board as standalone rows — the `features.repo_id` FK is `ON DELETE
+stay on the board as standalone rows. The `features.repo_id` FK is `ON DELETE
 set null` (migration `0016`), so removing the `repositories` row nulls their
 `repo_id` rather than cascading. What *is* removed: the sync connection itself and
-the repo's `feature_github_links` (PR/issue links, a `NOT NULL` FK — they can't
+the repo's `feature_github_links` (PR/issue links, a `NOT NULL` FK that can't
 refresh without the install). The GitHub App **installation** on GitHub is left
 alone; uninstall it there separately if you also want to revoke access.
 
 Under the hood: `DELETE /api/v1/repositories/:id` (admin-only, workspace-scoped).
 Reconnecting later re-imports and re-homes items by their stable key, so a
 disconnect → reconnect round-trip is non-destructive. To connect a different
-GitHub org, just install the App there and connect — repositories are listed
+GitHub org, just install the App there and connect. Repositories are listed
 per-row, so multiple repos across multiple orgs coexist in one workspace.
 
 ## Troubleshooting
@@ -153,15 +153,15 @@ per-row, so multiple repos across multiple orgs coexist in one workspace.
 - **Delivery 401 (Invalid signature):** `GITHUB_WEBHOOK_SECRET` doesn't match the
   App's webhook secret.
 - **Delivery 404 (not connected):** the push's `owner/name` has no `repositories`
-  row — connect it again from the Repositories page (owner/name are case-sensitive).
+  row. Connect it again from the Repositories page (owner/name are case-sensitive).
 - **`sync` returns `{ error: "GitHub App is not configured" }`:** no credentials
-  stored and no env vars — re-run the one-click setup (step 1).
+  stored and no env vars. Re-run the one-click setup (step 1).
 - **"Set up GitHub App" errors:** check `BETTER_AUTH_SECRET` is set and migration
   `0003` is applied (the `github_app` table must exist).
 - **Delivery ignored (202):** push was to a non-default branch, or nothing under
-  the spec globs changed — both are expected no-ops.
+  the spec globs changed. Both are expected no-ops.
 
-## Appendix — manual env-based setup (alternative)
+## Appendix: manual env-based setup (alternative)
 
 For air-gapped or scripted deployments you can skip the in-app flow and provide
 credentials via env. Create the App by hand (GitHub → Settings → Developer

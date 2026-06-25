@@ -1,4 +1,4 @@
-# Plan — Multi-tenant org provisioning (ADR-0001 Phase 4-lite)
+# Plan: Multi-tenant org provisioning (ADR-0001 Phase 4-lite)
 
 - **Status:** In progress
 - **Branch:** `feat/org-provisioning` (off `main`)
@@ -19,11 +19,11 @@ Single-tenant / self-host behavior (`SPECBOARD_MULTI_TENANT` unset) must stay
 The schema + routing are already multi-tenant (Phases 1–3 done). Three N=1
 conveniences still force one org per deployment:
 
-1. `createWorkspaceWithOwner` (`apps/web/src/lib/workspace.ts`) — if any
+1. `createWorkspaceWithOwner` (`apps/web/src/lib/workspace.ts`). If any
    workspace exists, it returns that one instead of creating a new org.
-2. `ensureMembership` — auto-joins every authenticated user to the first
+2. `ensureMembership` auto-joins every authenticated user to the first
    workspace as `viewer`.
-3. `/setup` + `resolveActiveWorkspace`(no slug) + root `/` — key off "a
+3. `/setup` + `resolveActiveWorkspace`(no slug) + root `/` key off "a
    workspace exists" rather than "this user has a membership."
 
 ## Decisions
@@ -41,31 +41,31 @@ conveniences still force one org per deployment:
 
 ## Work items
 
-### 1. Slug helpers (isomorphic) — `apps/web/src/lib/org-path.ts`
-- `slugifyOrg(name): string` — pure, shared by client preview + server.
-- `RESERVED_ORG_SLUGS: Set<string>` — top-level literal routes that must never be
+### 1. Slug helpers (isomorphic): `apps/web/src/lib/org-path.ts`
+- `slugifyOrg(name): string`: pure, shared by client preview + server.
+- `RESERVED_ORG_SLUGS: Set<string>` lists the top-level literal routes that must never be
   an org slug: `api`, `setup`, `sign-in`, `sign-up`, `forgot-password`,
   `reset-password`, `_next`, `favicon.ico`, plus `LOCAL_ORG_SLUG` (`local`).
 - `isReservedOrgSlug(slug): boolean`.
 
-### 2. Workspace creation — `apps/web/src/lib/workspace.ts`
+### 2. Workspace creation: `apps/web/src/lib/workspace.ts`
 - `createWorkspaceWithOwner`: in MT mode, **always** create a new workspace +
   make the caller `admin` (no "return existing"). Derive slug via `slugifyOrg`;
   reject reserved; on unique-violation/collision throw a typed
   `SlugTakenError` (carry a suggested free slug). Single-tenant: unchanged.
 - Add an explicit-`slug` parameter path so the form can submit a chosen slug.
-- `ensureMembership`: in MT mode, **no auto-join** — return the caller's existing
+- `ensureMembership`: in MT mode, **no auto-join**; return the caller's existing
   membership or `null`.
 - `resolveActiveWorkspace`(no slug): in MT mode, resolve from the caller's actual
   memberships (single → it; none → `null`); never auto-join.
 
-### 3. API — `apps/web/src/app/api/v1/workspaces/route.ts`
+### 3. API: `apps/web/src/app/api/v1/workspaces/route.ts`
 - Accept optional `slug` in the body.
 - Map `SlugTakenError` → `409 { error, code: "slug_taken", suggestion }`.
 - Map reserved/invalid slug → `422 { error, code: "slug_invalid" }`.
 - Keep "already belongs → 409".
 
-### 4. Setup flow — `apps/web/src/app/setup/page.tsx` + `components/setup-form.tsx`
+### 4. Setup flow: `apps/web/src/app/setup/page.tsx` + `components/setup-form.tsx`
 - Page guard (MT): show the form when **this user** has no membership; redirect
   to their org only if they already belong to one. Single-tenant: unchanged
   ("if any workspace exists, join + leave").
@@ -95,7 +95,7 @@ conveniences still force one org per deployment:
 2. Flip `SPECBOARD_MULTI_TENANT=true` on **test**; verify a second account
    creates its own org and `palouse` still resolves.
 3. In GitHub, register the hosted Apps under the `Specboards` org ("Any
-   account") — one per env, since an App binds to a single host's URLs.
+   account"), one per env, since an App binds to a single host's URLs.
 4. Set each App's env secrets (`GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` /
    `GITHUB_WEBHOOK_SECRET` / `NEXT_PUBLIC_GITHUB_APP_SLUG`) +
    `SPECBOARD_MULTI_TENANT=true` on `specboard-test` and `specboard`.
@@ -103,7 +103,7 @@ conveniences still force one org per deployment:
 ## Environment facts (updated 2026-06-20)
 
 The repo was transferred from the `StudioPalouse` org (id 80005306) to
-`Specboards` (id 295463913) — a different org, so the old App could not carry
+`Specboards` (id 295463913), a different org, so the old App could not carry
 over. New hosted Apps were registered under `Specboards`:
 
 - **test** → App `specboards-test` (app_id 4105658), env on `specboard-test`.
@@ -112,7 +112,7 @@ over. New hosted Apps were registered under `Specboards`:
 - test (`specboard-test`, db `z7y24od8vemrgqd1`): 1 workspace `palouse`, 1 member.
   The old stored App `specboard-studiopalouse` (app_id 4052836, StudioPalouse)
   was deleted from `github_app` so env creds take over. The pre-existing repo row
-  (`StudioPalouse/SpecBoard`, installation 140279350) is stale — must be
+  (`StudioPalouse/SpecBoard`, installation 140279350) is stale and must be
   re-installed/reconnected against `specboards-test` (and re-pointed at the new
   `Specboards/SpecBoard` path). `SPECBOARD_MULTI_TENANT=true`.
 - prod (`specboard`, db `1zqyxr7d791rwp8m`): 1 workspace `nintex`, 1 member, 0

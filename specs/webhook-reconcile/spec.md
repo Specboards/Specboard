@@ -12,7 +12,7 @@ and refresh the cached content the boards render from.
 ## Problem
 
 If the index drifts from git, the UI shows stale spec content and agents act
-on outdated requirements — git must stay the undisputed source of truth.
+on outdated requirements. Git must stay the undisputed source of truth.
 
 ## Requirements
 

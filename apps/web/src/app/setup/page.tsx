@@ -22,7 +22,7 @@ export const metadata = { title: "Set up · SpecBoard" };
  */
 export default async function SetupPage() {
   const db = getDb();
-  if (!db) redirect("/"); // auth disabled (file mode) — nothing to set up
+  if (!db) redirect("/"); // auth disabled (file mode); nothing to set up
 
   const user = await getServerSessionUser();
   if (!user) redirect("/sign-in?from=/setup");

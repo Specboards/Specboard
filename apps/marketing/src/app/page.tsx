@@ -71,7 +71,7 @@ function Hero() {
 
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <ButtonLink href={SIGN_UP_URL} size="lg">
-              Get started — it&apos;s free
+              Get started for free
               <ArrowRight className="h-4 w-4" />
             </ButtonLink>
             <ButtonLink href={GITHUB_URL} target="_blank" rel="noreferrer" variant="secondary" size="lg">
@@ -166,8 +166,8 @@ function BoardPreview() {
 
 function ValueStrip() {
   const points = [
-    "Specs stay canonical in git — versioned with code, read by AI agents.",
-    "PM metadata layered on top — no duplication into Jira or Aha.",
+    "Specs stay canonical in git, versioned with your code and read by AI agents.",
+    "Add product metadata on top. No copying specs into Jira or Aha.",
     "One source of truth for PM, UX, and engineering.",
   ];
   return (
@@ -192,7 +192,7 @@ const FEATURES: { icon: IconComponent; title: string; body: string }[] = [
   {
     icon: GitBranch,
     title: "Git-native specs",
-    body: "Your specs/**/spec.md files stay the source of truth. SpecBoard reads frontmatter and keeps a live index — renames and edits survive because every spec carries a stable id.",
+    body: "Your specs/**/spec.md files stay the source of truth. SpecBoard reads frontmatter and keeps a live index. Renames and edits survive because every spec carries a stable id.",
   },
   {
     icon: ListTodo,
@@ -202,7 +202,7 @@ const FEATURES: { icon: IconComponent; title: string; body: string }[] = [
   {
     icon: LayoutGrid,
     title: "Kanban board",
-    body: "A status board with a workflow-validated state machine — backlog, defining, ready, in progress, in review, done — so status always means the same thing.",
+    body: "A status board with a validated workflow: backlog, defining, ready, in progress, in review, done. Status always means the same thing.",
   },
   {
     icon: Map,
@@ -217,7 +217,7 @@ const FEATURES: { icon: IconComponent; title: string; body: string }[] = [
   {
     icon: Bot,
     title: "MCP for AI agents",
-    body: "An MCP server exposes prioritized, assigned, status-aware specs to coding agents — list_features, read_spec, update_status — so agents work from the same plan.",
+    body: "An MCP server exposes prioritized, assigned, status-aware specs to coding agents through list_features, read_spec, and update_status, so agents work from the same plan.",
   },
 ];
 
@@ -227,7 +227,7 @@ function Features() {
       id="features"
       eyebrow="Features"
       title="Everything to run product on top of your specs"
-      subtitle="The planning layer your repo was missing — without pulling specs out of git."
+      subtitle="The planning layer your repo never had, without pulling specs out of git."
     >
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {FEATURES.map(({ icon: Icon, title, body }) => (
@@ -254,7 +254,7 @@ const STEPS: { icon: IconComponent; step: string; title: string; body: string }[
     icon: GithubIcon,
     step: "01",
     title: "Connect your repo",
-    body: "Set up the GitHub App in one click. No secrets to paste — credentials are created and stored encrypted for you.",
+    body: "Set up the GitHub App in one click. There are no secrets to paste; credentials are created and stored encrypted for you.",
   },
   {
     icon: Workflow,
@@ -359,7 +359,7 @@ function FinalCta() {
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <ButtonLink href={SIGN_UP_URL} size="lg">
-            Get started — it&apos;s free
+            Get started for free
             <ArrowRight className="h-4 w-4" />
           </ButtonLink>
           <ButtonLink

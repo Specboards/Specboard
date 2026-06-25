@@ -155,7 +155,7 @@ export async function patchFeature(
 
   if (patch.title !== undefined && !feature.isDbNative) {
     throw new InvalidPatchError(
-      "Spec-backed item titles come from the spec — edit the title in git.",
+      "Spec-backed item titles come from the spec. Edit the title in git.",
     );
   }
 

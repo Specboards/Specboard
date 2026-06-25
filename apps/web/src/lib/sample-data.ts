@@ -31,7 +31,7 @@ const SAMPLE_FEATURES: SampleFeature[] = [
     roadmapQuarter: null,
     path: "specs/welcome/spec.md",
     content:
-      "## What this is\n\nSpecBoard manages product work as **git-native specs**. Each feature is a `spec.md` in your repo; the board adds status, priority, and roadmap metadata on top.\n\n## Try it\n\nChange this card's status with the dropdown — the edit lands in the database, while the spec content stays canonical in git.",
+      "## What this is\n\nSpecBoard manages product work as **git-native specs**. Each feature is a `spec.md` in your repo; the board adds status, priority, and roadmap metadata on top.\n\n## Try it\n\nChange this card's status with the dropdown. The edit lands in the database, while the spec content stays canonical in git.",
   },
   {
     specId: "a0000000-0000-4000-8000-000000000002",
@@ -53,7 +53,7 @@ const SAMPLE_FEATURES: SampleFeature[] = [
     roadmapQuarter: null,
     path: "specs/first-spec/spec.md",
     content:
-      "## Format\n\nA spec is markdown with `id` and `title` frontmatter. SpecBoard injects a stable `id` automatically on first import, so you only write the `title`.\n\n## Sections\n\nUse `##` headings — they're parsed into structured sections shown on the feature page.",
+      "## Format\n\nA spec is markdown with `id` and `title` frontmatter. SpecBoard injects a stable `id` automatically on first import, so you only write the `title`.\n\n## Sections\n\nUse `##` headings. They're parsed into structured sections shown on the feature page.",
   },
   {
     specId: "a0000000-0000-4000-8000-000000000004",

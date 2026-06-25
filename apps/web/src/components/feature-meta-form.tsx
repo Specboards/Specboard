@@ -87,7 +87,7 @@ export function FeatureMetaForm({
   if (!canEdit) {
     return (
       <p className="text-xs text-muted-foreground">
-        You have view-only access — ask an admin for an editor role to change
+        You have view-only access. Ask an admin for an editor role to change
         metadata.
       </p>
     );

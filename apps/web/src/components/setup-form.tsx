@@ -159,7 +159,7 @@ export function SetupForm() {
               <span>
                 <span className="font-medium">Start empty</span>
                 <span className="block text-xs text-muted-foreground">
-                  A clean slate — connect a GitHub repo to import your specs.
+                  A clean slate. Connect a GitHub repo to import your specs.
                 </span>
               </span>
             </label>

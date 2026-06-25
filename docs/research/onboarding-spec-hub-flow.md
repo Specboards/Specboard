@@ -1,6 +1,6 @@
-# Onboarding flow design — Spec Hub
+# Onboarding flow design: Spec Hub
 
-**Status:** Design (for discussion) — no code in this doc
+**Status:** Design (for discussion), no code in this doc
 **Date:** 2026-06-15
 **Companion to:** [`spec-repo-strategy.md`](./spec-repo-strategy.md)
 
@@ -9,8 +9,8 @@
 ## 1. Goal & non-goals
 
 **Goal.** Extend SpecBoard's onboarding so a new workspace can choose how it wants specs
-organized, and — if it wants the **Spec Hub** model (one repo holds specs + a manifest
-pointing at service repos) — get there with as little manual setup as possible. The flow
+organized. If it wants the **Spec Hub** model (one repo holds specs + a manifest
+pointing at service repos), it should get there with as little manual setup as possible. The flow
 should: (a) ask the user what **setup style** they want, (b) **detect** whether they
 already have a spec hub, and (c) if not, **offer to create one** by scaffolding hub files
 into an existing connected repo.
@@ -20,7 +20,7 @@ into an existing connected repo.
   has `contents: write`, `pull_requests: write`, `metadata: read`
   (`apps/web/src/app/api/v1/github/app/create/route.ts`). Creating a repo needs
   `Administration: write`, a permission bump that triggers re-consent for every existing
-  install — deferred until there's demand. We scaffold into a repo the user already
+  install, so we've deferred it until there's demand. We scaffold into a repo the user already
   connected.
 - Changing how agents *execute* code across multiple repos. That's downstream of this;
   see the memo. This doc stops at "the hub exists and is registered."
@@ -39,7 +39,7 @@ sign-up → verify email → /setup (org name + "sample data | empty") → /back
 
 (`apps/web/src/app/setup/page.tsx`, `apps/web/src/components/setup-form.tsx`,
 `apps/web/src/components/repositories-manager.tsx`.) There is **no stepper/wizard pattern
-in the codebase**, so the multi-step shape below is new — but each step reuses an existing
+in the codebase**, so the multi-step shape below is new, but each step reuses an existing
 piece rather than inventing one.
 
 ---
@@ -103,7 +103,7 @@ artifacts using the **existing** `GitHubRepoClient.writeFile` (`packages/git/src
 honoring the repo's `writeMode` (so a `pr`-mode repo gets a PR, a `direct`-mode repo gets a
 commit on the default branch):
 
-1. **`.specboard/config.yml`** — extend the existing config with `isSpecHub: true` (see §5):
+1. **`.specboard/config.yml`**: extend the existing config with `isSpecHub: true` (see §5):
    ```yaml
    version: 1
    isSpecHub: true
@@ -111,7 +111,7 @@ commit on the default branch):
      - "specs/**/spec.md"
    writeMode: pr
    ```
-2. **`.specboard/manifest.yml`** — the service list with pinned references:
+2. **`.specboard/manifest.yml`**: the service list with pinned references:
    ```yaml
    version: 1
    services:
@@ -121,7 +121,7 @@ commit on the default branch):
        ref: v1.0.0        # pinned tag/SHA, not a floating branch
        # path: services/example   # optional sub-path within the repo
    ```
-3. **`specs/example/spec.md`** — a starter spec, with a stable `id` injected via the
+3. **`specs/example/spec.md`**: a starter spec, with a stable `id` injected via the
    existing `injectSpecId` / `reconcileSpecs` (`packages/git/src/index.ts`).
 
 Then run `syncRepository` (`apps/web/src/lib/github-sync.ts`) so the new specs and config
@@ -159,7 +159,7 @@ const manifestSchema = z.object({
 });
 ```
 
-**Storage: reuse `repositories.config` JSONB — no migration.** That column already caches
+**Storage: reuse `repositories.config` JSONB, no migration.** That column already caches
 the parsed `.specboard/config.yml` (`packages/db/src/schema.ts`,
 `apps/web/src/lib/github-sync.ts`), so `isSpecHub` rides along for free, and a hub query is
 just a JSONB filter. The manifest's service list is read from git (and can be cached the
@@ -174,13 +174,13 @@ lives in the versioned `.specboard/` files. Prefer JSONB; revisit if hub queries
 ## 6. Detection logic
 
 A hub = a connected repo whose parsed config has `isSpecHub === true`. To detect during
-onboarding, read each workspace repo's config — prefer the **cached** `repositories.config`
+onboarding, read each workspace repo's config. Prefer the **cached** `repositories.config`
 (already synced) and fall back to `readRepoConfigFromGit` (`apps/web/src/lib/github-sync.ts`)
 for freshly connected repos not yet synced.
 
 | Repos with `isSpecHub` | Behavior |
 |---|---|
-| 0 | Offer to create — pick a connected repo to scaffold into (§4) |
+| 0 | Offer to create: pick a connected repo to scaffold into (§4) |
 | 1 | Auto-designate; show which repo, allow change |
 | >1 | Ask the user to pick the active hub; flag the others as a warning (multiple hubs is usually a mistake) |
 
@@ -188,11 +188,11 @@ for freshly connected repos not yet synced.
 
 ## 7. API surface (proposed)
 
-Sketches only — shapes, not implementations.
+Sketches only: shapes, not implementations.
 
-- **`GET /api/v1/spec-hubs`** — list hubs detected in the workspace.
+- **`GET /api/v1/spec-hubs`**: list hubs detected in the workspace.
   `→ { hubs: [{ repoId, owner, name, manifestServiceCount }] }`
-- **`POST /api/v1/spec-hubs`** — designate + (optionally) scaffold.
+- **`POST /api/v1/spec-hubs`**: designate + (optionally) scaffold.
   `{ repoId, scaffold: true }` → writes config/manifest/starter spec (§4), re-syncs,
   returns `{ repoId, isSpecHub: true, pr?: { url } }`.
 
@@ -209,32 +209,32 @@ Once a hub is registered, a spec in the hub needs to point code work at the righ
 repo(s). The natural shape: a feature references one or more manifest services (e.g. a
 `targets` field), and the MCP layer (`apps/mcp/src/server.ts`) exposes that alongside
 `read_spec` so an agent reading a hub spec knows which repo(s) to act in. Fully specifying
-this is out of scope here — see the memo's "recommendation" and "open questions" sections.
+this is out of scope here. See the memo's "recommendation" and "open questions" sections.
 
 ---
 
 ## 9. Risks & open questions
 
-- **PR-mode scaffolding** — files arrive via PR, so "the hub is ready" is eventually
+- **PR-mode scaffolding:** files arrive via PR, so "the hub is ready" is eventually
   consistent. Need clear UX for the pending-PR state (§4).
-- **Private-repo scope** — scaffolding assumes write access to the chosen repo; confirm the
+- **Private-repo scope:** scaffolding assumes write access to the chosen repo; confirm the
   App install covers it before offering to create.
-- **Multiple hubs** — define one active hub per workspace (or allow several explicitly?).
-- **Scan cost** — detection across many repos should use cached config, not N git reads.
-- **Manifest schema** — `ref` pinning, optional `path`, and how/whether to validate that
+- **Multiple hubs:** define one active hub per workspace (or allow several explicitly?).
+- **Scan cost:** detection across many repos should use cached config, not N git reads.
+- **Manifest schema:** `ref` pinning, optional `path`, and how/whether to validate that
   referenced repos are also connected to the workspace.
-- **Deferred: create-new-repo** — revisit the `Administration: write` permission bump if
+- **Deferred: create-new-repo.** Revisit the `Administration: write` permission bump if
   users want SpecBoard to stand up the hub repo itself.
 
 ---
 
 ## 10. Phased implementation outline
 
-1. **Config & manifest schema** — extend `repoConfigSchema`, add `manifestSchema`
+1. **Config & manifest schema:** extend `repoConfigSchema`, add `manifestSchema`
    (`packages/core/src/config.ts`); parse manifest in sync.
-2. **Detection API** — `GET /api/v1/spec-hubs` over cached `repositories.config`.
-3. **Scaffold API** — `POST /api/v1/spec-hubs` using `writeFile` + `injectSpecId` + re-sync.
-4. **Wizard UI** — sequence Steps 1–5, add the style choice and hub step, add resumable
+2. **Detection API:** `GET /api/v1/spec-hubs` over cached `repositories.config`.
+3. **Scaffold API:** `POST /api/v1/spec-hubs` using `writeFile` + `injectSpecId` + re-sync.
+4. **Wizard UI:** sequence Steps 1–5, add the style choice and hub step, add resumable
    `onboarding_state`.
 
 Each phase is independently shippable; the model works end-to-end after Phase 3 (a power

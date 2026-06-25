@@ -17,7 +17,7 @@ const SITE_URL = "https://www.specboard.ai";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "SpecBoard — Product management for spec-driven development",
+    default: "SpecBoard: product management for spec-driven development",
     template: "%s · SpecBoard",
   },
   description: site.description,
@@ -26,12 +26,12 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE_URL,
     siteName: site.name,
-    title: "SpecBoard — Product management for spec-driven development",
+    title: "SpecBoard: product management for spec-driven development",
     description: site.description,
   },
   twitter: {
     card: "summary_large_image",
-    title: "SpecBoard — Product management for spec-driven development",
+    title: "SpecBoard: product management for spec-driven development",
     description: site.description,
   },
   icons: {

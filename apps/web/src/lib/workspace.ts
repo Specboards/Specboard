@@ -394,20 +394,20 @@ export async function createWorkspaceWithOwner(
   if (!slug) {
     throw new WorkspaceSlugError(
       "slug_invalid",
-      "That name has no usable letters or numbers for a URL — try another.",
+      "That name has no usable letters or numbers for a URL. Try another.",
     );
   }
   if (isReservedOrgSlug(slug)) {
     throw new WorkspaceSlugError(
       "slug_invalid",
-      `"${slug}" is reserved — pick a different name.`,
+      `"${slug}" is reserved. Pick a different name.`,
       await suggestFreeSlug(db, slug),
     );
   }
   if (!(await isSlugAvailable(db, slug))) {
     throw new WorkspaceSlugError(
       "slug_taken",
-      `The URL "${slug}" is already taken — pick a different name.`,
+      `The URL "${slug}" is already taken. Pick a different name.`,
       await suggestFreeSlug(db, slug),
     );
   }
@@ -419,7 +419,7 @@ export async function createWorkspaceWithOwner(
     if (isUniqueViolation(err)) {
       throw new WorkspaceSlugError(
         "slug_taken",
-        `The URL "${slug}" was just taken — pick a different name.`,
+        `The URL "${slug}" was just taken. Pick a different name.`,
         await suggestFreeSlug(db, slug),
       );
     }

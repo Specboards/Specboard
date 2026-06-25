@@ -1,8 +1,8 @@
-# Runbook — Marketing site (www.specboard.ai)
+# Runbook: Marketing site (www.specboard.ai)
 
 The public landing site is a **separate** Next app (`apps/marketing`) deployed as
 its own Fly app (`specboard-www`), independent of the product app
-(`specboard` → app.specboard.ai). It has no database, auth, or secrets — it's a
+(`specboard` → app.specboard.ai). It has no database, auth, or secrets. It's a
 fully static page.
 
 | Host | Serves | Fly app |
@@ -36,7 +36,7 @@ Point both hosts at the `specboard-www` Fly IPs:
 | A | `@` (apex) | `66.241.124.12` |
 | AAAA | `@` (apex) | `2a09:8280:1::12f:f74d:0` |
 
-> The v4 is a Fly **shared** IP (host-routed) — fine for both apex and www.
+> The v4 is a Fly **shared** IP (host-routed), fine for both apex and www.
 > Re-check the current IPs with `fly ips list -a specboard-www` if they change.
 
 Then watch certs issue (Let's Encrypt, once DNS resolves):
@@ -51,7 +51,7 @@ fly certs check specboard.ai      -a specboard-www
 CTAs and links are baked at build time from env, with production defaults in
 `apps/marketing/src/lib/site.ts`:
 
-- `NEXT_PUBLIC_APP_URL` (default `https://app.specboard.ai`) — sign-in / sign-up.
+- `NEXT_PUBLIC_APP_URL` (default `https://app.specboard.ai`): sign-in / sign-up.
 - `NEXT_PUBLIC_GITHUB_URL` (default `https://github.com/Specboards/SpecBoard`).
 
 To point a deploy elsewhere, pass them as build args / Fly build env.

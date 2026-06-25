@@ -1,4 +1,4 @@
-# Migration Plan — Fly.io Hosting + Better Auth (drop Supabase)
+# Migration Plan: Fly.io Hosting + Better Auth (drop Supabase)
 
 **Status: executed 2026-06-12** (Phases 1–3 complete; see [Next steps](#next-steps)
 for what remains). Amends the stack decision in [`PLAN.md`](./PLAN.md) and the
@@ -6,32 +6,32 @@ deployment section of [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 Landed beyond the original scope of this plan, same date:
 
-- **Consumer email-domain blocking** — sign-ups from gmail/outlook/yahoo/etc.
+- **Consumer email-domain blocking:** sign-ups from gmail/outlook/yahoo/etc.
   are rejected when `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS` is truthy
   (helper + list in `@specboard/core`, hook in `apps/web/src/lib/auth.ts`).
   On for both Fly apps, off by default for self-host.
-- **Versioned API layer** — `GET /api/v1/features`,
+- **Versioned API layer:** `GET /api/v1/features`,
   `GET`/`PATCH /api/v1/features/:specId` (`lib/features-service.ts`); all UI
   mutations go through it (`lib/api-client.ts`), server actions removed.
-- **Postmark email delivery** — `lib/email.ts` posts to Postmark's HTTP API;
+- **Postmark email delivery:** `lib/email.ts` posts to Postmark's HTTP API;
   Better Auth verification + password-reset emails. No-op with a logged
   warning when `POSTMARK_SERVER_TOKEN` / `EMAIL_FROM` are unset.
 - The RLS policies became a **journaled** drizzle migration
-  (`infra/migrations/0002_rls_policies.sql`) instead of a manual psql step —
+  (`infra/migrations/0002_rls_policies.sql`) instead of a manual psql step.
   `pnpm db:migrate` applies the entire chain.
 
 ## Decision & rationale
 
 - **Hosting (SaaS):** Fly.io Machines running the existing
-  `infra/web.Dockerfile` — the hosted product runs the *same image*
+  `infra/web.Dockerfile`. The hosted product runs the *same image*
   self-hosters run via docker-compose (strong open-core parity). Fly also
   handles the long-lived processes we need later (webhook reconciler, remote
   MCP server over streamable HTTP/SSE) that serverless platforms make awkward.
-- **Database (SaaS):** plain managed Postgres — Fly Managed Postgres (MPG).
+- **Database (SaaS):** plain managed Postgres, using Fly Managed Postgres (MPG).
   The Supabase↔Fly partnership was deprecated April 2025, and depending on
   Supabase-specific features (Auth, `auth.uid()` in RLS) would have forced
   self-hosters to run the full Supabase stack or forked the auth code path.
-- **Auth:** [Better Auth](https://better-auth.com) — a TypeScript library that
+- **Auth:** [Better Auth](https://better-auth.com), a TypeScript library that
   runs *inside* the Next.js app against our own Postgres. One auth
   implementation for self-host and SaaS; no external provider.
 - **Why now:** the Supabase coupling is still trivially small (verified
@@ -52,13 +52,13 @@ Landed beyond the original scope of this plan, same date:
 | Comments: `packages/db/src/schema.ts:38`, `packages/db/src/client.ts:9`, `infra/docker-compose.yml:1-2`, `apps/web/src/lib/store/db.ts:13` | reword |
 | Docs: `ARCHITECTURE.md` lines 48, 62, 66, 85, 101, 107, 123; `README.md` (layout + Database sections) | update |
 
-Self-host is **already** plain Postgres via docker-compose — nothing changes
+Self-host is **already** plain Postgres via docker-compose. Nothing changes
 for self-hosters except auth becoming available to them (it was previously
 planned as Supabase/SaaS-only).
 
 ---
 
-## Phase 1 — Code changes (repo)
+## Phase 1: Code changes (repo)
 
 ### 1.1 Dependency swap
 
@@ -135,7 +135,7 @@ Keep `members.user_id` as a plain uuid (no FK to `users.id`) so a
 single-workspace self-host can still run with auth disabled. Update its
 comment (currently references `Supabase auth.users.id`).
 
-### 1.3 Better Auth server instance — `apps/web/src/lib/auth.ts`
+### 1.3 Better Auth server instance: `apps/web/src/lib/auth.ts`
 
 Replaces the deleted `lib/supabase.ts`. Mirrors the `getStore()` pattern:
 gated on `DATABASE_URL`, resolved once per process, `null` in local file mode.
@@ -178,7 +178,7 @@ export function getAuth() {
 Note: `@specboard/db` must export `users`/`sessions`/`accounts`/
 `verifications` from its index (it already re-exports `schema`).
 
-### 1.4 Route handler — `apps/web/src/app/api/auth/[...all]/route.ts`
+### 1.4 Route handler: `apps/web/src/app/api/auth/[...all]/route.ts`
 
 ```ts
 import { getAuth } from "@/lib/auth";
@@ -197,7 +197,7 @@ async function handler(req: Request) {
 export { handler as GET, handler as POST };
 ```
 
-### 1.5 RLS rewrite — vanilla Postgres, no `auth.uid()`
+### 1.5 RLS rewrite: vanilla Postgres, no `auth.uid()`
 
 Move `infra/supabase/migrations/` → `infra/migrations/` (`git mv`), update
 `packages/db/drizzle.config.ts` (`out: "../../infra/migrations"`), then run
@@ -219,8 +219,8 @@ select set_config('app.user_id', '<session user uuid>', true);
 ```
 
 **Caveat:** RLS does not apply to the table owner / superuser. The compose
-stack connects as `postgres`, which bypasses RLS — fine for single-workspace
-self-host, but the SaaS must connect as a non-owner role. Add a
+stack connects as `postgres`, which bypasses RLS. That's fine for
+single-workspace self-host, but the SaaS must connect as a non-owner role. Add a
 `specboard_app` role grant migration when wiring the SaaS connection.
 
 ### 1.6 Environment variables
@@ -233,7 +233,7 @@ self-host, but the SaaS must connect as a non-owner role. Add a
 | `APP_URL` | optional override for the public origin (falls back to `BETTER_AUTH_URL`, then forwarded headers) |
 
 GitHub App credentials are normally created in-app (the manifest flow) and
-stored **encrypted in the `github_app` table** — no env vars required. The
+stored **encrypted in the `github_app` table**. No env vars required. The
 following are an optional fallback for air-gapped/scripted setups (stored creds
 take precedence when both exist):
 
@@ -260,7 +260,7 @@ take precedence when both exist):
 
 ---
 
-## Phase 2 — Fly.io setup (terminal / `flyctl`)
+## Phase 2: Fly.io setup (terminal / `flyctl`)
 
 > **Executed 2026-06-12**, with one amendment to the shape below: two
 > environments instead of one, both in the **specboard** Fly org, region
@@ -274,7 +274,7 @@ take precedence when both exist):
 > Configs: `fly.toml` (prod) and `fly.test.toml` at the repo root;
 > pipeline: `.github/workflows/fly-deploy.yml` (deploy tokens stored as the
 > `FLY_API_TOKEN_TEST` / `FLY_API_TOKEN_PROD` repo secrets). The RLS file
-> (`0001_rls_policies.sql`) is **not** applied to either MPG database — it
+> (`0001_rls_policies.sql`) is **not** applied to either MPG database. It
 > still uses Supabase's `auth.uid()` and is rewritten in Phase 1 (1.5),
 > which remains unexecuted.
 
@@ -284,10 +284,10 @@ curl -L https://fly.io/install.sh | sh
 fly auth login
 
 # 2. Create the app from the existing Dockerfile (no deploy yet).
-#    Run from the repo root; say no to Postgres/Redis prompts — DB comes next.
+#    Run from the repo root; say no to Postgres/Redis prompts; DB comes next.
 fly launch --no-deploy --name specboard --dockerfile infra/web.Dockerfile
 
-# 3. Managed Postgres (MPG) — pick the same region as the app
+# 3. Managed Postgres (MPG): pick the same region as the app
 fly mpg create --name specboard-db
 # grab the connection string it prints (or: fly mpg status / fly mpg connect)
 
@@ -330,7 +330,7 @@ primary_region = "sea"   # pick the region adjacent to the DB
 
 Notes:
 - `fly mpg` is Fly's first-party Managed Postgres (the old `fly postgres` /
-  Supabase partnership is deprecated — don't use those docs).
+  Supabase partnership is deprecated, so don't use those docs).
 - The GitHub App webhook URL (spec-import / webhook-reconcile work) will be
   `https://specboard.fly.dev/api/webhooks/github`; set `min_machines_running = 1`
   before going live with webhooks.
@@ -339,7 +339,7 @@ Notes:
 
 ---
 
-## Phase 3 — Verification
+## Phase 3: Verification
 
 > **Executed 2026-06-12**, against the live test environment
 > (test.specboard.ai) rather than local compose: build/typecheck/test green;
@@ -347,11 +347,11 @@ Notes:
 > 400; work-domain sign-up created `users`/`sessions` rows (UUID ids minted
 > by Postgres); metadata PATCH persisted. Production (app.specboard.ai)
 > verified the same way after promote, minus the user-creating sign-up.
-> Items 4 (RLS as non-owner) and 5 (compose boot) were **not** exercised —
+> Items 4 (RLS as non-owner) and 5 (compose boot) were **not** exercised.
 > RLS verification needs the `specboard_app` role (next steps), and compose
 > parity wasn't re-tested this round.
 
-1. `pnpm build && pnpm typecheck && pnpm test` — green.
+1. `pnpm build && pnpm typecheck && pnpm test`: green.
 2. Local, no `DATABASE_URL`: app runs in file mode; `GET /api/auth/session`
    returns the 501 "auth disabled" response.
 3. Local, with compose Postgres + migrations: sign-up round-trip via
@@ -384,25 +384,25 @@ Rough priority order; the first three unblock real multi-user usage.
    auto-joined as `viewer` by `ensureMembership` (`lib/workspace.ts`), invoked
    from the page-access gate `requireWorkspaceAccess` (`lib/workspace-access.ts`)
    which now fronts the backlog/board/roadmap/feature pages. Membership is
-   resolved on first authenticated access rather than via a Better Auth hook —
-   single code path; the post-signup redirect hits it immediately. Pages stay
-   ungated in local file mode. Still open: assigning richer roles
-   (`pm`/`ux`/`eng`) and an admin UI to manage members — everyone past the first
+   resolved on first authenticated access rather than via a Better Auth hook.
+   That keeps one code path, and the post-signup redirect hits it immediately.
+   Pages stay ungated in local file mode. Still open: assigning richer roles
+   (`pm`/`ux`/`eng`) and an admin UI to manage members. Everyone past the first
    is a `viewer` today.
 3. **DB-enforced tenant isolation.** _App-layer half done 2026-06-13:_ every
-   tenant query now runs through a `WorkspaceScope` (`store/types.ts`) — the
+   tenant query now runs through a `WorkspaceScope` (`store/types.ts`). The
    `DbStore` filters by `workspaceId` and sets `app.user_id` inside a
    transaction (`store/db.ts`), and reads/writes are authorized by membership +
    role (`resolveReadScope` / `authorizeWrite` in `lib/auth-session.ts`;
    `viewer` is read-only via `canWrite`). This gives real isolation in the app
    even though the connection still bypasses RLS. _DB role provisioned on both
    MPG clusters 2026-06-13:_ a non-owner `writer` user **`specboard-app`** (not
-   the SQL `create role` in a journaled migration — that role is MPG-specific
+   the SQL `create role` in a journaled migration: that role is MPG-specific
    and self-host runs as the superuser-owner, so it lives as an ops step, see
    the operational reference). RLS was verified on both clusters as that role
    (`app.user_id` unset → 0 rows; member → workspace rows; non-member → 0). The
    app reads tenant data via `DATABASE_URL_APP` (the writer) when set, falling
-   back to `DATABASE_URL` (owner) otherwise — `store/index.ts`; onboarding/auth
+   back to `DATABASE_URL` (owner) otherwise (`store/index.ts`); onboarding/auth
    stay on the owner connection (`lib/db.ts`), since `createWorkspaceWithOwner`
    / `ensureMembership` are default-denied under RLS. The `DATABASE_URL_APP`
    secret is **staged** on both Fly apps. _Remaining:_ deploy the
@@ -430,20 +430,20 @@ Rough priority order; the first three unblock real multi-user usage.
    and stores the parsed `RepoConfig` on the `repositories` row, so spec globs
    and custom-field definitions track git. Production already runs
    `min_machines_running = 1` so deliveries won't hit cold starts.
-   **Done 2026-06-14 — in-app one-click setup:** admins create the deployment's
+   **Done 2026-06-14, in-app one-click setup:** admins create the deployment's
    GitHub App via the **manifest flow** (`/api/v1/github/app/create` →
    `/callback`), credentials stored encrypted in `github_app` (AES-256-GCM off
    `BETTER_AUTH_SECRET`); the env `GITHUB_*` vars are now an optional fallback.
    The **Repositories** page handles App setup, install (`/api/v1/github/setup`
    captures the installation), a repo **picker**
-   (`/api/v1/github/installations/repositories`), and connect/re-sync — the old
+   (`/api/v1/github/installations/repositories`), and connect/re-sync. The old
    curl registration is now an advanced fallback. See `docs/RUNBOOK-github-sync.md`.
    _Still open (follow-up):_ handling spec **deletion** (a removed file currently
    leaves its feature row to avoid nuking user comments/metadata), and editing
    spec content from the UI (PR write-back).
 6. ~~**First-run onboarding choice.**~~ **Done 2026-06-13.** `/setup` now asks
    the first user to either seed a starter board (sample data baked into the app
-   — `lib/sample-data.ts`, seeded into a synthetic "sample" repo) or start empty;
+   via `lib/sample-data.ts`, seeded into a synthetic "sample" repo) or start empty;
    `POST /api/v1/workspaces` takes `seedSampleData` and only seeds when the
    caller actually became admin. The board/backlog/roadmap render a shared
    `EmptyState` (prompting a repo connection) when there are no features, and the
@@ -453,15 +453,15 @@ Rough priority order; the first three unblock real multi-user usage.
    and any config-defined custom fields; `parseFeaturePatch` validates
    `assigneeId`/`customFields`, the stores read/write them, and field definitions
    come from the synced `RepoConfig.fields`. _Still open:_ richer roles
-   (`pm`/`ux`/`eng`) and a member-management UI — everyone past the first user is
+   (`pm`/`ux`/`eng`) and a member-management UI. Everyone past the first user is
    still a `viewer`.
-8. **Remote MCP server** — second process group in the Fly apps or its own
+8. **Remote MCP server:** second process group in the Fly apps or its own
    app; should consume `/api/v1` (or the shared service layer), not the DB
    directly.
 9. **Cost check-in:** two MPG basic clusters run $76/mo. If that's heavy
    pre-launch, both environments can share one cluster (~$38/mo) with
-   separate databases — revisit before the bill matters.
-10. SSO/SAML/SCIM (commercial tier) — Better Auth has plugins for this later.
+   separate databases. Revisit before the bill matters.
+10. SSO/SAML/SCIM (commercial tier). Better Auth has plugins for this later.
 
 ### Operational reference (as deployed)
 
@@ -482,7 +482,7 @@ Secrets per app: `DATABASE_URL` (owner: migrations, auth, onboarding),
 `fly mpg proxy <cluster-id>` + `pnpm db:migrate` (no release command yet).
 
 **Provisioning the non-owner `writer` role (per cluster).** Not a journaled
-migration — MPG creates roles at the cluster level and self-host doesn't use
+migration: MPG creates roles at the cluster level and self-host doesn't use
 this role. After the schema migrations (incl. `0002` RLS) are applied:
 
 ```bash

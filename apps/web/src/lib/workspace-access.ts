@@ -55,7 +55,7 @@ export async function listSidebarOrgs(): Promise<
 export async function listSidebarProducts(): Promise<ProductRecord[]> {
   const db = getDb();
   const store = await getStore();
-  if (!db) return store.listProducts(); // file mode — unscoped
+  if (!db) return store.listProducts(); // file mode, unscoped
   const user = await getServerSessionUser();
   if (!user) return [];
   const orgSlug = (await headers()).get("x-org-slug") || undefined;
@@ -89,7 +89,7 @@ export async function currentOrgSlug(): Promise<string> {
 export async function requireWorkspaceAccess(): Promise<PageAccess | null> {
   const db = getDb();
   const user = await getServerSessionUser();
-  if (!db) return null; // file mode — no auth, no gating
+  if (!db) return null; // file mode, no auth, no gating
   if (!user) redirect("/sign-in");
 
   const orgSlug = (await headers()).get("x-org-slug") || undefined;

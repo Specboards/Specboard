@@ -1,4 +1,4 @@
-# ADR 0002 — Work Item leaf + type-segmented item URLs
+# ADR 0002: Work Item leaf + type-segmented item URLs
 
 - **Status:** Accepted
 - **Date:** 2026-06-19
@@ -18,21 +18,21 @@ Two problems followed:
 1. **"Spec id" is a misnomer for most items.** Calling a grouping's row id a
    "spec id" and framing identity as "the git spec id" only holds for the leaf.
 2. **The URL hides the item's type.** `/backlog/{id}` gives no signal whether
-   you're looking at an initiative, epic, feature, or a spec — and it conflated
+   you're looking at an initiative, epic, feature, or a spec. It also conflated
    two kinds of identity (git spec id vs DB row id) behind one segment.
 
 Separately, the product intent firmed up: **specs should describe work items**
 that sit *under* features. Features (and everything above) are planning
-groupings managed in the app, not synced from git — even when a feature has
+groupings managed in the app, not synced from git, even when a feature has
 just one work item.
 
 ## Decision
 
-### D1 — A spec-backed "Work Item" leaf beneath "Feature"
+### D1. A spec-backed "Work Item" leaf beneath "Feature"
 The default hierarchy becomes four levels: **Initiative → Epic → Feature →
 Work Item**, where **Work Item is the only git-spec-backed level**. Feature is
 demoted to an app-native grouping. This is a default-config change, not new
-machinery — the level system (`packages/core/src/levels.ts`) already treats
+machinery. The level system (`packages/core/src/levels.ts`) already treats
 "leaf = spec-backed, everything above = DB-native"; we add one level and let the
 existing leaf-agnostic rules (`leafLevel`, `parentLevelKey`, `resolveLevelUpdate`)
 apply to `work`.
@@ -40,7 +40,7 @@ apply to `work`.
 Spec sync sets `features.level` explicitly to the workspace's leaf key rather
 than relying on the column default, so the leaf can be renamed without drifting.
 
-### D2 — Type-segmented item URLs
+### D2. Type-segmented item URLs
 The item permalink gains a **level-key segment**:
 
 ```
@@ -52,17 +52,17 @@ The item permalink gains a **level-key segment**:
 The segment is always the item's **level key** (uniform across levels, leaf
 included), so it stays correct when a workspace renames or adds levels. `{specId}`
 remains the row's `specId` for every level (groupings keep `specId = id`), so
-lookup is unchanged — the segment is a legibility + type hint that is validated
+lookup is unchanged. The segment is a legibility + type hint that is validated
 against the resolved row and redirected when stale.
 
-### D3 — Identity, restated
-- **Leaf (Work Item):** identity is the **git spec id** — global, stable, never
+### D3. Identity, restated
+- **Leaf (Work Item):** identity is the **git spec id**: global, stable, never
   renumbered (the durable part of ADR 0001 D4).
 - **Groupings (Initiative / Epic / Feature):** app-native, identified by their
   **DB id** (surfaced as `specId` for routing uniformity). These are not specs
   and carry no git identity.
 
-### D4 — Backward compatibility
+### D4. Backward compatibility
 The old shallow permalink `/{org}/{product}/backlog/{specId}` still resolves: a
 single catch-all route (`backlog/[...slug]`) accepts one segment (bare specId)
 and **redirects** to the canonical typed URL, and two segments (`[level, specId]`)
@@ -86,5 +86,5 @@ honest about git-backed vs app-native; old links still resolve.
 **Negative / risks:** the 1:1 auto-wrap creates one Feature per existing spec
 (acceptable, user-chosen; can be merged later); the item route is now a catch-all
 (slightly more parsing); GitHub PR/issue/branch links still attach only to
-spec-backed Work Items (groupings show inherited rollups) — unchanged, but worth
-restating since "epics link to PRs" is a common misconception.
+spec-backed Work Items (groupings show inherited rollups). This is unchanged, but
+worth restating since "epics link to PRs" is a common misconception.

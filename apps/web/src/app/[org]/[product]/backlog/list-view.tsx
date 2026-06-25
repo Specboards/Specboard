@@ -76,7 +76,7 @@ export async function ListView({
 
   const filtering = hasActiveFilters(filters);
   const rows = filtering
-    ? // Filtering flattens the view — the hierarchy grouping no longer holds
+    ? // Filtering flattens the view, so the hierarchy grouping no longer holds
       // once arbitrary rows are excluded.
       applyFeatureFilters(features, filters).map((feature) => ({
         feature,

@@ -6,7 +6,7 @@
 
 ---
 
-## 1. Context — the customer question
+## 1. Context: the customer question
 
 Several customers working across multiple **service repos** have told us the same
 thing: it's much easier to keep **all of their specs in a single repo** that carries a
@@ -16,9 +16,9 @@ multiple repos/codebases** as needed.
 
 That maps to three candidate models for SpecBoard:
 
-- **Attach** — connect to an existing repo that already has specs inside it.
-- **Create** — stand up a dedicated spec repo for a project/org.
-- **Hybrid** — support both, and add the "one spec repo, many code repos" workflow.
+- **Attach:** connect to an existing repo that already has specs inside it.
+- **Create:** stand up a dedicated spec repo for a project/org.
+- **Hybrid:** support both, and add the "one spec repo, many code repos" workflow.
 
 This memo reviews how the leading spec-driven tooling (GitHub **Spec Kit**, **BMAD**)
 and the broader agentic-development ecosystem recommend organizing repos and specs,
@@ -43,12 +43,12 @@ SpecBoard currently uses a **per-repo, co-located spec** model:
 - Specs live **inside each connected repo** at `specs/<feature>/spec.md` (configurable
   via `specGlobs` in `.specboard/config.yml`). Content is cached in the `spec_index`
   table and synced on push. (`apps/web/src/lib/github-sync.ts`, `.specboard/config.yml`)
-- Agents consume specs over MCP — `list_features`, `read_spec`, `update_status` — which
+- Agents consume specs over MCP (`list_features`, `read_spec`, `update_status`), which
   read from the cached index rather than scanning git live. (`apps/mcp/src/server.ts`)
 
 **The gap:** a workspace can span many repos, but **specs always live in the same repo
 as the code they describe**. There is no model where one repo holds the specs while the
-code work targets *other* repos — which is exactly what customers are asking for.
+code work targets *other* repos. That is exactly what customers are asking for.
 
 **Two existing primitives make us unusually well-positioned to close that gap:**
 
@@ -74,13 +74,13 @@ source of truth.
 assumption that users are going to initialize … in a single codebase," which the
 maintainers admit "doesn't reflect reality" for microservice projects:
 
-- Issue #891 — microservice architectures: <https://github.com/github/spec-kit/issues/891>
-- Issue #2120 — coordinated branching across nested repos: <https://github.com/github/spec-kit/issues/2120>
-- Discussion #1743 — separate specs repo + independent FE/BE (maintainer: "we're aware
+- Issue #891 (microservice architectures): <https://github.com/github/spec-kit/issues/891>
+- Issue #2120 (coordinated branching across nested repos): <https://github.com/github/spec-kit/issues/2120>
+- Discussion #1743 (separate specs repo + independent FE/BE; maintainer: "we're aware
   … and will be addressing this soon"): <https://github.com/github/spec-kit/discussions/1743>
-- Discussion #769 — managing artifacts in a monorepo (no official guidance):
+- Discussion #769 (managing artifacts in a monorepo, no official guidance):
   <https://github.com/github/spec-kit/discussions/769>
-- Discussion #1437 — should specs be committed at all: <https://github.com/github/spec-kit/discussions/1437>
+- Discussion #1437 (should specs be committed at all): <https://github.com/github/spec-kit/discussions/1437>
 
 The only current lever is `--no-git` (decouple spec management from branching). A
 "central specs, published as versioned packages (OpenAPI/types)" pattern is discussed
@@ -95,7 +95,7 @@ Spec Kit.**
 `docs/architecture.md`, and sharded `docs/epics/` + `docs/stories/`, plus a
 `_bmad/`/`.bmad-core/` framework dir. Its two-phase flow (planning → IDE
 implementation) leans heavily on **document sharding** so a dev agent loads only the
-self-contained story it needs — a context-economy technique worth noting regardless of
+self-contained story it needs. That is a context-economy technique worth noting regardless of
 repo layout.
 
 - Repo: <https://github.com/bmad-code-org/BMAD-METHOD>
@@ -103,13 +103,13 @@ repo layout.
 
 **But BMAD has a real multi-repo pattern**, unlike Spec Kit:
 
-- **Orchestrator + component** model — a central repo holds the master PRD and
+- **Orchestrator + component** model: a central repo holds the master PRD and
   cross-cutting architecture; component repos (backend/frontend/hardware) **sync
   bidirectionally** (read-only docs pushed down, component stories synced back to
   `/project-management/{component}/`), with feature-scoped output dirs to avoid merge
   conflicts. Discussion #1425: <https://github.com/bmad-code-org/BMAD-METHOD/discussions/1425>
   · Discussion #1705: <https://github.com/bmad-code-org/BMAD-METHOD/discussions/1705>
-- **Federated Knowledge System** (extension) — git-based, multi-repo knowledge with
+- **Federated Knowledge System** (extension): git-based, multi-repo knowledge with
   priority-based conflict resolution, flattening relevant repos into unified agent
   context: <https://github.com/vishalmysore/bmad-federated-knowledge>
 
@@ -122,22 +122,22 @@ and shows the operational shape (sync + conflict avoidance) it tends to take.
 
 The cross-repo context problem is being solved in several converging ways:
 
-1. **Meta-repo / manifest with pinned refs** — a dedicated repo that holds *only*
+1. **Meta-repo / manifest with pinned refs**: a dedicated repo that holds *only*
    manifests + integration tests, pinning each component to an immutable tag/SHA
    (avoid floating `@main`). This is essentially the model our customers describe.
    GitHub Well-Architected polyrepo guidance:
    <https://wellarchitected.github.com/library/architecture/recommendations/implementing-polyrepo-engineering/>
-2. **IDP catalogs as agent context** — Backstage-style `catalog-info.yaml` as the
+2. **IDP catalogs as agent context**: Backstage-style `catalog-info.yaml` as the
    queryable system-of-record for services/dependencies, now extending toward an
    `AIContext` catalog kind for agent rules/skills. RFC #33575:
    <https://github.com/backstage/backstage/issues/33575> · context-engineering writeup:
    <https://roadie.io/blog/idp-ai-goldmine-context-engineering/>
-3. **`CLAUDE.md` / `AGENTS.md` + `@import` composition** — agents walk the directory
+3. **`CLAUDE.md` / `AGENTS.md` + `@import` composition**: agents walk the directory
    tree and compose layered instructions, enabling a shared spec/context source without
    duplication: <https://blink.new/blog/agents-md-vs-claude-md>
-4. **Git submodules / "synthetic monorepo"** — nest dependent repos to give the agent a
+4. **Git submodules / "synthetic monorepo"**: nest dependent repos to give the agent a
    single unified filesystem view: <https://monorepo.tools/synthetic-monorepos>
-5. **"Living specs" to fight spec drift** — the documented failure mode of *any* central
+5. **"Living specs" to fight spec drift**: the documented failure mode of *any* central
    spec store: the doc says X, the code says Y, and AI generation widens the gap.
    Mitigation is continuous drift detection/correction, not one-time prompts.
    <https://www.kinde.com/learn/ai-for-software-engineering/ai-devops/spec-drift-the-hidden-problem-ai-can-help-fix/>
@@ -149,16 +149,16 @@ The cross-repo context problem is being solved in several converging ways:
 
 | Dimension | Central spec repo (+ manifest) | Co-located specs (in each code repo) |
 |---|---|---|
-| Cross-cutting / multi-service changes | **Easier** — one place to plan | Harder — coordinate across N repos |
-| Unified agent context | **Strong** — one place to read | Fragmented across repos |
-| Spec ↔ code drift | **Higher risk** — they can diverge | **Lower** — atomic spec+code commits |
-| Discovery for agents | Out-of-band (needs manifest/catalog) | Natural — specs sit next to code |
-| Onboarding a single existing repo | Extra setup (hub + manifest) | **Trivial** — just attach |
+| Cross-cutting / multi-service changes | **Easier** (one place to plan) | Harder (coordinate across N repos) |
+| Unified agent context | **Strong** (one place to read) | Fragmented across repos |
+| Spec ↔ code drift | **Higher risk** (they can diverge) | **Lower** (atomic spec+code commits) |
+| Discovery for agents | Out-of-band (needs manifest/catalog) | Natural (specs sit next to code) |
+| Onboarding a single existing repo | Extra setup (hub + manifest) | **Trivial** (just attach) |
 | Tooling maturity (industry) | Emerging, no standard yet | Default in Spec Kit & BMAD |
 
 **Reading of the field:** co-location is the *current default*, but the *unsolved,
-most-requested* problem — across Spec Kit issues, BMAD's orchestrator pattern, and
-polyrepo/IDP guidance — is exactly the **central-spec-hub-coordinating-many-code-repos**
+most-requested* problem (across Spec Kit issues, BMAD's orchestrator pattern, and
+polyrepo/IDP guidance) is exactly the **central-spec-hub-coordinating-many-code-repos**
 workflow our customers are describing. Its known Achilles' heel is **spec drift**.
 
 ---
@@ -166,7 +166,7 @@ workflow our customers are describing. Its known Achilles' heel is **spec drift*
 ## 7. Recommendation
 
 **Support both, but lead with a hybrid "Spec Hub + manifest" model.** Do not force a
-migration — keep co-located specs as the zero-config on-ramp.
+migration. Keep co-located specs as the zero-config on-ramp.
 
 - **Keep "attach":** connecting an existing repo with in-repo `specs/` stays the
   simplest path and the default for single-repo teams.
@@ -183,7 +183,7 @@ migration — keep co-located specs as the zero-config on-ramp.
 
 ### Why this is the right bet for SpecBoard
 
-- It **closes a gap Spec Kit and BMAD have publicly acknowledged but not shipped** — a
+- It **closes a gap Spec Kit and BMAD have publicly acknowledged but not shipped**. That's a
   genuine differentiator rather than catch-up.
 - It **builds on primitives we already have**: spec identity is a UUID decoupled from
   path/repo (`packages/db/src/schema.ts`), and a workspace already spans multiple repos.
@@ -195,7 +195,7 @@ migration — keep co-located specs as the zero-config on-ramp.
 ## 8. Why SpecBoard is well-positioned (reusable primitives)
 
 - **UUID spec identity** (`spec_id` in frontmatter) already separates a spec's identity
-  from its location — the hard part of letting specs live in a different repo than code.
+  from its location, which is the hard part of letting specs live in a different repo than code.
 - **Multi-repo workspace** already aggregates repos; the manifest becomes structured
   data the workspace owns, and the MCP layer (`apps/mcp/src/server.ts`) is the natural
   place to expose "this spec → these target repos" to agents.
@@ -206,18 +206,18 @@ migration — keep co-located specs as the zero-config on-ramp.
 
 ## 9. Risks & open questions
 
-- **Spec drift / staleness** — the central model's main weakness. What's our detection
+- **Spec drift / staleness:** the central model's main weakness. What's our detection
   and reconciliation story (pinned-ref checks, "living spec" validation, push webhooks
   on referenced repos)?
-- **Manifest schema** — what does `.specboard/manifest.yml` contain (service name →
+- **Manifest schema:** what does `.specboard/manifest.yml` contain (service name →
   repo, pinned ref, ownership, links)? Reuse/extend `.specboard/config.yml` or separate?
-- **Agent execution model** — how does an agent reading a hub spec get pointed at, and
+- **Agent execution model:** how does an agent reading a hub spec get pointed at, and
   authorized for, the correct *other* repo for code work? (GitHub App install scope.)
-- **Data model** — is a "target repo" a new relation on `feature`, or a richer
+- **Data model:** is a "target repo" a new relation on `feature`, or a richer
   service/manifest entity? (Affects `features` / `repositories` in `schema.ts`.)
-- **Migration / coexistence** — how do hub specs and co-located specs show up together
+- **Migration / coexistence:** how do hub specs and co-located specs show up together
   in one backlog without confusion?
-- **Standards drift** — Backstage `AIContext` and `AGENTS.md`/`@import` are moving fast;
+- **Standards drift:** Backstage `AIContext` and `AGENTS.md`/`@import` are moving fast;
   worth aligning our manifest with whatever consolidates.
 
 ---

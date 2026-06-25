@@ -1,10 +1,10 @@
-# SpecBoard — Architecture
+# SpecBoard Architecture
 
 SpecBoard is a lightweight, spec-based product-management layer for teams doing
 **spec-driven development**. Specs live as markdown in your git repo (canonical,
 versioned with code, read by AI coding agents). SpecBoard layers the _product_
-metadata — status, assignment, priority, backlog order, roadmap — **on top** of
-those specs so PM, UX, and engineering can collaborate without editing files in a
+metadata **on top** of those specs (status, assignment, priority, backlog order,
+roadmap) so PM, UX, and engineering can collaborate without editing files in a
 terminal and without duplicating work into a separate tracker.
 
 Think of it as a spec-native, lightweight ProductBoard / JIRA / Aha!.
@@ -12,7 +12,7 @@ Think of it as a spec-native, lightweight ProductBoard / JIRA / Aha!.
 ## Why not just use spec-board / Spec Kit / JIRA?
 
 - **spec-board** centralizes specs in Postgres, giving up git as the source of truth.
-- **GitHub Spec Kit** is git-native but CLI-only — no PM layer, no metadata, no UI for PM/UX.
+- **GitHub Spec Kit** is git-native but CLI-only, with no PM layer, no metadata, and no UI for PM/UX.
 - **JIRA / Aha / ProductBoard** are heavyweight and disconnected from the actual specs,
   forcing duplicate authoring and brittle syncs.
 
@@ -27,16 +27,16 @@ stable spec id.
 | Metadata (status, assignee, priority, rank, tags, roadmap) | **Database** | Queryable, real-time, access-controlled; no spec-file thrash on a status flip |
 | Spec index (content cache + git path/sha)                  | **Database** | Fast boards/search without hitting git on every render                        |
 
-### Spec identity — the linchpin
+### Spec identity: the linchpin
 
 Each spec carries a stable `id` (UUID) in YAML frontmatter. The DB `features` row is
-keyed by `(repo_id, spec_id)`, **not** by path — so renames/moves never orphan
+keyed by `(repo_id, spec_id)`, **not** by path, so renames/moves never orphan
 metadata. On first import of a spec without an `id`, the git service injects one via a
 single commit (`packages/git` → `injectSpecId`). Path + blob `sha` are cached in
 `spec_index` for fast lookup and drift/conflict detection.
 
 Only the **leaf** level (Work Item) is spec-backed; the grouping levels above it
-(Initiative / Epic / Feature) are **DB-native** rows with no git spec — each takes a
+(Initiative / Epic / Feature) are **DB-native** rows with no git spec; each takes a
 synthetic `spec_id` equal to its row id so every item is uniformly routable. Item
 permalinks are type-segmented by level: `/{org}/{product}/backlog/{levelKey}/{specId}`
 (the bare `/backlog/{specId}` still redirects). See
@@ -62,18 +62,18 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
    + dependencies/relations)           (to coding agents)
 ```
 
-- **`packages/core`** — framework-agnostic domain logic: spec frontmatter + markdown
+- **`packages/core`** holds framework-agnostic domain logic: spec frontmatter + markdown
   parser (`parseSpec`), status state machine (`canTransition`), `.specboard/config.yml`
   schema (`parseRepoConfig`), and the configurable work-tracking **levels** model
-  (`resolveLevels`/`leafLevel`/`parentLevelKey`/`resolveLevelUpdate` — depth, the
+  (`resolveLevels`/`leafLevel`/`parentLevelKey`/`resolveLevelUpdate`, covering depth, the
   spec-backed leaf, and parent/child level rules). Unit-tested.
-- **`packages/db`** — Drizzle schema (`workspaces`, `members`, `repositories`,
-  `workspace_levels` (per-workspace hierarchy config — default Initiative → Epic →
+- **`packages/db`**: Drizzle schema (`workspaces`, `members`, `repositories`,
+  `workspace_levels` (per-workspace hierarchy config, default Initiative → Epic →
   Feature → Work Item, where only the leaf is spec-backed), `features` (with a
   self-referential `parent_id` for the work hierarchy,
   a `level` column composite-FK'd to `workspace_levels`, a nullable `repo_id` for
-  DB-native items above the leaf — also `ON DELETE set null`, so disconnecting a
-  repo detaches its imported items instead of deleting them — and a fractional
+  DB-native items above the leaf (also `ON DELETE set null`, so disconnecting a
+  repo detaches its imported items instead of deleting them), and a fractional
   `rank` for manual board ordering),
   `feature_links` (typed dependencies/relations between features),
   `feature_github_links` (links a feature to a GitHub PR/issue/branch with cached
@@ -82,37 +82,37 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
   deployment-global `github_app` credential row, plus the Better Auth
   `users`/`sessions`/`accounts`/`verifications` tables) + Postgres client. RLS
   policies in `infra/migrations`.
-- **`packages/git`** — GitHub App client + reconciler (`reconcileSpecs`), webhook
+- **`packages/git`**: GitHub App client + reconciler (`reconcileSpecs`), webhook
   verification/affected-spec resolution, installation-repo listing (via `octokit`).
-- **`packages/ui`** — shared design tokens / components.
-- **`apps/web`** — Next.js App Router UI; left sidebar nav with light/dark theme;
+- **`packages/ui`**: shared design tokens / components.
+- **`apps/web`**: Next.js App Router UI; left sidebar nav with light/dark theme;
   in-app auth via Better Auth (`/api/auth/*`: sign-up/in, email verification,
   password reset); routes for Board + Backlog (two views of one nav entry, with a
   per-hierarchy-level switcher), Roadmap, Feature detail (renders DB-native items
   without spec content), and `/settings/*` (Profile, Repositories, Company,
   Hierarchy levels editor, …).
-- **`apps/mcp`** — MCP server exposing prioritized, status-aware specs to agents.
+- **`apps/mcp`**: MCP server exposing prioritized, status-aware specs to agents.
 
 ## Key flows
 
-1. **Connect repo** — an admin creates the deployment's GitHub App in one click
+1. **Connect repo**: an admin creates the deployment's GitHub App in one click
    (GitHub App *manifest* flow; credentials stored encrypted in `github_app`),
    installs it and picks repos, then connects one → scan `specs/**` per
    `.specboard/config.yml` → create `features` + `spec_index`, injecting missing `id`s.
-   Each spec's work item is homed under a Feature grouping — found or created by a
+   Each spec's work item is homed under a Feature grouping, found or created by a
    stable key (the spec's `feature:` frontmatter, else its folder), so the hierarchy
    fills in on import without overriding any parent set later in the app (ADR 0002).
-   Multiple repos (across multiple GitHub orgs) coexist in one workspace — one
+   Multiple repos (across multiple GitHub orgs) coexist in one workspace, one
    `repositories` row each. An admin can **disconnect** a repo
    (`DELETE /api/v1/repositories/:id`): the connection and the repo's GitHub links
    are removed, but imported items detach (`repo_id` → NULL) rather than delete.
-2. **Reconcile on push** — `push` webhook → re-parse changed specs → update `spec_index`;
+2. **Reconcile on push**: `push` webhook → re-parse changed specs → update `spec_index`;
    `blob_sha` detects drift/conflicts. The same webhook handles `pull_request`/`issues`
    events to refresh the cached state of any `feature_github_links` (open → merged/closed).
-3. **Edit spec in UI** — save → `packages/git` writes a commit or opens a PR
+3. **Edit spec in UI**: save → `packages/git` writes a commit or opens a PR
    (`writeMode`) → webhook confirms → index updates.
-4. **Edit metadata in UI** — writes straight to DB (no git churn), real-time to boards.
-5. **Agent via MCP** — `list_features` / `read_spec` / `update_status` /
+4. **Edit metadata in UI**: writes straight to DB (no git churn), real-time to boards.
+5. **Agent via MCP**: `list_features` / `read_spec` / `update_status` /
    `get_relations`: agents act on prioritized, assigned, status-aware specs, and
    respect dependency sequencing (a feature's `blocks` / `blockedBy`).
 
@@ -157,7 +157,7 @@ Postgres (RLS multi-tenancy) · Better Auth · `@modelcontextprotocol/sdk` ·
 When `DATABASE_URL` is unset, `apps/web` swaps its store implementation
 (`apps/web/src/lib/store`) for a filesystem-backed one: specs are read directly
 from this repo's `specs/` directory and metadata persists to
-`.specboard/local-metadata.json`. Same UI, zero infrastructure — useful for UI
+`.specboard/local-metadata.json`. Same UI, zero infrastructure, useful for UI
 testing and for dogfooding SpecBoard on its own specs. Postgres mode is the
 deployment shape.
 
@@ -168,7 +168,7 @@ base shadcn styling), spec parser + status workflow (`packages/core`), Drizzle
 schema/migrations/seed (`packages/db`), DB-backed MCP tools (`apps/mcp`), local
 file mode; full auth (Better Auth: email/password sign-up/in, email
 verification, password reset, account/company settings, optional consumer-domain
-blocking, session-gated writes); GitHub App sync (`packages/git`) — one-click
+blocking, session-gated writes); GitHub App sync (`packages/git`): one-click
 in-app App setup (manifest flow), repo install + connect picker, push reconcile
 into `features`/`spec_index`, stable-id injection. Interactive board:
 drag-and-drop status change + manual reorder, click-to-edit drawer, per-user

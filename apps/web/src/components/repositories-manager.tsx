@@ -115,7 +115,7 @@ function SetupGitHubCard() {
       <CardHeader>
         <CardTitle>Connect SpecBoard to GitHub</CardTitle>
         <CardDescription>
-          We&apos;ll create a GitHub App on your account or organization in one click — you just
+          We&apos;ll create a GitHub App on your account or organization in one click, and you
           confirm on GitHub. After that you can install it on repositories and sync specs.
         </CardDescription>
       </CardHeader>
@@ -336,7 +336,7 @@ function ConnectSection({
         <CardTitle>Connect a repository</CardTitle>
         <CardDescription>
           Install the SpecBoard GitHub App on the repositories you want to sync, then connect them
-          here — no copying ids by hand.
+          here. No copying ids by hand.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

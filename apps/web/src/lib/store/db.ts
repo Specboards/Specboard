@@ -646,7 +646,7 @@ export class DbStore implements FeatureStore {
       if (!row[0]) throw new FeatureError(`Unknown work item: ${specId}`);
       if (row[0].repoId !== null)
         throw new FeatureError(
-          "Spec-backed items can't be deleted here — remove the spec in git.",
+          "Spec-backed items can't be deleted here. Remove the spec in git.",
         );
       // Children's parent_id is ON DELETE SET NULL, so they're orphaned, not deleted.
       await tx

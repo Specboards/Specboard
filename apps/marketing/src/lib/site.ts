@@ -16,5 +16,5 @@ export const site = {
   name: "SpecBoard",
   tagline: "Product management that lives in your git specs.",
   description:
-    "SpecBoard layers status, priority, roadmap, and ownership on top of the spec files your team and your AI agents already commit to git — no duplication into Jira or Aha.",
+    "SpecBoard layers status, priority, roadmap, and ownership on top of the spec files your team and your AI agents already commit to git, with no duplication into Jira or Aha.",
 } as const;
