@@ -26,13 +26,13 @@ grant and require a commercial agreement with Studio Palouse. Where their code l
 in this repository it is marked with a `LICENSE` notice in the relevant
 directory; otherwise it ships only in the hosted product.
 
-- **Multi-tenant hosting** — serving more than one organization from a single
+- **Multi-tenant hosting:** serving more than one organization from a single
   deployment (`N>1`), including self-service org provisioning.
-- **SSO / SAML / SCIM** — enterprise identity, directory sync, and automated
+- **SSO / SAML / SCIM:** enterprise identity, directory sync, and automated
   provisioning.
-- **Advanced analytics** — cross-product reporting, cycle-time, and roadmap
+- **Advanced analytics:** cross-product reporting, cycle-time, and roadmap
   insight dashboards.
-- **Premium integrations** — managed connectors beyond the open GitHub sync.
+- **Premium integrations:** managed connectors beyond the open GitHub sync.
 - **Audit logs** — tamper-evident, exportable activity history.
 
 These features power the hosted service at
