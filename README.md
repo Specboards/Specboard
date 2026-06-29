@@ -25,6 +25,7 @@ Open-core: self-host the core for free, or use the hosted SaaS.
 apps/
   web/        Next.js App Router UI (Backlog · Board · Roadmap · Feature detail)
   mcp/        MCP server exposing specs + metadata to coding agents
+  cli/        `specboard` CLI over the /api/v1 surface (API-key auth)
 packages/
   core/       Spec parsing, status state machine, .specboard/config.yml schema
   db/         Drizzle schema + Postgres client (metadata + spec index)
@@ -121,11 +122,17 @@ docker compose -f infra/docker-compose.yml up   # web (infra/web.Dockerfile) + P
 ## License
 
 SpecBoard is **open-core**. The core product, which includes the web app,
-marketing site, shared packages, MCP server, and single-org (`N=1`)
-self-hosting, is licensed under the [Apache License 2.0](./LICENSE). You may run,
-modify, and self-host it for any purpose, including commercially.
+shared packages, MCP server, and single-org (`N=1`) self-hosting, is licensed
+under the [Apache License 2.0](./LICENSE). You may run, modify, and self-host it
+for any purpose, including commercially.
 
 A small set of SaaS-oriented features are licensed separately: multi-tenant
 hosting (`N>1`), SSO/SAML/SCIM, advanced analytics, premium integrations, and
 audit logs. See [LICENSING.md](./LICENSING.md) for the full breakdown, or contact
 **contact@palouse.io** for a commercial license.
+
+The SpecBoard **brand** (name, logos, visual identity) and the marketing site
+are **not** open source. They live in the separate
+[Website](https://github.com/Specboards/Website) repo under a proprietary
+license. Apache-2.0 does not grant trademark rights; see
+[LICENSING.md](./LICENSING.md#brand-and-trademarks-all-rights-reserved).
