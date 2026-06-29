@@ -143,12 +143,14 @@ feature-detail/board/backlog UI → `apps/mcp` enrichment → `pnpm typecheck &&
 Applying the migration is part of shipping the feature, **not** a deferred step.
 A branch isn't done until its migration is live on both databases (there's no
 release_command, so an unapplied migration breaks the next deploy). Migrations are
-not auto-applied on deploy, so per cluster (test `z7y24od8vemrgqd1`, prod
-`1zqyxr7d791rwp8m`):
+not auto-applied on deploy. The DBs are legacy Fly Postgres apps as of 2026-06-29
+(test `specboard-test-db` / db `specboard_test`, prod `specboard-prod-db` / db
+`specboard_prod`); per environment:
 
-1. `fly mpg status <cluster-id> --json` → `.credentials` (user `fly-user`, password, db `fly-db`).
-2. `fly mpg proxy <cluster-id> -p 16380` (background; one cluster at a time).
-3. `DATABASE_URL='postgres://fly-user:<pass>@127.0.0.1:16380/fly-db?sslmode=disable' pnpm --filter @specboard/db migrate`.
+1. `fly proxy 15432:5432 -a <pg-app>` (background; one app at a time). Owner
+   creds (`specboard_owner`) are in `~/specboard-fly-db-migration-2026-06-29/CREDENTIALS.txt`.
+2. `DATABASE_URL='postgres://specboard_owner:<pass>@localhost:15432/<db>?sslmode=disable' pnpm db:migrate`.
+3. New RLS table? As the owner, `grant select,insert,update,delete on <t> to writer`.
 4. Verify the change via `psql` over the proxy, then stop the proxy. Test first, then prod.
 
 **Repo hygiene**

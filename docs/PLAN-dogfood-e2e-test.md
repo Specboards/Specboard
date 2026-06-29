@@ -58,10 +58,10 @@ the `Nintex` workspace, which does not track that repo.
 
 - Fly CLI authed (`fly auth whoami`) for the DB-proxy verification.
 - `gh` authed with admin on the StudioPalouse test repo (to set secrets / open PRs).
-- DB clusters (for proxy verification, migration `0018` already applied):
-  test `specboard-db-test` (`z7y24od8vemrgqd1`), prod `specboard-db`
-  (`1zqyxr7d791rwp8m`). Recipe: see `db-migrations` memory / the existing
-  proxy + `pnpm --filter @specboard/db migrate` flow.
+- DB apps (for proxy verification, migration `0018` already applied): legacy Fly
+  Postgres as of 2026-06-29: test `specboard-test-db` (db `specboard_test`), prod
+  `specboard-prod-db` (db `specboard_prod`). Recipe: see `db-migrations` memory /
+  the `fly proxy 15432:5432 -a <pg-app>` + `pnpm db:migrate` (as `specboard_owner`) flow.
 
 ## Steps
 

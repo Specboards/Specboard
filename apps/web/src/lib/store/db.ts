@@ -130,7 +130,7 @@ function tallyLink(
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-/** Postgres-backed store (self-host compose stack or managed Postgres). */
+/** Postgres-backed store (self-host compose stack or hosted Postgres). */
 export class DbStore implements FeatureStore {
   private readonly db: Database;
 

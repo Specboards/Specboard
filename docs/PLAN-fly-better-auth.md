@@ -27,10 +27,13 @@ Landed beyond the original scope of this plan, same date:
   self-hosters run via docker-compose (strong open-core parity). Fly also
   handles the long-lived processes we need later (webhook reconciler, remote
   MCP server over streamable HTTP/SSE) that serverless platforms make awkward.
-- **Database (SaaS):** plain managed Postgres, using Fly Managed Postgres (MPG).
-  The Supabase↔Fly partnership was deprecated April 2025, and depending on
-  Supabase-specific features (Auth, `auth.uid()` in RLS) would have forced
-  self-hosters to run the full Supabase stack or forked the auth code path.
+- **Database (SaaS):** plain Postgres on Fly.io. (Originally Fly Managed
+  Postgres / MPG; moved to legacy Fly Postgres on 2026-06-29 for cost, see the
+  Operational reference below. The schema is provider-agnostic, so this is a
+  hosting choice, not an app change.) The Supabase↔Fly partnership was
+  deprecated April 2025, and depending on Supabase-specific features (Auth,
+  `auth.uid()` in RLS) would have forced self-hosters to run the full Supabase
+  stack or forked the auth code path.
 - **Auth:** [Better Auth](https://better-auth.com), a TypeScript library that
   runs *inside* the Next.js app against our own Postgres. One auth
   implementation for self-host and SaaS; no external provider.
@@ -249,7 +252,7 @@ take precedence when both exist):
 ### 1.7 Docs & comments sweep
 
 - `ARCHITECTURE.md`: deployment section becomes "SaaS: Fly.io Machines
-  (`infra/web.Dockerfile`) + Fly Managed Postgres; auth via Better Auth
+  (`infra/web.Dockerfile`) + Fly Postgres; auth via Better Auth
   in-app"; fix the other Supabase mentions (lines 48, 62, 66, 85, 101, 123).
 - `README.md`: layout entry for `infra/`, the Database section's
   `infra/supabase/migrations` path, and the status line ("Supabase auth"
@@ -277,6 +280,12 @@ take precedence when both exist):
 > (`0001_rls_policies.sql`) is **not** applied to either MPG database. It
 > still uses Supabase's `auth.uid()` and is rewritten in Phase 1 (1.5),
 > which remains unexecuted.
+>
+> **Superseded 2026-06-29:** the two MPG clusters below were destroyed and
+> replaced by legacy Fly Postgres apps (`specboard-prod-db`,
+> `specboard-test-db`). The `fly mpg ...` commands in this Phase 2 block are
+> kept as a historical record; for the current setup and provisioning recipe
+> see "Operational reference (as deployed)" at the end of this doc.
 
 ```bash
 # 1. Install + sign in
@@ -363,7 +372,7 @@ Notes:
 5. `docker compose -f infra/docker-compose.yml up` still boots (self-host
    parity, auth disabled).
 6. On Fly: `fly deploy` succeeds, the boards are served, sign-up round-trip
-   works against MPG.
+   works against the Postgres backend.
 
 ## Next steps
 
@@ -458,53 +467,93 @@ Rough priority order; the first three unblock real multi-user usage.
 8. **Remote MCP server:** second process group in the Fly apps or its own
    app; should consume `/api/v1` (or the shared service layer), not the DB
    directly.
-9. **Cost check-in:** two MPG basic clusters run $76/mo. If that's heavy
-   pre-launch, both environments can share one cluster (~$38/mo) with
-   separate databases. Revisit before the bill matters.
+9. ~~**Cost check-in:** two MPG basic clusters run $76/mo.~~ **Done 2026-06-29.**
+   Both environments moved off MPG onto legacy Fly Postgres (~$3/mo each), a
+   ~$75/mo cut, keeping the two-role RLS model. Tradeoff: unmanaged, single
+   node, no automated backups yet. Promote prod to a managed/HA tier before real
+   customer data lands. See the Operational reference below.
 10. SSO/SAML/SCIM (commercial tier). Better Auth has plugins for this later.
 
 ### Operational reference (as deployed)
+
+> **DB platform changed 2026-06-29:** both environments moved off Fly Managed
+> Postgres (MPG Basic, ~$38/mo each) onto **legacy Fly Postgres** (Repmgr
+> "flex", PG 17.2, single-node `shared-cpu-1x`/512MB + 1GB volume, ~$3/mo each)
+> to cut the pre-launch bill ~$75/mo. The RLS two-role model was preserved
+> exactly. Caveat: legacy Fly Postgres is unmanaged (single node, no automatic
+> failover) and **automated backups are not yet enabled**; a one-time
+> pre-cutover dump and the DB credentials live in
+> `~/specboard-fly-db-migration-2026-06-29/`. Promote prod to a managed/HA tier
+> before real customer data lands.
 
 | | test | production |
 | --- | --- | --- |
 | URL | https://test.specboard.ai | https://app.specboard.ai |
 | Fly app (org `specboard`) | `specboard-test` | `specboard` |
-| MPG cluster (sjc, basic) | `specboard-db-test` = `z7y24od8vemrgqd1` (seeded from repo specs) | `specboard-db` = `1zqyxr7d791rwp8m` (empty) |
-| MPG users | `fly-user` (`schema_admin`, owner) + `specboard-app` (`writer`, non-owner) | same |
+| Postgres app (sjc, flex PG 17) | `specboard-test-db`, db `specboard_test` (seeded from repo specs) | `specboard-prod-db`, db `specboard_prod` |
+| DB roles | owner `specboard_owner` + non-owner `specboard_app` (group `writer`) | same |
 | Deploy | auto on push to `main` | GitHub Actions → "Fly Deploy" → run workflow → `production` |
 | Email | Postmark (test server token) | Postmark (prod server token) |
 
-Secrets per app: `DATABASE_URL` (owner: migrations, auth, onboarding),
-`DATABASE_URL_APP` (non-owner `writer`: RLS-enforced tenant reads/writes),
+Secrets per app: `DATABASE_URL` (owner `specboard_owner`: migrations, auth,
+onboarding; bypasses RLS as the table owner), `DATABASE_URL_APP` (non-owner
+`specboard_app` in group `writer`: RLS-enforced tenant reads/writes),
 `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
 `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS=true`, `POSTMARK_SERVER_TOKEN`,
-`EMAIL_FROM`. DB migrations are applied from a workstation via
-`fly mpg proxy <cluster-id>` + `pnpm db:migrate` (no release command yet).
+`EMAIL_FROM`. The flex superuser + role passwords are in
+`~/specboard-fly-db-migration-2026-06-29/CREDENTIALS.txt` (shown only at cluster
+creation; not recoverable from Fly afterward). DB migrations are applied from a
+workstation via `fly proxy 15432:5432 -a <pg-app>` + `pnpm db:migrate` as the
+owner (no release command yet).
 
-**Provisioning the non-owner `writer` role (per cluster).** Not a journaled
-migration: MPG creates roles at the cluster level and self-host doesn't use
-this role. After the schema migrations (incl. `0002` RLS) are applied:
+**Provisioning the roles (per Postgres app).** Not a journaled migration:
+self-host runs as a single superuser-owner, so this lives as an ops step. After
+`fly postgres create -o specboard -r sjc -n <pg-app> --vm-memory 512
+--volume-size 1 --initial-cluster-size 1`, open `fly proxy 15432:5432 -a <pg-app>`
+and connect as the `postgres` superuser:
 
 ```bash
-# 1. Create the non-owner writer user (gets no DML on pre-existing tables).
-fly mpg users create <cluster-id> -u specboard-app -r writer
-
-# 2. Grant DML on the existing tenant tables + future ones (run as the owner).
-fly mpg proxy <cluster-id> &
-psql 'host=localhost port=16380 user=fly-user dbname=fly-db sslmode=disable' <<'SQL'
-grant select, insert, update, delete on
-  workspaces, members, repositories, features, comments, activity_log, spec_index
-  to writer;
-alter default privileges in schema public
-  grant select, insert, update, delete on tables to writer;
+# 1. Owner (runs migrations, owns tables, bypasses RLS) + non-owner writer login.
+psql "$SUPER" <<'SQL'
+create role specboard_owner login password '<owner-pw>';
+create role writer nologin;
+create role specboard_app login password '<app-pw>' in role writer;
+create database specboard_prod owner specboard_owner;   -- specboard_test for test
 SQL
 
-# 3. Wire the connection string into the app as DATABASE_URL_APP.
-fly mpg attach <cluster-id> -a <app> -u specboard-app -d fly-db \
-  --variable-name DATABASE_URL_APP
+# 2. In the new DB: owner controls the schema, writer may connect + use it.
+psql "$SUPER (dbname=specboard_prod)" <<'SQL'
+alter schema public owner to specboard_owner;
+grant connect on database specboard_prod to writer;
+grant usage on schema public to writer;
+SQL
+
+# 3. Run migrations as the owner (creates the schema incl. 0002 RLS).
+DATABASE_URL='postgres://specboard_owner:<owner-pw>@localhost:15432/specboard_prod?sslmode=disable' \
+  pnpm db:migrate
+
+# 4. As the owner, grant the writer DML on the RLS-protected tables only
+#    (auto-discovered) plus future tables and sequences.
+psql "$OWNER (dbname=specboard_prod)" <<'SQL'
+do $$ declare r record; begin
+  for r in select c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
+           where n.nspname='public' and c.relkind='r' and c.relrowsecurity loop
+    execute format('grant select,insert,update,delete on public.%I to writer', r.relname);
+  end loop; end $$;
+grant usage, select on all sequences in schema public to writer;
+alter default privileges for role specboard_owner in schema public
+  grant select,insert,update,delete on tables to writer;
+alter default privileges for role specboard_owner in schema public
+  grant usage, select on sequences to writer;
+SQL
+
+# 5. Wire both connection strings into the consuming app (internal flycast host).
+fly secrets set -a <app> \
+  DATABASE_URL='postgres://specboard_owner:<owner-pw>@<pg-app>.flycast:5432/specboard_prod?sslmode=disable' \
+  DATABASE_URL_APP='postgres://specboard_app:<app-pw>@<pg-app>.flycast:5432/specboard_prod?sslmode=disable'
 ```
 
-Verify (as `specboard-app`): `app.user_id` unset → 0 rows; set to a member's
+Verify (as `specboard_app`): `app.user_id` unset → 0 rows; set to a member's
 uuid via `select set_config('app.user_id','<uuid>',true)` in a transaction →
-only that workspace's rows; non-member → 0. Owner (`fly-user`) bypasses RLS, so
-migrations/auth/onboarding keep working.
+only that workspace's rows; non-member → 0. The owner (`specboard_owner`)
+bypasses RLS, so migrations/auth/onboarding keep working.

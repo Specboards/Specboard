@@ -108,7 +108,7 @@ the repo picker — **Connect** `Specboards/SpecBoard` (it upserts owner +
 installation_id and re-imports). Then remove the stale `StudioPalouse/SpecBoard`
 row if one lingers.
 
-If you'd rather do it directly (proxy via `fly mpg connect z7y24od8vemrgqd1`):
+If you'd rather do it directly (proxy via `fly proxy 15432:5432 -a specboard-test-db`, then `psql` as `specboard_owner`):
 ```sql
 -- new installation_id comes from the install in 4a (App → Advanced, or the
 -- installation URL). Replace <NEW_INSTALL_ID>.

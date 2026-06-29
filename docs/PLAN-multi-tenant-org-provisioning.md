@@ -109,13 +109,13 @@ over. New hosted Apps were registered under `Specboards`:
 - **test** → App `specboards-test` (app_id 4105658), env on `specboard-test`.
 - **prod** → App `specboards` (app_id 4105632), env on `specboard`.
 
-- test (`specboard-test`, db `z7y24od8vemrgqd1`): 1 workspace `palouse`, 1 member.
+- test (`specboard-test`, db app `specboard-test-db`): 1 workspace `palouse`, 1 member.
   The old stored App `specboard-studiopalouse` (app_id 4052836, StudioPalouse)
   was deleted from `github_app` so env creds take over. The pre-existing repo row
   (`StudioPalouse/SpecBoard`, installation 140279350) is stale and must be
   re-installed/reconnected against `specboards-test` (and re-pointed at the new
   `Specboards/SpecBoard` path). `SPECBOARD_MULTI_TENANT=true`.
-- prod (`specboard`, db `1zqyxr7d791rwp8m`): 1 workspace `nintex`, 1 member, 0
+- prod (`specboard`, db app `specboard-prod-db`): 1 workspace `nintex`, 1 member, 0
   repos. No stored App row → uses env creds (`specboards` App) directly.
   `SPECBOARD_MULTI_TENANT=true`.
 </content>

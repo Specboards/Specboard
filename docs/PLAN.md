@@ -20,7 +20,7 @@ with no PM layer. JIRA/Aha are heavyweight and disconnected from the actual spec
 fills the gap.
 
 > **Amendment (2026-06-12):** the Supabase + Vercel decision below is
-> superseded. The hosted SaaS will run on Fly.io with plain managed Postgres,
+> superseded. The hosted SaaS will run on Fly.io with plain Postgres,
 > and auth moves to Better Auth (in-app, works identically for self-host).
 > Details and execution steps: [`PLAN-fly-better-auth.md`](./PLAN-fly-better-auth.md).
 >
