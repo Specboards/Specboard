@@ -203,6 +203,106 @@ export async function scanWorkspaceSpecs(db: Database, workspaceId: string): Pro
   return scans;
 }
 
+/** Slugify a feature name into a path segment (lowercase, hyphen-separated). */
+function featureSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** The starter spec.md body we commit on a user's first walkthrough. */
+function starterSpecContent(title: string, id: string): string {
+  // Double-quote the title (JSON is valid YAML) so names with colons etc. stay valid.
+  return `---
+id: ${id}
+title: ${JSON.stringify(title)}
+kind: feature
+---
+
+# ${title}
+
+This is your first SpecBoard spec. It lives in your repository as
+\`specs/${featureSlug(title)}/spec.md\` and stays in sync with this card on every
+push. Edit it in git; the board follows.
+
+## Problem
+
+What problem are we solving, and for whom?
+
+## Proposal
+
+What are we building?
+
+## Acceptance criteria
+
+- [ ] First thing it must do
+- [ ] Second thing it must do
+`;
+}
+
+/** Outcome of seeding a starter spec into a repo. */
+export interface StarterSpecResult {
+  /** Path of the spec file committed to the repo. */
+  path: string;
+  /** The import summary from syncing the repo after the commit. */
+  summary: SyncSummary;
+}
+
+/**
+ * Commit a starter `specs/<feature>/spec.md` into a connected repo, then import
+ * it so a card appears on the board. The "build your first spec" walkthrough for
+ * a workspace whose repos have no specs yet, so a new admin can feel the whole
+ * loop (commit -> sync -> card) end to end. Refuses to overwrite an existing
+ * file at the target path.
+ */
+export async function createStarterSpec(
+  db: Database,
+  repo: RepoRecord,
+  featureName: string,
+): Promise<StarterSpecResult> {
+  const title = featureName.trim();
+  const slug = featureSlug(title);
+  if (!slug) {
+    throw new Error("Give the feature a name with at least one letter or number.");
+  }
+
+  const app = await getGithubApp(db);
+  if (!app) {
+    throw new Error("GitHub App is not configured. Set it up on the Repositories page.");
+  }
+  const client = await createGitHubRepoClient(app, {
+    installationId: repo.githubInstallationId,
+    owner: repo.owner,
+    name: repo.name,
+    ref: repo.defaultBranch,
+  });
+
+  const path = `specs/${slug}/spec.md`;
+  // Don't clobber an existing spec at that path.
+  let exists = false;
+  try {
+    await client.readFile(path);
+    exists = true;
+  } catch {
+    exists = false;
+  }
+  if (exists) {
+    throw new Error(`${path} already exists in ${repo.owner}/${repo.name}. Pick a different name.`);
+  }
+
+  await client.writeFile({
+    path,
+    content: starterSpecContent(title, randomUUID()),
+    message: `docs(specboard): add starter spec ${path}`,
+    mode: "direct",
+  });
+
+  // Import it so the card shows up immediately (completes the walkthrough loop).
+  const summary = await syncRepository(db, repo);
+  return { path, summary };
+}
+
 /** Find a connected repository by owner + name (case-sensitive, as GitHub stores them). */
 export async function resolveRepository(
   db: Database,

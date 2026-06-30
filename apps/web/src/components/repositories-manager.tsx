@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 
 import {
   connectRepository,
+  createStarterSpec,
   disconnectRepository,
   importWorkspaceSpecs,
   listInstallationRepositories,
@@ -13,6 +14,7 @@ import {
   type ImportResult,
   type InstallationRepo,
   type RepoScan,
+  type StarterSpecResult,
   type SyncResult,
 } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -98,7 +100,7 @@ export function RepositoriesManager({
       <RepoList repos={repos} canResync={canConnect && configured} canManage={canConnect} />
 
       {canConnect && configured && repos.length > 0 ? (
-        <SpecImportPanel scanNonce={scanNonce} />
+        <SpecImportPanel scanNonce={scanNonce} repos={repos} />
       ) : null}
 
       {!canConnect ? (
@@ -125,7 +127,13 @@ export function RepositoriesManager({
  * scan -> prompt -> create -> view board. The empty state is the hook for the
  * "no specs yet, let's build your first one" walkthrough (a later slice).
  */
-function SpecImportPanel({ scanNonce }: { scanNonce: number }) {
+function SpecImportPanel({
+  scanNonce,
+  repos,
+}: {
+  scanNonce: number;
+  repos: ConnectedRepo[];
+}) {
   const router = useRouter();
   const boardPath = useOrgProductPath();
   const [loading, setLoading] = useState(true);
@@ -192,7 +200,12 @@ function SpecImportPanel({ scanNonce }: { scanNonce: number }) {
         ) : result ? (
           <ImportResultView result={result} boardHref={boardPath("/backlog")} onRescan={() => void rescan()} />
         ) : totalSpecs === 0 ? (
-          <EmptySpecsState onRescan={() => void rescan()} loading={loading} />
+          <EmptySpecsState
+            repos={repos}
+            boardHref={boardPath("/backlog")}
+            onRescan={() => void rescan()}
+            loading={loading}
+          />
         ) : (
           <div className="space-y-3">
             <p className="text-sm">
@@ -304,23 +317,122 @@ function ImportResultView({
 }
 
 /**
- * No specs found in the connected repos. Placeholder for the guided "build your
- * first spec" walkthrough (a later slice); for now it explains the convention
- * and lets the admin rescan after adding one.
+ * No specs found in the connected repos: the guided "build your first spec"
+ * walkthrough. Commits a starter `specs/<feature>/spec.md` into a connected repo
+ * and imports it, so a new admin gets a real card and feels the whole loop. On
+ * success it shows what was committed plus a link to the board.
  */
-function EmptySpecsState({ onRescan, loading }: { onRescan: () => void; loading: boolean }) {
+function EmptySpecsState({
+  repos,
+  boardHref,
+  onRescan,
+  loading,
+}: {
+  repos: ConnectedRepo[];
+  boardHref: string;
+  onRescan: () => void;
+  loading: boolean;
+}) {
+  const router = useRouter();
+  const [featureName, setFeatureName] = useState("");
+  const [repoId, setRepoId] = useState(repos[0]?.id ?? "");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<StarterSpecResult | null>(null);
+
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const name = featureName.trim();
+    if (!name) {
+      setError("Give your first feature a name.");
+      return;
+    }
+    if (!repoId) {
+      setError("Pick a repository to add it to.");
+      return;
+    }
+    startTransition(async () => {
+      setError(null);
+      try {
+        const result = await createStarterSpec({ repoId, featureName: name });
+        setCreated(result);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't create the starter spec.");
+      }
+    });
+  }
+
+  if (created) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm">
+          Committed <code>{created.path}</code> and added it to your board. Edit the file in your
+          repo anytime, the card stays in sync.
+        </p>
+        <div className="flex items-center gap-2">
+          <Link href={boardHref}>
+            <Button size="sm">View your board</Button>
+          </Link>
+          <Button size="sm" variant="ghost" onClick={onRescan}>
+            Scan again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
-      <p className="text-sm">
-        We didn&apos;t find any specs in your connected repositories yet.
-      </p>
+      <p className="text-sm">We didn&apos;t find any specs in your connected repositories yet.</p>
       <p className="text-xs text-muted-foreground">
-        Specs are markdown files at <code>specs/&lt;feature&gt;/spec.md</code>. Add one and rescan,
-        and we&apos;ll turn it into a work item on your board.
+        Let&apos;s create your first one. We&apos;ll commit a starter{" "}
+        <code>specs/&lt;feature&gt;/spec.md</code> to your repo and turn it into a card, so you can
+        see how specs and the board stay in sync.
       </p>
-      <Button size="sm" variant="outline" onClick={onRescan} disabled={loading}>
-        {loading ? "…" : "Rescan"}
-      </Button>
+      <form onSubmit={submit} className="space-y-3">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Feature name</span>
+          <Input
+            value={featureName}
+            onChange={(e) => setFeatureName(e.target.value)}
+            placeholder="Checkout flow"
+            disabled={pending}
+          />
+        </label>
+        {repos.length > 1 ? (
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Repository</span>
+            <select
+              value={repoId}
+              onChange={(e) => setRepoId(e.target.value)}
+              disabled={pending}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              {repos.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.owner}/{r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <div className="flex items-center gap-2">
+          <Button type="submit" size="sm" disabled={pending}>
+            {pending ? "Creating…" : "Create my first spec"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onRescan}
+            disabled={pending || loading}
+          >
+            {loading ? "…" : "Rescan"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

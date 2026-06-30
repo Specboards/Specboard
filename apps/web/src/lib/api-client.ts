@@ -363,6 +363,39 @@ export async function scanWorkspaceSpecs(): Promise<{ repos: RepoScan[]; totalSp
   return { repos: body?.repos ?? [], totalSpecs: body?.totalSpecs ?? 0 };
 }
 
+/** The outcome of seeding a starter spec into a repo and importing it. */
+export interface StarterSpecResult {
+  path: string;
+  summary: SyncResult;
+}
+
+/**
+ * Commit a starter `spec.md` into a connected repo and import it, creating the
+ * workspace's first card. Backs the empty-state "build your first spec"
+ * walkthrough. Admin-only.
+ */
+export async function createStarterSpec(input: {
+  repoId: string;
+  featureName: string;
+}): Promise<StarterSpecResult> {
+  const res = await fetch("/api/v1/repositories/starter-spec", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { path?: string; summary?: SyncResult; error?: string }
+    | null;
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Couldn't create the starter spec (${res.status}).`);
+  }
+  return {
+    path: body?.path ?? "",
+    summary: body?.summary ?? { upserted: 0, skipped: 0, idsInjected: 0, featuresCreated: 0 },
+  };
+}
+
 /** The aggregated outcome of importing specs across all connected repos. */
 export interface ImportResult {
   summary: SyncResult;
