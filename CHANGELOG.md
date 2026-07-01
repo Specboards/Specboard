@@ -5,6 +5,22 @@ All notable changes to SpecBoard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.1.4] - 2026-07-01
+
+### Added
+
+- Onboarding spec flow. Connecting a repository now registers it without
+  auto-importing; an "Import your specs" panel scans connected repos read-only
+  for `spec.md` files and creates cards only after you confirm, then links to the
+  board.
+- Guided first spec. When connected repos have no specs, the empty state walks
+  you through naming a feature and picking a repo, then commits a starter
+  `specs/<feature>/spec.md` (stable id and template body) and imports it so a
+  real card appears. Refuses to overwrite an existing file.
+- "Prefer a dedicated repo just for specs?" nudge for users without a suitable
+  repo: a prefilled link to create a `specs` repo on GitHub, then install,
+  connect, and seed it through the existing flow. No new GitHub App permissions.
+
 ## [0.1.3] - 2026-06-30
 
 ### Added
