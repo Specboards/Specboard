@@ -32,37 +32,42 @@ Key files: `packages/core/src/spec.ts` (`previewSpec`, unit-tested),
 `apps/web/src/components/repositories-manager.tsx` (`SpecImportPanel`,
 `EmptySpecsState`).
 
-## Open decisions (need Jon's call before finishing)
+## Decisions (settled)
 
-1. **Starter spec commit target.** Today `createStarterSpec` commits directly to
-   the default branch (mode `"direct"`, consistent with how stable-id injection
-   already commits). Option: switch to a PR (`mode: "pr"`) so nothing lands on
-   `main` unreviewed. Decision pending.
-2. **Scope for 0.2.0.** Ship #1 + #3 now and treat the rest of #2 as a fast
-   follow, or finish #2 first and cut one release. Leaning toward shipping
-   #1 + #3, but Jon's call.
+1. **Starter spec commit target: direct.** `createStarterSpec` keeps committing
+   directly to the default branch (mode `"direct"`, consistent with how stable-id
+   injection already commits). No PR mode.
+2. **Scope for 0.1.4: finish #2 first,** then cut one release covering all three
+   asks. (Shipped as a patch, 0.1.4, by Jon's call, even though VERSIONING.md
+   would normally treat new features as a minor.)
 
 ## Remaining work
 
-- **Ask #2 - "create a dedicated spec repo" nudge.** The seed mechanism
-  (`createStarterSpec`) is already built and reused by #3. What's left is a UI
-  nudge: when a user has no suitable repo, guide them to create a spec repo on
-  GitHub and connect it (existing connect flow), then seed it. Chosen approach
-  uses existing `contents:write`, no GitHub App permission bump (decided earlier).
+- **Ask #2 - "create a dedicated spec repo" nudge. DONE.** The seed mechanism
+  (`createStarterSpec`) was already built and reused by #3. Added a
+  `CreateSpecRepoNudge` (in `repositories-manager.tsx`): a collapsible that
+  deep-links to GitHub's prefilled new-repo page (`github.com/new?name=specs`),
+  then walks the user back through install -> connect -> first spec. Shown in the
+  two "no suitable repo" moments: the connect section (nothing connected) and the
+  empty-specs first-spec state. Uses existing `contents:write`, no GitHub App
+  permission bump. Verified green (typecheck 11/11, build 7/7, tests pass).
 - **Manual test on cloud test** (per cloud-test-first): merge #68 -> auto-deploys
   to test.specboard.ai -> try both paths: a repo with `specs/**/spec.md`
   (scan -> import) and a repo with none (create-first-spec).
-- **Release:** when happy, this is a MINOR bump to **0.2.0** (see VERSIONING.md):
-  bump all 8 package.json in lockstep, add a CHANGELOG entry, verify green, merge,
-  tag `v0.2.0` on the merge commit, then dispatch the Fly production deploy.
+- **Release:** when happy, bump to **0.1.4** (see VERSIONING.md): bump all 8
+  package.json in lockstep, add a CHANGELOG entry, verify green, merge, tag
+  `v0.1.4` on the merge commit, then dispatch the Fly production deploy.
 
-## How to resume tomorrow
+## How to resume
 
-1. Answer the two open decisions above.
-2. If keeping direct commit + shipping #1/#3: merge #68, smoke-test on test, then
-   run the 0.2.0 release steps. If finishing #2 first: add the spec-repo nudge on
-   this branch, then release.
-3. Re-run `pnpm -w build && pnpm -w typecheck && pnpm -w test` before any push
+All three asks (#1, #2, #3) are implemented on this branch and green. Next:
+
+1. Merge #68 -> auto-deploys to test.specboard.ai.
+2. Smoke-test on test: a repo with `specs/**/spec.md` (scan -> import), a repo
+   with none (create-first-spec), and the "dedicated spec repo" nudge.
+3. Run the 0.1.4 release steps (bump 8 package.json in lockstep, CHANGELOG entry,
+   verify green, merge, tag `v0.1.4`, dispatch Fly prod deploy).
+4. Re-run `pnpm -w build && pnpm -w typecheck && pnpm -w test` before any push
    (push only green branches).
 
 ## Related context (this session)

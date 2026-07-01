@@ -100,7 +100,7 @@ export function RepositoriesManager({
       <RepoList repos={repos} canResync={canConnect && configured} canManage={canConnect} />
 
       {canConnect && configured && repos.length > 0 ? (
-        <SpecImportPanel scanNonce={scanNonce} repos={repos} />
+        <SpecImportPanel scanNonce={scanNonce} repos={repos} installUrl={installUrl} />
       ) : null}
 
       {!canConnect ? (
@@ -130,9 +130,11 @@ export function RepositoriesManager({
 function SpecImportPanel({
   scanNonce,
   repos,
+  installUrl,
 }: {
   scanNonce: number;
   repos: ConnectedRepo[];
+  installUrl: string | null;
 }) {
   const router = useRouter();
   const boardPath = useOrgProductPath();
@@ -205,6 +207,7 @@ function SpecImportPanel({
             boardHref={boardPath("/backlog")}
             onRescan={() => void rescan()}
             loading={loading}
+            installUrl={installUrl}
           />
         ) : (
           <div className="space-y-3">
@@ -327,11 +330,13 @@ function EmptySpecsState({
   boardHref,
   onRescan,
   loading,
+  installUrl,
 }: {
   repos: ConnectedRepo[];
   boardHref: string;
   onRescan: () => void;
   loading: boolean;
+  installUrl: string | null;
 }) {
   const router = useRouter();
   const [featureName, setFeatureName] = useState("");
@@ -433,7 +438,51 @@ function EmptySpecsState({
           </Button>
         </div>
       </form>
+      <CreateSpecRepoNudge installUrl={installUrl} />
     </div>
+  );
+}
+
+/**
+ * Nudge for users who'd rather keep specs in their own repository. We can't
+ * create the repo for them (that needs a GitHub App permission we deliberately
+ * don't request), so we deep-link to GitHub's new-repo page prefilled with a
+ * sensible name, then walk them back through the existing install -> connect ->
+ * first-spec flow. Shown in the two "no suitable repo" moments: the connect
+ * section (nothing connected) and the empty-specs first-spec state.
+ */
+function CreateSpecRepoNudge({ installUrl }: { installUrl: string | null }) {
+  const newRepoUrl =
+    "https://github.com/new?name=specs&description=" +
+    encodeURIComponent("Product specs synced to SpecBoard");
+  return (
+    <details className="rounded-md border px-3 py-2">
+      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+        Prefer a dedicated repo just for specs?
+      </summary>
+      <div className="mt-3 space-y-3 text-xs text-muted-foreground">
+        <p>Keep your specs in their own repository, separate from application code.</p>
+        <ol className="list-decimal space-y-1 pl-4">
+          <li>
+            <a href={newRepoUrl} target="_blank" rel="noreferrer" className="underline">
+              Create a repo on GitHub
+            </a>{" "}
+            (we suggest naming it <code>specs</code>).
+          </li>
+          <li>
+            {installUrl ? (
+              <a href={installUrl} target="_blank" rel="noreferrer" className="underline">
+                Install SpecBoard
+              </a>
+            ) : (
+              "Install the SpecBoard GitHub App"
+            )}{" "}
+            on the new repo.
+          </li>
+          <li>Connect it here, then create your first spec.</li>
+        </ol>
+      </div>
+    </details>
   );
 }
 
@@ -706,6 +755,8 @@ function ConnectSection({
         ) : null}
 
         <ManualConnectForm />
+
+        {connected.length === 0 ? <CreateSpecRepoNudge installUrl={installUrl} /> : null}
       </CardContent>
     </Card>
   );
