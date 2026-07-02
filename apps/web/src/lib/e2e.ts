@@ -8,13 +8,22 @@
  * With the flag off, every one of those paths behaves exactly as in production.
  */
 export function isE2E(): boolean {
-  // Belt and suspenders: never honor the E2E flag in a production build, so a
-  // stray or injected SPECBOARD_E2E can't disable email verification or swap in
-  // the fake GitHub client on a deployed environment. The Playwright harness
-  // runs with NODE_ENV !== "production".
-  if (process.env.NODE_ENV === "production") return false;
   const value = process.env.SPECBOARD_E2E?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "yes";
+  if (value !== "1" && value !== "true" && value !== "yes") return false;
+  // Belt and suspenders: only honor the flag when the app is configured to
+  // serve localhost, so a stray or injected SPECBOARD_E2E can't disable email
+  // verification or swap in the fake GitHub client on a deployed environment
+  // (which always serves a public origin). A NODE_ENV check would not work
+  // here: the Playwright harness runs `next start`, which is a production
+  // build.
+  const origin = (process.env.APP_URL ?? process.env.BETTER_AUTH_URL)?.trim();
+  if (!origin) return false;
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
 }
 
 /**
