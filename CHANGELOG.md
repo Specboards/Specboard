@@ -5,6 +5,15 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.1.6] - 2026-07-01
+
+### Fixed
+
+- Deployed apps served a broken logo image on the sign-in and sign-up cards:
+  the Docker runtime image did not include the `public` folder, which Next.js
+  standalone output requires to be copied in manually, so every public asset
+  returned 404 in cloud environments.
+
 ## [0.1.5] - 2026-07-01
 
 ### Added
