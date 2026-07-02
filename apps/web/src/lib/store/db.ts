@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   canReadProduct,
+  canWriteProduct,
   DEFAULT_PRODUCT_KEY,
   extractSections,
   isLeafLevel,
@@ -28,6 +29,7 @@ import {
   or,
   productMembers,
   products,
+  repositories,
   savedViews,
   sql,
   specIndex,
@@ -129,6 +131,25 @@ function tallyLink(
 }
 
 type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type ProductVisibilityRow = { id: string; visibility: "org" | "private" };
+
+function canReadProductId(
+  access: ProductAccess,
+  productById: ReadonlyMap<string, ProductVisibilityRow>,
+  productId: string | null,
+): boolean {
+  if (productId === null) return true;
+  const product = productById.get(productId);
+  return product ? canReadProduct(access, product) : false;
+}
+
+function canWriteProductId(
+  access: ProductAccess,
+  productId: string | null,
+): boolean {
+  if (productId === null) return access.isOrgAdmin;
+  return canWriteProduct(access, productId);
+}
 
 /** Postgres-backed store (self-host compose stack or hosted Postgres). */
 export class DbStore implements FeatureStore {
@@ -142,7 +163,7 @@ export class DbStore implements FeatureStore {
    * Run `fn` inside a transaction scoped to `scope`: it sets the
    * `app.user_id` session variable RLS keys on (transaction-local, so it must
    * live in a transaction), and callers additionally filter by `workspaceId`.
-   * Refuses to run unscoped — that would expose every tenant's rows, since the
+   * Refuses to run unscoped because that would expose every tenant's rows, since the
    * app still connects as the table owner (RLS bypassed until the
    * `specboard_app` non-owner role lands; see docs/PLAN-fly-better-auth.md).
    */
@@ -154,18 +175,27 @@ export class DbStore implements FeatureStore {
       throw new Error("DbStore requires a workspace scope.");
     }
     return this.db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.user_id', ${scope.userId}, true)`);
+      await tx.execute(
+        sql`select set_config('app.user_id', ${scope.userId}, true)`,
+      );
       return fn(tx);
     });
   }
 
   async listFeatures(scope?: WorkspaceScope): Promise<FeatureRecord[]> {
     return this.scoped(scope, async (tx) => {
-      const rows = await tx.query.features.findMany({
-        where: eq(features.workspaceId, scope!.workspaceId),
-        with: { index: true },
-      });
-      // One pass over the workspace's `blocks` edges to tally counts per row.
+      const [allRows, access, productById] = await Promise.all([
+        tx.query.features.findMany({
+          where: eq(features.workspaceId, scope!.workspaceId),
+          with: { index: true },
+        }),
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, scope!.workspaceId),
+      ]);
+      const rows = allRows.filter((row) =>
+        canReadProductId(access, productById, row.productId),
+      );
+      const visibleIds = new Set(rows.map((row) => row.id));
       const links = await tx
         .select({
           fromFeatureId: featureLinks.fromFeatureId,
@@ -178,18 +208,24 @@ export class DbStore implements FeatureStore {
             eq(featureLinks.type, "blocks"),
           ),
         );
+      const visibleLinks = links.filter(
+        (link) =>
+          visibleIds.has(link.fromFeatureId) &&
+          visibleIds.has(link.toFeatureId),
+      );
+      // One pass over the visible `blocks` edges to tally counts per row.
       const blocks = new Map<string, number>();
       const blockedBy = new Map<string, number>();
-      for (const l of links) {
+      for (const l of visibleLinks) {
         blocks.set(l.fromFeatureId, (blocks.get(l.fromFeatureId) ?? 0) + 1);
         blockedBy.set(l.toFeatureId, (blockedBy.get(l.toFeatureId) ?? 0) + 1);
       }
-      // Hierarchy roll-up from the full workspace set (no extra query).
+      // Hierarchy roll-up from the visible workspace set.
       const specById = new Map(rows.map((r) => [r.id, r.specId]));
       const childCount = new Map<string, number>();
       const childDone = new Map<string, number>();
       for (const r of rows) {
-        if (!r.parentId) continue;
+        if (!r.parentId || !visibleIds.has(r.parentId)) continue;
         childCount.set(r.parentId, (childCount.get(r.parentId) ?? 0) + 1);
         if (isDone(r.status))
           childDone.set(r.parentId, (childDone.get(r.parentId) ?? 0) + 1);
@@ -197,25 +233,31 @@ export class DbStore implements FeatureStore {
       const rolled = rollUpEstimates(
         rows.map((r) => ({
           key: r.id,
-          parentKey: r.parentId,
+          parentKey:
+            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
           estimate: r.estimate,
         })),
       );
-      // GitHub link aggregate, rolled up over each feature's subtree. Tally each
-      // link onto its own feature, then propagate up the parent chain.
-      const ghLinks = await tx
-        .select({
-          featureId: featureGithubLinks.featureId,
-          kind: featureGithubLinks.kind,
-          state: featureGithubLinks.state,
-        })
-        .from(featureGithubLinks)
-        .where(eq(featureGithubLinks.workspaceId, scope!.workspaceId));
-      const parentOf = new Map(rows.map((r) => [r.id, r.parentId]));
+      // GitHub link aggregate, rolled up over each visible feature's subtree.
+      const ghLinks = (
+        await tx
+          .select({
+            featureId: featureGithubLinks.featureId,
+            kind: featureGithubLinks.kind,
+            state: featureGithubLinks.state,
+          })
+          .from(featureGithubLinks)
+          .where(eq(featureGithubLinks.workspaceId, scope!.workspaceId))
+      ).filter((link) => visibleIds.has(link.featureId));
+      const parentOf = new Map(
+        rows.map((r) => [
+          r.id,
+          r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
+        ]),
+      );
       const ghAgg = new Map<string, GithubLinkAggregate>();
       for (const r of rows) ghAgg.set(r.id, emptyAgg());
       for (const link of ghLinks) {
-        // Add this link to its own feature and every ancestor (subtree roll-up).
         const seen = new Set<string>();
         let cur: string | null = link.featureId;
         while (cur && !seen.has(cur)) {
@@ -243,7 +285,9 @@ export class DbStore implements FeatureStore {
         path: row.index?.path ?? "",
         blocksCount: blocks.get(row.id) ?? 0,
         blockedByCount: blockedBy.get(row.id) ?? 0,
-        parentSpecId: row.parentId ? (specById.get(row.parentId) ?? null) : null,
+        parentSpecId: row.parentId
+          ? (specById.get(row.parentId) ?? null)
+          : null,
         childCount: childCount.get(row.id) ?? 0,
         childDoneCount: childDone.get(row.id) ?? 0,
         githubSummary: ghAgg.get(row.id) ?? emptyAgg(),
@@ -264,8 +308,13 @@ export class DbStore implements FeatureStore {
         with: { index: true },
       });
       if (!row) return null;
+      const [access, productById] = await Promise.all([
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, scope!.workspaceId),
+      ]);
+      if (!canReadProductId(access, productById, row.productId)) return null;
       const content = row.index?.content ?? "";
-      // Resolve the assignee's display name (separate lookup — there's no
+      // Resolve the assignee's display name (separate lookup, since there's no
       // features→users relation, and assignees are usually few).
       let assigneeName: string | null = null;
       if (row.assigneeId) {
@@ -304,11 +353,21 @@ export class DbStore implements FeatureStore {
               specId: features.specId,
               title: features.title,
               level: features.level,
+              productId: features.productId,
             })
             .from(features)
-            .where(inArray(features.id, otherIds))
+            .where(
+              and(
+                eq(features.workspaceId, scope!.workspaceId),
+                inArray(features.id, otherIds),
+              ),
+            )
         : [];
-      const byId = new Map(others.map((o) => [o.id, o]));
+      const byId = new Map(
+        others
+          .filter((o) => canReadProductId(access, productById, o.productId))
+          .map((o) => [o.id, o]),
+      );
       const relations: FeatureRelation[] = links
         .map((l) => {
           const otherId =
@@ -330,20 +389,36 @@ export class DbStore implements FeatureStore {
       let parentTitle: string | null = null;
       if (row.parentId) {
         const parent = await tx.query.features.findFirst({
-          where: eq(features.id, row.parentId),
-          columns: { specId: true, title: true },
+          where: and(
+            eq(features.id, row.parentId),
+            eq(features.workspaceId, scope!.workspaceId),
+          ),
+          columns: { specId: true, title: true, productId: true },
         });
-        parentSpecId = parent?.specId ?? null;
-        parentTitle = parent?.title ?? null;
+        if (parent && canReadProductId(access, productById, parent.productId)) {
+          parentSpecId = parent.specId;
+          parentTitle = parent.title;
+        }
       }
-      const childRows = await tx
+      const childRowsRaw = await tx
         .select({
           specId: features.specId,
           title: features.title,
           status: features.status,
+          productId: features.productId,
         })
         .from(features)
-        .where(eq(features.parentId, row.id));
+        .where(
+          and(
+            eq(features.parentId, row.id),
+            eq(features.workspaceId, scope!.workspaceId),
+          ),
+        );
+      const childRows = childRowsRaw
+        .filter((child) =>
+          canReadProductId(access, productById, child.productId),
+        )
+        .map(({ productId: _productId, ...child }) => child);
 
       // Roll the estimate up over this feature's subtree. Needs the whole
       // workspace tree, so pull just the three columns the roll-up uses.
@@ -352,13 +427,19 @@ export class DbStore implements FeatureStore {
           id: features.id,
           parentId: features.parentId,
           estimate: features.estimate,
+          productId: features.productId,
         })
         .from(features)
         .where(eq(features.workspaceId, scope!.workspaceId));
+      const visibleEstimateRows = estimateRows.filter((r) =>
+        canReadProductId(access, productById, r.productId),
+      );
+      const visibleIds = new Set(visibleEstimateRows.map((r) => r.id));
       const rolled = rollUpEstimates(
-        estimateRows.map((r) => ({
+        visibleEstimateRows.map((r) => ({
           key: r.id,
-          parentKey: r.parentId,
+          parentKey:
+            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
           estimate: r.estimate,
         })),
       );
@@ -366,9 +447,12 @@ export class DbStore implements FeatureStore {
       // GitHub links: this item's own + all descendants' (rolled up). Walk the
       // parent map down from `row.id` to collect the subtree feature ids.
       const childrenOf = new Map<string, string[]>();
-      for (const r of estimateRows) {
-        if (!r.parentId) continue;
-        (childrenOf.get(r.parentId) ?? childrenOf.set(r.parentId, []).get(r.parentId)!).push(r.id);
+      for (const r of visibleEstimateRows) {
+        if (!r.parentId || !visibleIds.has(r.parentId)) continue;
+        (
+          childrenOf.get(r.parentId) ??
+          childrenOf.set(r.parentId, []).get(r.parentId)!
+        ).push(r.id);
       }
       const subtree = new Set<string>([row.id]);
       const queue = [row.id];
@@ -401,9 +485,20 @@ export class DbStore implements FeatureStore {
         );
       const sourceInfo = ghRows.length
         ? await tx
-            .select({ id: features.id, specId: features.specId, title: features.title })
+            .select({
+              id: features.id,
+              specId: features.specId,
+              title: features.title,
+            })
             .from(features)
-            .where(inArray(features.id, [...new Set(ghRows.map((l) => l.featureId))]))
+            .where(
+              and(
+                eq(features.workspaceId, scope!.workspaceId),
+                inArray(features.id, [
+                  ...new Set(ghRows.map((l) => l.featureId)),
+                ]),
+              ),
+            )
         : [];
       const sourceById = new Map(sourceInfo.map((s) => [s.id, s]));
       const githubLinks: GithubLink[] = ghRows.map((l) => ({
@@ -456,7 +551,10 @@ export class DbStore implements FeatureStore {
   }
 
   /** The workspace's hierarchy levels, ordered top → leaf (default if none). */
-  private async levelsIn(tx: Tx, workspaceId: string): Promise<WorkspaceLevel[]> {
+  private async levelsIn(
+    tx: Tx,
+    workspaceId: string,
+  ): Promise<WorkspaceLevel[]> {
     const rows = await tx
       .select({
         key: workspaceLevels.key,
@@ -486,7 +584,9 @@ export class DbStore implements FeatureStore {
       try {
         resolved = resolveLevelUpdate(current, updates);
       } catch (err) {
-        throw new LevelError(err instanceof Error ? err.message : "Invalid levels.");
+        throw new LevelError(
+          err instanceof Error ? err.message : "Invalid levels.",
+        );
       }
 
       // A level can only be removed once nothing references it (FK aside, the
@@ -547,6 +647,10 @@ export class DbStore implements FeatureStore {
     return this.scoped(scope, async (tx) => {
       const ws = scope!.workspaceId;
       const levels = await this.levelsIn(tx, ws);
+      const [access, productById] = await Promise.all([
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, ws),
+      ]);
 
       const title = input.title.trim();
       if (!title) throw new FeatureError("Title is required.");
@@ -561,7 +665,11 @@ export class DbStore implements FeatureStore {
       let parentId: string | null = null;
       if (input.parentSpecId) {
         const parent = await tx
-          .select({ id: features.id, level: features.level })
+          .select({
+            id: features.id,
+            level: features.level,
+            productId: features.productId,
+          })
           .from(features)
           .where(
             and(
@@ -571,6 +679,9 @@ export class DbStore implements FeatureStore {
           );
         if (!parent[0])
           throw new FeatureError(`Unknown parent: ${input.parentSpecId}`);
+        if (!canReadProductId(access, productById, parent[0].productId)) {
+          throw new FeatureError(`Unknown parent: ${input.parentSpecId}`);
+        }
         if (!isValidParentLevel(input.level, parent[0].level, levels))
           throw new FeatureError(
             `A ${input.level} can't sit under a ${parent[0].level}.`,
@@ -585,6 +696,11 @@ export class DbStore implements FeatureStore {
       const productId = input.productId
         ? await this.requireProductId(tx, ws, input.productId)
         : await this.defaultProductId(tx, ws);
+      if (!canWriteProductId(access, productId)) {
+        throw new FeatureError(
+          "Your role does not permit editing this product.",
+        );
+      }
 
       // DB-native items have no repo/spec; spec_id mirrors the row id so every
       // row stays uniformly routable by specId.
@@ -640,10 +756,20 @@ export class DbStore implements FeatureStore {
     await this.scoped(scope, async (tx) => {
       const ws = scope!.workspaceId;
       const row = await tx
-        .select({ id: features.id, repoId: features.repoId })
+        .select({
+          id: features.id,
+          repoId: features.repoId,
+          productId: features.productId,
+        })
         .from(features)
         .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)));
       if (!row[0]) throw new FeatureError(`Unknown work item: ${specId}`);
+      const access = await this.accessIn(tx, scope!);
+      if (!canWriteProductId(access, row[0].productId)) {
+        throw new FeatureError(
+          "Your role does not permit editing this product.",
+        );
+      }
       if (row[0].repoId !== null)
         throw new FeatureError(
           "Spec-backed items can't be deleted here. Remove the spec in git.",
@@ -660,16 +786,32 @@ export class DbStore implements FeatureStore {
     patch: FeaturePatch,
     scope?: WorkspaceScope,
   ): Promise<void> {
-    // `parentSpecId` isn't a column — translate it to the parent row's `parentId`.
+    // `parentSpecId` isn't a column, so translate it to the parent row's `parentId`.
     const { parentSpecId, ...rest } = patch;
     await this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const current = await tx
+        .select({ productId: features.productId })
+        .from(features)
+        .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)))
+        .limit(1);
+      if (!current[0]) throw new RelationError(`Unknown feature: ${specId}`);
+      const [access, productById] = await Promise.all([
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, ws),
+      ]);
+      if (!canWriteProductId(access, current[0].productId)) {
+        throw new RelationError(
+          "Your role does not permit editing this product.",
+        );
+      }
       const set: Record<string, unknown> = { ...rest, updatedAt: new Date() };
       if (parentSpecId !== undefined) {
         if (parentSpecId === null) {
           set.parentId = null;
         } else {
           const parent = await tx
-            .select({ id: features.id })
+            .select({ id: features.id, productId: features.productId })
             .from(features)
             .where(
               and(
@@ -679,6 +821,9 @@ export class DbStore implements FeatureStore {
             );
           if (!parent[0])
             throw new RelationError(`Unknown parent feature: ${parentSpecId}`);
+          if (!canReadProductId(access, productById, parent[0].productId)) {
+            throw new RelationError(`Unknown parent feature: ${parentSpecId}`);
+          }
           set.parentId = parent[0].id;
         }
       }
@@ -702,7 +847,11 @@ export class DbStore implements FeatureStore {
     await this.scoped(scope, async (tx) => {
       const ws = scope!.workspaceId;
       const ids = await tx
-        .select({ id: features.id, specId: features.specId })
+        .select({
+          id: features.id,
+          specId: features.specId,
+          productId: features.productId,
+        })
         .from(features)
         .where(
           and(
@@ -717,6 +866,18 @@ export class DbStore implements FeatureStore {
         throw new RelationError(`Unknown related feature: ${input.toSpecId}`);
       if (self.id === other.id)
         throw new RelationError("A feature cannot relate to itself.");
+      const [access, productById] = await Promise.all([
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, ws),
+      ]);
+      if (!canWriteProductId(access, self.productId)) {
+        throw new RelationError(
+          "Your role does not permit editing this product.",
+        );
+      }
+      if (!canReadProductId(access, productById, other.productId)) {
+        throw new RelationError(`Unknown related feature: ${input.toSpecId}`);
+      }
 
       // Resolve the requested direction into a canonical stored edge.
       const edge = toEdge(self.id, other.id, input.direction);
@@ -764,11 +925,40 @@ export class DbStore implements FeatureStore {
   }
 
   async removeRelation(
-    _specId: string,
+    specId: string,
     linkId: string,
     scope?: WorkspaceScope,
   ): Promise<void> {
     await this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const link = await tx.query.featureLinks.findFirst({
+        where: and(
+          eq(featureLinks.id, linkId),
+          eq(featureLinks.workspaceId, ws),
+        ),
+      });
+      if (!link) return;
+      const endpoints = await tx
+        .select({
+          id: features.id,
+          specId: features.specId,
+          productId: features.productId,
+        })
+        .from(features)
+        .where(
+          and(
+            eq(features.workspaceId, ws),
+            inArray(features.id, [link.fromFeatureId, link.toFeatureId]),
+          ),
+        );
+      const self = endpoints.find((feature) => feature.specId === specId);
+      if (!self) throw new RelationError(`Unknown relation: ${linkId}`);
+      const access = await this.accessIn(tx, scope!);
+      if (!canWriteProductId(access, self.productId)) {
+        throw new RelationError(
+          "Your role does not permit editing this product.",
+        );
+      }
       await tx
         .delete(featureLinks)
         .where(
@@ -788,10 +978,28 @@ export class DbStore implements FeatureStore {
     await this.scoped(scope, async (tx) => {
       const ws = scope!.workspaceId;
       const feat = await tx
-        .select({ id: features.id })
+        .select({ id: features.id, productId: features.productId })
         .from(features)
         .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)));
       if (!feat[0]) throw new RelationError(`Unknown feature: ${specId}`);
+      const access = await this.accessIn(tx, scope!);
+      if (!canWriteProductId(access, feat[0].productId)) {
+        throw new RelationError(
+          "Your role does not permit editing this product.",
+        );
+      }
+      const repo = await tx
+        .select({ id: repositories.id })
+        .from(repositories)
+        .where(
+          and(
+            eq(repositories.id, link.repoId),
+            eq(repositories.workspaceId, ws),
+          ),
+        )
+        .limit(1);
+      if (!repo[0])
+        throw new RelationError("Unknown repository for GitHub link.");
       await tx
         .insert(featureGithubLinks)
         .values({
@@ -814,11 +1022,38 @@ export class DbStore implements FeatureStore {
   }
 
   async removeGithubLink(
-    _specId: string,
+    specId: string,
     linkId: string,
     scope?: WorkspaceScope,
   ): Promise<void> {
     await this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const rows = await tx
+        .select({
+          featureId: featureGithubLinks.featureId,
+          specId: features.specId,
+          productId: features.productId,
+        })
+        .from(featureGithubLinks)
+        .innerJoin(features, eq(features.id, featureGithubLinks.featureId))
+        .where(
+          and(
+            eq(featureGithubLinks.id, linkId),
+            eq(featureGithubLinks.workspaceId, ws),
+            eq(features.workspaceId, ws),
+          ),
+        )
+        .limit(1);
+      if (!rows[0]) return;
+      if (rows[0].specId !== specId) {
+        throw new RelationError(`Unknown GitHub link: ${linkId}`);
+      }
+      const access = await this.accessIn(tx, scope!);
+      if (!canWriteProductId(access, rows[0].productId)) {
+        throw new RelationError(
+          "Your role does not permit editing this product.",
+        );
+      }
       await tx
         .delete(featureGithubLinks)
         .where(
@@ -951,27 +1186,47 @@ export class DbStore implements FeatureStore {
     const existing = await tx
       .select({ id: products.id })
       .from(products)
-      .where(and(eq(products.workspaceId, ws), eq(products.key, DEFAULT_PRODUCT_KEY)))
+      .where(
+        and(
+          eq(products.workspaceId, ws),
+          eq(products.key, DEFAULT_PRODUCT_KEY),
+        ),
+      )
       .limit(1);
     if (existing[0]) return existing[0].id;
     const [created] = await tx
       .insert(products)
-      .values({ workspaceId: ws, key: DEFAULT_PRODUCT_KEY, name: "General", position: 0 })
+      .values({
+        workspaceId: ws,
+        key: DEFAULT_PRODUCT_KEY,
+        name: "General",
+        position: 0,
+      })
       .onConflictDoNothing({ target: [products.workspaceId, products.key] })
       .returning({ id: products.id });
     if (created) return created.id;
-    // Lost an insert race — re-read.
+    // Lost an insert race, so re-read.
     const row = await tx
       .select({ id: products.id })
       .from(products)
-      .where(and(eq(products.workspaceId, ws), eq(products.key, DEFAULT_PRODUCT_KEY)))
+      .where(
+        and(
+          eq(products.workspaceId, ws),
+          eq(products.key, DEFAULT_PRODUCT_KEY),
+        ),
+      )
       .limit(1);
-    if (!row[0]) throw new ProductError("Could not resolve the default product.");
+    if (!row[0])
+      throw new ProductError("Could not resolve the default product.");
     return row[0].id;
   }
 
   /** Verify a product id belongs to the workspace, returning it. */
-  private async requireProductId(tx: Tx, ws: string, productId: string): Promise<string> {
+  private async requireProductId(
+    tx: Tx,
+    ws: string,
+    productId: string,
+  ): Promise<string> {
     const row = await tx
       .select({ id: products.id })
       .from(products)
@@ -986,16 +1241,25 @@ export class DbStore implements FeatureStore {
   }
 
   /** Build the acting user's product access (org-admin flag + per-product roles). */
-  private async accessIn(tx: Tx, scope: WorkspaceScope): Promise<ProductAccess> {
+  private async accessIn(
+    tx: Tx,
+    scope: WorkspaceScope,
+  ): Promise<ProductAccess> {
     const membership = await tx
       .select({ role: members.role })
       .from(members)
       .where(
-        and(eq(members.workspaceId, scope.workspaceId), eq(members.userId, scope.userId)),
+        and(
+          eq(members.workspaceId, scope.workspaceId),
+          eq(members.userId, scope.userId),
+        ),
       )
       .limit(1);
     const mine = await tx
-      .select({ productId: productMembers.productId, role: productMembers.role })
+      .select({
+        productId: productMembers.productId,
+        role: productMembers.role,
+      })
       .from(productMembers)
       .where(
         and(
@@ -1005,6 +1269,18 @@ export class DbStore implements FeatureStore {
       );
     const roles = new Map(mine.map((g) => [g.productId, g.role] as const));
     return { isOrgAdmin: membership[0]?.role === "admin", roles };
+  }
+
+  /** Product visibility by id for owner-connection app-side RLS mirroring. */
+  private async productVisibilityIn(
+    tx: Tx,
+    workspaceId: string,
+  ): Promise<Map<string, ProductVisibilityRow>> {
+    const rows = await tx
+      .select({ id: products.id, visibility: products.visibility })
+      .from(products)
+      .where(eq(products.workspaceId, workspaceId));
+    return new Map(rows.map((row) => [row.id, row]));
   }
 
   /** Item counts per product across the workspace. */
@@ -1216,7 +1492,12 @@ export class DbStore implements FeatureStore {
       await this.requireProductId(tx, ws, productId);
       await tx
         .insert(productMembers)
-        .values({ workspaceId: ws, productId, userId: input.userId, role: input.role })
+        .values({
+          workspaceId: ws,
+          productId,
+          userId: input.userId,
+          role: input.role,
+        })
         .onConflictDoUpdate({
           target: [productMembers.productId, productMembers.userId],
           set: { role: input.role },
@@ -1255,9 +1536,17 @@ function toEdge(
     case "blocked_by":
       return { fromFeatureId: otherId, toFeatureId: selfId, type: "blocks" };
     case "relates_to":
-      return { fromFeatureId: selfId, toFeatureId: otherId, type: "relates_to" };
+      return {
+        fromFeatureId: selfId,
+        toFeatureId: otherId,
+        type: "relates_to",
+      };
     case "duplicates":
-      return { fromFeatureId: selfId, toFeatureId: otherId, type: "duplicates" };
+      return {
+        fromFeatureId: selfId,
+        toFeatureId: otherId,
+        type: "duplicates",
+      };
   }
 }
 

@@ -1,13 +1,17 @@
-import { eq, repositories } from "@specboard/db";
+import { and, eq, repositories } from "@specboard/db";
+import { listInstallationRepositories } from "@specboard/git";
+import { cookies } from "next/headers";
 
 import { getDb } from "@/lib/db";
 import { getSessionUser, resolveReadScope } from "@/lib/auth-session";
+import { getGithubApp } from "@/lib/github-app";
+import { INSTALL_COOKIE, readInstallCookie } from "@/lib/github-install";
 import { syncRepository, type SyncSummary } from "@/lib/github-sync";
 import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/v1/repositories — connected repos in the caller's workspace. */
+/** GET /api/v1/repositories: connected repos in the caller's workspace. */
 export async function GET(req: Request) {
   const authz = await resolveReadScope(req);
   if (!authz.ok) return authz.response;
@@ -37,7 +41,8 @@ interface RegisterBody {
 function parseRegisterBody(body: unknown): RegisterBody | null {
   if (typeof body !== "object" || body === null) return null;
   const raw = body as Record<string, unknown>;
-  const str = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
+  const str = (v: unknown) =>
+    typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 
   const installationId = str(raw.installationId);
   const owner = str(raw.owner);
@@ -47,10 +52,15 @@ function parseRegisterBody(body: unknown): RegisterBody | null {
   const defaultBranch = str(raw.defaultBranch) ?? undefined;
   let specGlobs: string[] | undefined;
   if (raw.specGlobs !== undefined) {
-    if (!Array.isArray(raw.specGlobs) || raw.specGlobs.some((g) => typeof g !== "string")) {
+    if (
+      !Array.isArray(raw.specGlobs) ||
+      raw.specGlobs.some((g) => typeof g !== "string")
+    ) {
       return null;
     }
-    specGlobs = (raw.specGlobs as string[]).map((g) => g.trim()).filter(Boolean);
+    specGlobs = (raw.specGlobs as string[])
+      .map((g) => g.trim())
+      .filter(Boolean);
   }
 
   // Connecting defaults to importing immediately (re-sync, manual connect). The
@@ -62,7 +72,7 @@ function parseRegisterBody(body: unknown): RegisterBody | null {
 }
 
 /**
- * POST /api/v1/repositories — connect a GitHub repo to the workspace, then run
+ * POST /api/v1/repositories: connect a GitHub repo to the workspace, then run
  * an initial spec import. Admin-only: connecting a repo wires up automated
  * commits (stable-id injection) into someone's source tree.
  */
@@ -78,10 +88,16 @@ export async function POST(req: Request) {
 
   const membership = await getMembership(db, auth.id);
   if (!membership) {
-    return Response.json({ error: "You do not belong to a workspace." }, { status: 403 });
+    return Response.json(
+      { error: "You do not belong to a workspace." },
+      { status: 403 },
+    );
   }
   if (membership.role !== "admin") {
-    return Response.json({ error: "Only an admin can connect repositories." }, { status: 403 });
+    return Response.json(
+      { error: "Only an admin can connect repositories." },
+      { status: 403 },
+    );
   }
 
   const parsed = parseRegisterBody(await req.json().catch(() => null));
@@ -92,7 +108,59 @@ export async function POST(req: Request) {
     );
   }
 
-  const config = parsed.specGlobs ? { version: 1, specGlobs: parsed.specGlobs } : null;
+  const existing = await db.query.repositories.findFirst({
+    where: and(
+      eq(repositories.workspaceId, membership.workspaceId),
+      eq(repositories.owner, parsed.owner),
+      eq(repositories.name, parsed.name),
+    ),
+  });
+  const connectedRepo = existing ?? null;
+
+  if (
+    !connectedRepo ||
+    connectedRepo.githubInstallationId !== parsed.installationId
+  ) {
+    const jar = await cookies();
+    const pendingInstallationId = readInstallCookie(
+      auth.id,
+      jar.get(INSTALL_COOKIE)?.value,
+    );
+    if (pendingInstallationId !== parsed.installationId) {
+      return Response.json(
+        { error: "Install the GitHub App before connecting this repository." },
+        { status: 403 },
+      );
+    }
+
+    const app = await getGithubApp(db);
+    if (!app) {
+      return Response.json(
+        { error: "GitHub App is not configured." },
+        { status: 501 },
+      );
+    }
+    const granted = await listInstallationRepositories(
+      app,
+      parsed.installationId,
+    );
+    const match = granted.find(
+      (repo) =>
+        repo.owner.toLowerCase() === parsed.owner.toLowerCase() &&
+        repo.name.toLowerCase() === parsed.name.toLowerCase(),
+    );
+    if (!match) {
+      return Response.json(
+        { error: "The GitHub App installation cannot access that repository." },
+        { status: 403 },
+      );
+    }
+    parsed.defaultBranch = match.defaultBranch;
+  }
+
+  const config = parsed.specGlobs
+    ? { version: 1, specGlobs: parsed.specGlobs }
+    : null;
   const [repo] = await db
     .insert(repositories)
     .values({
@@ -112,18 +180,27 @@ export async function POST(req: Request) {
       },
     })
     .returning();
-  if (!repo) return Response.json({ error: "Failed to connect repository." }, { status: 500 });
+  if (!repo)
+    return Response.json(
+      { error: "Failed to connect repository." },
+      { status: 500 },
+    );
 
   // Kick an initial import unless the caller deferred it (onboarding scan flow).
   // Don't fail the connection if it errors (e.g. the App isn't installed on the
-  // repo yet) — surface it so the UI can retry.
+  // repo yet), surface it so the UI can retry.
   let sync: SyncSummary | { error: string } | null = null;
   if (parsed.sync) {
     try {
       sync = await syncRepository(db, repo);
     } catch (err) {
-      console.error(`[repositories] initial sync failed for ${repo.owner}/${repo.name}:`, err);
-      sync = { error: err instanceof Error ? err.message : "Initial sync failed." };
+      console.error(
+        `[repositories] initial sync failed for ${repo.owner}/${repo.name}:`,
+        err,
+      );
+      sync = {
+        error: err instanceof Error ? err.message : "Initial sync failed.",
+      };
     }
   }
 

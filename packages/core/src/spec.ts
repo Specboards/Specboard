@@ -1,9 +1,9 @@
-import matter from "gray-matter";
+import { load } from "js-yaml";
 import { z } from "zod";
 
 /**
  * Frontmatter that Specboard expects at the top of a `spec.md`. `id` is the
- * stable link between the git-native spec content and the DB metadata row — it
+ * stable link between the git-native spec content and the DB metadata row. It
  * survives file renames/moves, so metadata is never orphaned. `title` is the
  * human-facing name shown on boards.
  */
@@ -48,13 +48,37 @@ export class SpecParseError extends Error {
   }
 }
 
+interface MatterResult {
+  data: Record<string, unknown>;
+  content: string;
+}
+
+function parseMatter(raw: string): MatterResult {
+  const firstLine = raw.match(/^---[ \t]*(?:\r?\n|$)/);
+  if (!firstLine) return { data: {}, content: raw };
+
+  const bodyStart = firstLine[0].length;
+  const rest = raw.slice(bodyStart);
+  const close = rest.match(/(?:^|\r?\n)(---|\.\.\.)[ \t]*(?:\r?\n|$)/);
+  if (!close || close.index === undefined) return { data: {}, content: raw };
+
+  const yaml = rest.slice(0, close.index);
+  const contentStart = bodyStart + close.index + close[0].length;
+  const parsed = load(yaml);
+  const data =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  return { data, content: raw.slice(contentStart) };
+}
+
 /**
  * Parse a spec markdown file (frontmatter + body) into a structured object.
  * Throws {@link SpecParseError} if required frontmatter (`id`, `title`) is
  * missing or malformed.
  */
 export function parseSpec(raw: string, path?: string): ParsedSpec {
-  const { data, content } = matter(raw);
+  const { data, content } = parseMatter(raw);
   const result = specFrontmatterSchema.safeParse(data);
   if (!result.success) {
     throw new SpecParseError(
@@ -79,7 +103,11 @@ export function extractSections(markdown: string): SpecSection[] {
     const match = /^(#{2,6})\s+(.*)$/.exec(line);
     if (match) {
       if (current) sections.push({ ...current, body: current.body.trim() });
-      current = { heading: match[2]!.trim(), level: match[1]!.length, body: "" };
+      current = {
+        heading: match[2]!.trim(),
+        level: match[1]!.length,
+        body: "",
+      };
     } else if (current) {
       current.body += line + "\n";
     }
@@ -93,7 +121,7 @@ export function extractSections(markdown: string): SpecSection[] {
  * git integration to decide whether it must inject one on first import.
  */
 export function hasSpecId(raw: string): boolean {
-  const { data } = matter(raw);
+  const { data } = parseMatter(raw);
   return typeof data.id === "string" && data.id.length > 0;
 }
 
@@ -116,14 +144,16 @@ export function previewSpec(raw: string): SpecPreview {
   let data: Record<string, unknown> = {};
   let body = raw;
   try {
-    const parsed = matter(raw);
-    data = parsed.data as Record<string, unknown>;
+    const parsed = parseMatter(raw);
+    data = parsed.data;
     body = parsed.content;
   } catch {
     // Malformed frontmatter: fall back to scanning the whole file for a heading.
   }
   const fmTitle =
-    typeof data.title === "string" && data.title.trim() ? data.title.trim() : null;
+    typeof data.title === "string" && data.title.trim()
+      ? data.title.trim()
+      : null;
   return {
     title: fmTitle ?? firstHeading(body),
     hasId: typeof data.id === "string" && data.id.length > 0,

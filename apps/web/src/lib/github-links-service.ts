@@ -1,10 +1,8 @@
+import { and, eq, features, repositories } from "@specboard/db";
 import {
-  and,
-  eq,
-  features,
-  repositories,
-} from "@specboard/db";
-import { createGitHubRepoClient, type GithubArtifactMeta } from "@specboard/git";
+  createGitHubRepoClient,
+  type GithubArtifactMeta,
+} from "@specboard/git";
 
 import { getDb } from "@/lib/db";
 import { getGithubApp } from "@/lib/github-app";
@@ -54,7 +52,9 @@ export function parseGithubLinkInput(body: unknown): GithubLinkInput {
     !Number.isInteger(raw.number) ||
     raw.number <= 0
   ) {
-    throw new InvalidGithubLinkError(`${kind} requires a positive integer number.`);
+    throw new InvalidGithubLinkError(
+      `${kind} requires a positive integer number.`,
+    );
   }
   return { kind, number: raw.number };
 }
@@ -77,7 +77,9 @@ async function resolveFeatureRepo(specId: string, workspaceId: string) {
     })
     .from(features)
     .innerJoin(repositories, eq(features.repoId, repositories.id))
-    .where(and(eq(features.specId, specId), eq(features.workspaceId, workspaceId)))
+    .where(
+      and(eq(features.specId, specId), eq(features.workspaceId, workspaceId)),
+    )
     .limit(1);
   return rows[0] ?? null;
 }
@@ -113,7 +115,12 @@ async function resolveMetadata(
 }
 
 function isNotFound(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "status" in err && err.status === 404;
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "status" in err &&
+    err.status === 404
+  );
 }
 
 /** Create a GitHub link on `specId`; returns the feature's refreshed links. */
@@ -127,6 +134,10 @@ export async function addFeatureGithubLink(
       "GitHub linking requires a connected repository.",
     );
   }
+  const store = await getStore();
+  const feature = await store.getFeature(specId, scope);
+  if (!feature) throw new FeatureNotFoundError(specId);
+
   const repo = await resolveFeatureRepo(specId, scope.workspaceId);
   if (!repo) throw new FeatureNotFoundError(specId);
 
@@ -141,7 +152,6 @@ export async function addFeatureGithubLink(
     state: meta.state,
   };
 
-  const store = await getStore();
   await store.addGithubLink(specId, resolved, scope);
   const updated = await store.getFeature(specId, scope);
   return updated?.githubLinks ?? [];

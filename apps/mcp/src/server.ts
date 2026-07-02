@@ -5,15 +5,20 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  canReadProduct,
+  canWriteProduct,
   canTransition,
   resolveWorkflow,
   rollUpEstimates,
   safeParseRepoConfig,
+  type ProductAccess,
 } from "@specboard/core";
 import {
   createDb,
   featureLinks,
   features,
+  members,
+  productMembers,
   products,
   repositories,
   workspaces,
@@ -41,6 +46,109 @@ function db(): Database {
     dbInstance = createDb(url);
   }
   return dbInstance;
+}
+
+interface McpScope {
+  userId: string;
+  workspaceId: string;
+  workspaceSlug: string;
+  access: ProductAccess;
+}
+
+let scopeInstance: McpScope | undefined;
+
+async function mcpScope(): Promise<McpScope> {
+  if (scopeInstance) return scopeInstance;
+  const userId = process.env.SPECBOARD_MCP_USER_ID;
+  if (!userId) {
+    throw new Error(
+      "SPECBOARD_MCP_USER_ID is required. Use a real Specboard user id so MCP access is scoped to that user's workspace and product roles.",
+    );
+  }
+  const requestedWorkspace = process.env.SPECBOARD_MCP_WORKSPACE?.trim();
+  const memberships = await db()
+    .select({
+      workspaceId: members.workspaceId,
+      role: members.role,
+      slug: workspaces.slug,
+    })
+    .from(members)
+    .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+    .where(eq(members.userId, userId));
+  const membership = requestedWorkspace
+    ? memberships.find(
+        (row) =>
+          row.workspaceId === requestedWorkspace ||
+          row.slug === requestedWorkspace,
+      )
+    : memberships.length === 1
+      ? memberships[0]
+      : undefined;
+  if (!membership) {
+    throw new Error(
+      requestedWorkspace
+        ? `User ${userId} is not a member of workspace ${requestedWorkspace}.`
+        : "SPECBOARD_MCP_WORKSPACE is required when the MCP user belongs to zero or multiple workspaces.",
+    );
+  }
+  const grants = await db()
+    .select({ productId: productMembers.productId, role: productMembers.role })
+    .from(productMembers)
+    .where(
+      and(
+        eq(productMembers.workspaceId, membership.workspaceId),
+        eq(productMembers.userId, userId),
+      ),
+    );
+  scopeInstance = {
+    userId,
+    workspaceId: membership.workspaceId,
+    workspaceSlug: membership.slug,
+    access: {
+      isOrgAdmin: membership.role === "admin",
+      roles: new Map(
+        grants.map((grant) => [grant.productId, grant.role] as const),
+      ),
+    },
+  };
+  return scopeInstance;
+}
+
+async function productVisibility(
+  workspaceId: string,
+): Promise<Map<string, { id: string; visibility: "org" | "private" }>> {
+  const rows = await db()
+    .select({ id: products.id, visibility: products.visibility })
+    .from(products)
+    .where(eq(products.workspaceId, workspaceId));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+function canReadProductId(
+  access: ProductAccess,
+  productById: ReadonlyMap<
+    string,
+    { id: string; visibility: "org" | "private" }
+  >,
+  productId: string | null,
+): boolean {
+  if (productId === null) return true;
+  const product = productById.get(productId);
+  return product ? canReadProduct(access, product) : false;
+}
+
+function canWriteProductId(
+  access: ProductAccess,
+  productId: string | null,
+): boolean {
+  if (productId === null) return access.isOrgAdmin;
+  return canWriteProduct(access, productId);
+}
+
+function assertWorkspaceArg(scope: McpScope, workspace: string): void {
+  if (workspace !== scope.workspaceSlug && workspace !== scope.workspaceId) {
+    throw new Error(`MCP is scoped to workspace "${scope.workspaceSlug}".`);
+  }
 }
 
 function text(value: unknown) {
@@ -71,20 +179,23 @@ server.tool(
     product: z
       .string()
       .optional()
-      .describe("Product key (sibling backlog) to filter to; see list_products"),
+      .describe(
+        "Product key (sibling backlog) to filter to; see list_products",
+      ),
   },
   async ({ workspace, status, assignee, product }) => {
     try {
-      const ws = await db().query.workspaces.findFirst({
-        where: eq(workspaces.slug, workspace),
-      });
-      if (!ws)
-        return errorResult(new Error(`No workspace with slug "${workspace}"`));
+      const scope = await mcpScope();
+      assertWorkspaceArg(scope, workspace);
+      const productById = await productVisibility(scope.workspaceId);
       // Resolve products for output labels + the optional product filter.
-      const prods = await db()
+      const prodsRaw = await db()
         .select({ id: products.id, key: products.key })
         .from(products)
-        .where(eq(products.workspaceId, ws.id));
+        .where(eq(products.workspaceId, scope.workspaceId));
+      const prods = prodsRaw.filter((p) =>
+        canReadProductId(scope.access, productById, p.id),
+      );
       const prodKeyById = new Map(prods.map((p) => [p.id, p.key]));
       let productId: string | undefined;
       if (product) {
@@ -95,15 +206,19 @@ server.tool(
       }
       const rows = await db().query.features.findMany({
         where: and(
-          eq(features.workspaceId, ws.id),
+          eq(features.workspaceId, scope.workspaceId),
           ...(status ? [eq(features.status, status)] : []),
           ...(assignee ? [eq(features.assigneeId, assignee)] : []),
           ...(productId ? [eq(features.productId, productId)] : []),
         ),
         with: { index: true },
       });
+      const visibleRows = rows.filter((row) =>
+        canReadProductId(scope.access, productById, row.productId),
+      );
       // Resolve `blocks` edges so agents can respect sequencing.
-      const specById = new Map(rows.map((r) => [r.id, r.specId]));
+      const visibleIds = new Set(visibleRows.map((r) => r.id));
+      const specById = new Map(visibleRows.map((r) => [r.id, r.specId]));
       const blockLinks = await db()
         .select({
           fromFeatureId: featureLinks.fromFeatureId,
@@ -112,7 +227,7 @@ server.tool(
         .from(featureLinks)
         .where(
           and(
-            eq(featureLinks.workspaceId, ws.id),
+            eq(featureLinks.workspaceId, scope.workspaceId),
             eq(featureLinks.type, "blocks"),
           ),
         );
@@ -124,6 +239,8 @@ server.tool(
         m.set(key, list);
       };
       for (const l of blockLinks) {
+        if (!visibleIds.has(l.fromFeatureId) || !visibleIds.has(l.toFeatureId))
+          continue;
         const fromSpec = specById.get(l.fromFeatureId);
         const toSpec = specById.get(l.toFeatureId);
         if (fromSpec && toSpec) {
@@ -134,27 +251,30 @@ server.tool(
       // Hierarchy roll-up from the same row set.
       const childCount = new Map<string, number>();
       const childDone = new Map<string, number>();
-      for (const r of rows) {
-        if (!r.parentId) continue;
+      for (const r of visibleRows) {
+        if (!r.parentId || !visibleIds.has(r.parentId)) continue;
         childCount.set(r.parentId, (childCount.get(r.parentId) ?? 0) + 1);
         if (r.status === "done")
           childDone.set(r.parentId, (childDone.get(r.parentId) ?? 0) + 1);
       }
       const rolled = rollUpEstimates(
-        rows.map((r) => ({
+        visibleRows.map((r) => ({
           key: r.id,
-          parentKey: r.parentId,
+          parentKey:
+            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
           estimate: r.estimate,
         })),
       );
       return text(
-        rows
+        visibleRows
           .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
           .map((f) => ({
             specId: f.specId,
             title: f.title,
             level: f.level,
-            product: f.productId ? (prodKeyById.get(f.productId) ?? null) : null,
+            product: f.productId
+              ? (prodKeyById.get(f.productId) ?? null)
+              : null,
             status: f.status,
             priority: f.priority,
             estimate: f.estimate,
@@ -162,7 +282,9 @@ server.tool(
             tags: f.tags,
             roadmapQuarter: f.roadmapQuarter,
             path: f.index?.path,
-            parentSpecId: f.parentId ? (specById.get(f.parentId) ?? null) : null,
+            parentSpecId: f.parentId
+              ? (specById.get(f.parentId) ?? null)
+              : null,
             childCount: childCount.get(f.id) ?? 0,
             childDoneCount: childDone.get(f.id) ?? 0,
             blocks: blocks.get(f.id) ?? [],
@@ -181,24 +303,54 @@ server.tool(
   { specId: z.string().uuid() },
   async ({ specId }) => {
     try {
+      const scope = await mcpScope();
+      const productById = await productVisibility(scope.workspaceId);
       const row = await db().query.features.findFirst({
-        where: eq(features.specId, specId),
+        where: and(
+          eq(features.specId, specId),
+          eq(features.workspaceId, scope.workspaceId),
+        ),
         with: { index: true },
       });
       if (!row)
         return errorResult(new Error(`No feature with spec id ${specId}`));
+      if (!canReadProductId(scope.access, productById, row.productId))
+        return errorResult(new Error(`No feature with spec id ${specId}`));
       let parentSpecId: string | null = null;
       if (row.parentId) {
         const parent = await db().query.features.findFirst({
-          where: eq(features.id, row.parentId),
-          columns: { specId: true },
+          where: and(
+            eq(features.id, row.parentId),
+            eq(features.workspaceId, scope.workspaceId),
+          ),
+          columns: { specId: true, productId: true },
         });
-        parentSpecId = parent?.specId ?? null;
+        if (
+          parent &&
+          canReadProductId(scope.access, productById, parent.productId)
+        )
+          parentSpecId = parent.specId;
       }
-      const children = await db()
-        .select({ specId: features.specId, title: features.title, status: features.status })
-        .from(features)
-        .where(eq(features.parentId, row.id));
+      const children = (
+        await db()
+          .select({
+            specId: features.specId,
+            title: features.title,
+            status: features.status,
+            productId: features.productId,
+          })
+          .from(features)
+          .where(
+            and(
+              eq(features.parentId, row.id),
+              eq(features.workspaceId, scope.workspaceId),
+            ),
+          )
+      )
+        .filter((child) =>
+          canReadProductId(scope.access, productById, child.productId),
+        )
+        .map(({ productId: _productId, ...child }) => child);
       let product: string | null = null;
       if (row.productId) {
         const p = await db().query.products.findFirst({
@@ -208,18 +360,25 @@ server.tool(
         product = p?.key ?? null;
       }
       // Roll the estimate up over this feature's subtree.
-      const estimateRows = await db()
-        .select({
-          id: features.id,
-          parentId: features.parentId,
-          estimate: features.estimate,
-        })
-        .from(features)
-        .where(eq(features.workspaceId, row.workspaceId));
+      const estimateRows = (
+        await db()
+          .select({
+            id: features.id,
+            parentId: features.parentId,
+            estimate: features.estimate,
+            productId: features.productId,
+          })
+          .from(features)
+          .where(eq(features.workspaceId, scope.workspaceId))
+      ).filter((item) =>
+        canReadProductId(scope.access, productById, item.productId),
+      );
+      const visibleIds = new Set(estimateRows.map((item) => item.id));
       const rolled = rollUpEstimates(
         estimateRows.map((r) => ({
           key: r.id,
-          parentKey: r.parentId,
+          parentKey:
+            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
           estimate: r.estimate,
         })),
       );
@@ -256,24 +415,29 @@ server.tool(
   },
   async ({ workspace }) => {
     try {
-      const ws = await db().query.workspaces.findFirst({
-        where: eq(workspaces.slug, workspace),
-      });
-      if (!ws)
-        return errorResult(new Error(`No workspace with slug "${workspace}"`));
-      const rows = await db()
-        .select({
-          key: products.key,
-          name: products.name,
-          description: products.description,
-          visibility: products.visibility,
-          position: products.position,
-        })
-        .from(products)
-        .where(eq(products.workspaceId, ws.id));
+      const scope = await mcpScope();
+      assertWorkspaceArg(scope, workspace);
+      const productById = await productVisibility(scope.workspaceId);
+      const rows = (
+        await db()
+          .select({
+            id: products.id,
+            key: products.key,
+            name: products.name,
+            description: products.description,
+            visibility: products.visibility,
+            position: products.position,
+          })
+          .from(products)
+          .where(eq(products.workspaceId, scope.workspaceId))
+      ).filter((product) =>
+        canReadProductId(scope.access, productById, product.id),
+      );
       return text(
         rows
-          .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+          .sort(
+            (a, b) => a.position - b.position || a.name.localeCompare(b.name),
+          )
           .map((p) => ({
             key: p.key,
             name: p.name,
@@ -293,10 +457,17 @@ server.tool(
   { specId: z.string().uuid() },
   async ({ specId }) => {
     try {
+      const scope = await mcpScope();
+      const productById = await productVisibility(scope.workspaceId);
       const row = await db().query.features.findFirst({
-        where: eq(features.specId, specId),
+        where: and(
+          eq(features.specId, specId),
+          eq(features.workspaceId, scope.workspaceId),
+        ),
       });
       if (!row)
+        return errorResult(new Error(`No feature with spec id ${specId}`));
+      if (!canReadProductId(scope.access, productById, row.productId))
         return errorResult(new Error(`No feature with spec id ${specId}`));
       const links = await db()
         .select({
@@ -319,11 +490,27 @@ server.tool(
       );
       const others = otherIds.length
         ? await db()
-            .select({ id: features.id, specId: features.specId, title: features.title })
+            .select({
+              id: features.id,
+              specId: features.specId,
+              title: features.title,
+              productId: features.productId,
+            })
             .from(features)
-            .where(inArray(features.id, otherIds))
+            .where(
+              and(
+                eq(features.workspaceId, scope.workspaceId),
+                inArray(features.id, otherIds),
+              ),
+            )
         : [];
-      const byId = new Map(others.map((o) => [o.id, o]));
+      const byId = new Map(
+        others
+          .filter((other) =>
+            canReadProductId(scope.access, productById, other.productId),
+          )
+          .map((o) => [o.id, o]),
+      );
       const relations = links
         .map((l) => {
           const outgoing = l.fromFeatureId === row.id;
@@ -355,16 +542,25 @@ server.tool(
   { specId: z.string().uuid(), status: z.string() },
   async ({ specId, status }) => {
     try {
+      const scope = await mcpScope();
       const row = await db().query.features.findFirst({
-        where: eq(features.specId, specId),
+        where: and(
+          eq(features.specId, specId),
+          eq(features.workspaceId, scope.workspaceId),
+        ),
       });
       if (!row)
         return errorResult(new Error(`No feature with spec id ${specId}`));
+      if (!canWriteProductId(scope.access, row.productId)) {
+        return errorResult(
+          new Error("Your MCP user cannot edit this feature's product."),
+        );
+      }
       // Validate against the workspace's (possibly custom) status workflow.
       const [repo] = await db()
         .select({ config: repositories.config })
         .from(repositories)
-        .where(eq(repositories.workspaceId, row.workspaceId));
+        .where(eq(repositories.workspaceId, scope.workspaceId));
       const workflow = resolveWorkflow(safeParseRepoConfig(repo?.config));
       if (!canTransition(row.status, status, workflow)) {
         return errorResult(
