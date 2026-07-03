@@ -58,6 +58,18 @@ export function leafLevel(levels?: readonly WorkspaceLevel[] | null): WorkspaceL
   return leaf;
 }
 
+/**
+ * The default browsing level for list views (Backlog/Roadmap): the level one
+ * above the leaf when the hierarchy has one (e.g. Feature in the default
+ * Initiative → Epic → Feature → Work Item setup), else the leaf itself.
+ */
+export function defaultBrowseLevel(
+  levels?: readonly WorkspaceLevel[] | null,
+): WorkspaceLevel {
+  const resolved = resolveLevels(levels);
+  return resolved.at(-2) ?? resolved.at(-1)!;
+}
+
 /** Whether `key` is the leaf (spec-backed) level. */
 export function isLeafLevel(
   key: string,

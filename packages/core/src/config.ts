@@ -1,14 +1,12 @@
 import { load } from "js-yaml";
 import { z } from "zod";
 
-/** Default story-point scale (Fibonacci) when a repo configures no `estimate`. */
-export const DEFAULT_ESTIMATE_SCALE = [1, 2, 3, 5, 8, 13, 21] as const;
-
 /**
  * Schema for `.specboard/config.yml`, the per-repo file that tells Specboard
- * where specs live and how this team's workflow/fields are shaped. Kept in the
- * repo so the configuration is versioned with the code, while the resulting
- * metadata still lives in the DB.
+ * where specs live and how this team's workflow is shaped. Kept in the repo so
+ * the configuration is versioned with the code, while the resulting metadata
+ * still lives in the DB. Custom item properties are NOT configured here: admins
+ * define them in Settings -> Cards (see workspace properties).
  */
 export const repoConfigSchema = z.object({
   version: z.literal(1),
@@ -27,31 +25,6 @@ export const repoConfigSchema = z.object({
   statuses: z.array(z.string().max(200)).min(2).max(100).optional(),
   /** Legal transitions keyed by status; omit to allow any transition. */
   transitions: z.record(z.string(), z.array(z.string())).optional(),
-  /** Custom metadata fields surfaced in the UI and stored in DB jsonb. */
-  fields: z
-    .array(
-      z.object({
-        key: z.string(),
-        label: z.string(),
-        type: z.enum(["text", "number", "select", "multiselect", "date", "user"]),
-        options: z.array(z.string()).optional(),
-      }),
-    )
-    .default([]),
-  /**
-   * Effort/estimate scale. Numeric points so an epic can roll up the total of
-   * its subtree. Omit to fall back to the Fibonacci default (see
-   * {@link DEFAULT_ESTIMATE_SCALE}); use {@link resolveEstimateConfig} to read it.
-   */
-  estimate: z
-    .object({
-      label: z.string().default("Estimate"),
-      scale: z
-        .array(z.number().int().nonnegative())
-        .min(1)
-        .default([...DEFAULT_ESTIMATE_SCALE]),
-    })
-    .optional(),
   /** How UI spec edits are written back to git. */
   writeMode: z.enum(["pr", "direct"]).default("pr"),
 });

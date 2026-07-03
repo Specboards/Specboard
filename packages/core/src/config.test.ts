@@ -3,37 +3,38 @@ import { describe, expect, it } from "vitest";
 import { parseRepoConfigYaml, safeParseRepoConfig } from "./config.js";
 
 describe("parseRepoConfigYaml", () => {
-  it("parses a config.yml with globs and custom fields", () => {
+  it("parses a config.yml with globs and write mode", () => {
     const raw = [
       "version: 1",
       "specGlobs:",
       '  - "specs/**/spec.md"',
       "writeMode: pr",
-      "fields:",
-      "  - key: effort",
-      "    label: Effort",
-      "    type: select",
-      '    options: ["S", "M", "L"]',
     ].join("\n");
 
     const config = parseRepoConfigYaml(raw);
     expect(config.specGlobs).toEqual(["specs/**/spec.md"]);
     expect(config.writeMode).toBe("pr");
-    expect(config.fields).toEqual([
-      { key: "effort", label: "Effort", type: "select", options: ["S", "M", "L"] },
-    ]);
   });
 
   it("applies defaults when optional keys are omitted", () => {
     const config = parseRepoConfigYaml("version: 1");
     expect(config.specGlobs).toEqual(["specs/**/spec.md"]);
     expect(config.writeMode).toBe("pr");
-    expect(config.fields).toEqual([]);
   });
 
-  it("throws on an invalid field type", () => {
-    const raw = "version: 1\nfields:\n  - key: x\n    label: X\n    type: bogus";
-    expect(() => parseRepoConfigYaml(raw)).toThrow();
+  it("ignores legacy keys (fields/estimate) removed from the schema", () => {
+    const raw = [
+      "version: 1",
+      "fields:",
+      "  - key: effort",
+      "    label: Effort",
+      "    type: select",
+      "estimate:",
+      "  scale: [1, 2, 3]",
+    ].join("\n");
+    const config = parseRepoConfigYaml(raw);
+    expect("fields" in config).toBe(false);
+    expect("estimate" in config).toBe(false);
   });
 });
 

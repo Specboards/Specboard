@@ -43,9 +43,7 @@ const SAMPLE_METADATA = JSON.parse(
   string,
   {
     status?: string;
-    priority?: number;
     tags?: string[];
-    roadmapQuarter?: string;
   }
 >;
 
@@ -149,9 +147,7 @@ for (const file of files) {
       level: leafLevel(DEFAULT_LEVELS).key,
       title: parsed.frontmatter.title,
       status: meta.status ?? "backlog",
-      priority: meta.priority ?? null,
       tags: meta.tags ?? [],
-      roadmapQuarter: meta.roadmapQuarter ?? null,
     })
     .onConflictDoUpdate({
       target: [features.repoId, features.specId],

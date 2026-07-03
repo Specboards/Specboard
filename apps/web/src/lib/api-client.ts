@@ -16,6 +16,12 @@ import type {
   ProductMemberRecord,
   ProductPatch,
   ProductRecord,
+  PropertyDef,
+  PropertyInput,
+  PropertyPatch,
+  ReleaseInput,
+  ReleasePatch,
+  ReleaseRecord,
   SavedView,
   SavedViewInput,
   WorkspaceLevel,
@@ -161,6 +167,104 @@ export async function updateLevelFields(
     throw new Error(body?.error ?? `Update failed with ${res.status}`);
   }
   return body.levels;
+}
+
+/** Define a custom property (admin-only on the server); returns it. */
+export async function createProperty(input: PropertyInput): Promise<PropertyDef> {
+  const res = await fetch("/api/v1/properties", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { property?: PropertyDef; error?: string }
+    | null;
+  if (!res.ok || !body?.property) {
+    throw new Error(body?.error ?? `Create property failed with ${res.status}`);
+  }
+  return body.property;
+}
+
+/** Update a custom property (admin-only); returns the updated definition. */
+export async function updateProperty(
+  id: string,
+  patch: PropertyPatch,
+): Promise<PropertyDef> {
+  const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { property?: PropertyDef; error?: string }
+    | null;
+  if (!res.ok || !body?.property) {
+    throw new Error(body?.error ?? `Update property failed with ${res.status}`);
+  }
+  return body.property;
+}
+
+/** Delete a custom property definition (admin-only). */
+export async function deleteProperty(id: string): Promise<void> {
+  const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Delete property failed with ${res.status}`);
+  }
+}
+
+/** Create a release (admin-only on the server); returns the new record. */
+export async function createRelease(input: ReleaseInput): Promise<ReleaseRecord> {
+  const res = await fetch("/api/v1/releases", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { release?: ReleaseRecord; error?: string }
+    | null;
+  if (!res.ok || !body?.release) {
+    throw new Error(body?.error ?? `Create release failed with ${res.status}`);
+  }
+  return body.release;
+}
+
+/** Update a release (admin-only); returns the updated record. */
+export async function updateRelease(
+  id: string,
+  patch: ReleasePatch,
+): Promise<ReleaseRecord> {
+  const res = await fetch(`/api/v1/releases/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { release?: ReleaseRecord; error?: string }
+    | null;
+  if (!res.ok || !body?.release) {
+    throw new Error(body?.error ?? `Update release failed with ${res.status}`);
+  }
+  return body.release;
+}
+
+/** Delete a release (admin-only); its items are unscheduled, not deleted. */
+export async function deleteRelease(id: string): Promise<void> {
+  const res = await fetch(`/api/v1/releases/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Delete release failed with ${res.status}`);
+  }
 }
 
 /** Create a typed relation from a feature; returns its refreshed relations. */

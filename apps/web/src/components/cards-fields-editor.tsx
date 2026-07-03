@@ -95,8 +95,9 @@ export function CardsFieldsEditor({
       })}
 
       <p className="text-xs text-muted-foreground">
-        Status and parent are structural and always available. Which of these
-        fields a card displays on the board stays a per-member preference.
+        Name, status, parent, and release are structural and always available.
+        Which of these fields a card displays on the board stays a per-member
+        preference.
       </p>
 
       {error ? <p className="text-xs text-destructive">{error}</p> : null}

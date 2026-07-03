@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { parentLevelKey, resolveEstimateConfig, resolveWorkflow } from "@specboard/core";
+import { parentLevelKey, resolveWorkflow } from "@specboard/core";
 
 import { BoardClient } from "./board-client";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
@@ -35,14 +35,16 @@ export async function BoardView({
 
   const repoConfig = await resolveRepoConfig(access);
   const workflow = resolveWorkflow(repoConfig);
-  const estimate = resolveEstimateConfig(repoConfig);
-  const customFields = repoConfig?.fields ?? [];
   const columns = workflow.statuses.filter((s) => s !== "archived");
 
   const { product: productSlug } = await params;
   const sp = await searchParams;
   const store = await getStore();
-  const allFeatures = await store.listFeatures(access ?? undefined);
+  const [allFeatures, properties, releases] = await Promise.all([
+    store.listFeatures(access ?? undefined),
+    store.listProperties(access ?? undefined),
+    store.listReleases(access ?? undefined),
+  ]);
 
   // The board scopes to the product in the URL (`all` = every product) and
   // shows one hierarchy level at a time (default: the leaf/specs).
@@ -79,10 +81,10 @@ export async function BoardView({
   const memberNames = Object.fromEntries(members.map((m) => [m.userId, m.name]));
 
   const prefs = await getBoardPreferences(access ?? undefined);
-  const catalog = cardFieldCatalog(customFields);
+  const catalog = cardFieldCatalog(properties);
   const { fields: cardFields, featured } = resolveCardFields(prefs, catalog);
   const customFieldLabels = Object.fromEntries(
-    customFields.map((f) => [f.key, f.label]),
+    properties.map((f) => [f.key, f.label]),
   );
 
   return (
@@ -106,7 +108,7 @@ export async function BoardView({
           {features.length > 0 && canEdit ? (
             <CardFieldsMenu
               catalog={catalog}
-              customFields={customFields.map((f) => ({ key: f.key, label: f.label }))}
+              customFields={properties.map((f) => ({ key: f.key, label: f.label }))}
               selected={cardFields}
               featured={featured}
             />
@@ -129,7 +131,6 @@ export async function BoardView({
           // so without a fresh key it would keep showing the prior level's cards.
           key={`${activeProduct?.id ?? ALL_PRODUCTS}:${activeLevel.key}`}
           features={features}
-          parentCandidates={parents}
           columns={columns}
           workflow={workflow}
           canEdit={canEdit}
@@ -138,8 +139,8 @@ export async function BoardView({
           customFieldLabels={customFieldLabels}
           memberNames={memberNames}
           members={members}
-          customFields={customFields}
-          estimate={estimate}
+          properties={properties}
+          releases={releases}
           productsById={productsById}
         />
       )}

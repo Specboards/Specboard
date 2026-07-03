@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusSelect } from "@/components/status-select";
 import { CUSTOM_FIELD_PREFIX } from "@/lib/card-fields";
-import { priorityLabel } from "@/lib/feature-helpers";
 import { productColorClasses } from "@/lib/product-color";
 import type { CustomFieldValue, FeatureRecord } from "@/lib/store/types";
 import { useOrgProductPath } from "@/lib/use-org";
@@ -39,6 +38,7 @@ export function FeatureCard({
   featured,
   customFieldLabels,
   memberNames,
+  releaseNames,
   workflow,
   canEdit,
   onOpen,
@@ -47,9 +47,11 @@ export function FeatureCard({
   feature: FeatureRecord;
   fields: string[];
   featured: string | null;
-  /** Label for each custom-field key (without the `cf:` prefix). */
+  /** Label for each custom-property key (without the `cf:` prefix). */
   customFieldLabels: Record<string, string>;
   memberNames: Record<string, string>;
+  /** Release name by id, for the release badge. */
+  releaseNames: Record<string, string>;
   workflow?: StatusWorkflow;
   canEdit: boolean;
   onOpen: () => void;
@@ -64,7 +66,13 @@ export function FeatureCard({
   const badges: React.ReactNode[] = [];
   for (const key of fields) {
     if (key === featuredKey) continue; // rendered separately, up top
-    const badge = renderField(key, feature, customFieldLabels, memberNames);
+    const badge = renderField(
+      key,
+      feature,
+      customFieldLabels,
+      memberNames,
+      releaseNames,
+    );
     if (badge) badges.push(badge);
   }
 
@@ -125,26 +133,9 @@ function renderField(
   f: FeatureRecord,
   customFieldLabels: Record<string, string>,
   memberNames: Record<string, string>,
+  releaseNames: Record<string, string>,
 ): React.ReactNode {
   switch (key) {
-    case "priority":
-      return (
-        <Badge key="priority" variant="outline" className="font-mono text-[10px]">
-          {priorityLabel(f.priority)}
-        </Badge>
-      );
-    case "estimate":
-      return f.rolledEstimate !== null ? (
-        <Badge
-          key="estimate"
-          variant="outline"
-          className="font-mono text-[10px]"
-          title={f.childCount > 0 ? "Estimate (rolled up from children)" : "Estimate"}
-        >
-          {f.childCount > 0 ? "Σ" : ""}
-          {f.rolledEstimate}
-        </Badge>
-      ) : null;
     case "assignee":
       return f.assigneeId ? (
         <Badge key="assignee" variant="secondary" className="text-[10px]">
@@ -184,10 +175,10 @@ function renderField(
           ↳ sub
         </Badge>
       ) : null;
-    case "quarter":
-      return f.roadmapQuarter ? (
-        <Badge key="quarter" variant="outline" className="text-[10px]">
-          {f.roadmapQuarter}
+    case "release":
+      return f.releaseId ? (
+        <Badge key="release" variant="outline" className="text-[10px]">
+          {releaseNames[f.releaseId] ?? "Release"}
         </Badge>
       ) : null;
     case "github": {

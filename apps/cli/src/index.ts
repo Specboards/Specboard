@@ -28,7 +28,6 @@ Work
   show <specId>                            Show one feature
   status <specId> <status>                 Set a feature's status
   assign <specId> <me|none|userId>         Set or clear the assignee
-  priority <specId> <number|none>          Set or clear the priority
   link <specId> (--pr <n> | --issue <n> | --branch <name>)
                                            Link a GitHub PR / issue / branch
   products                                 List products
@@ -161,13 +160,10 @@ async function cmdFeatures(argv: string[]): Promise<void> {
     process.stdout.write("No matching features.\n");
     return;
   }
-  process.stdout.write(
-    `${pad("STATUS", 12)} ${pad("PRI", 4)} ${pad("TITLE", 44)} SPEC\n`,
-  );
+  process.stdout.write(`${pad("STATUS", 12)} ${pad("TITLE", 44)} SPEC\n`);
   for (const f of features) {
     process.stdout.write(
-      `${pad(f.status, 12)} ${pad(f.priority == null ? "-" : String(f.priority), 4)} ` +
-        `${pad(f.title, 44)} ${f.specId}\n`,
+      `${pad(f.status, 12)} ${pad(f.title, 44)} ${f.specId}\n`,
     );
   }
 }
@@ -178,12 +174,11 @@ async function cmdShow(specId: string): Promise<void> {
     `${f.title}`,
     `spec:     ${f.specId}`,
     `status:   ${f.status}`,
-    `priority: ${f.priority ?? "-"}`,
     `level:    ${f.level}${f.isDbNative ? " (db-native)" : ""}`,
     `assignee: ${f.assigneeId ?? "-"}`,
     `product:  ${f.productId ?? "-"}`,
     `tags:     ${f.tags.length ? f.tags.join(", ") : "-"}`,
-    `roadmap:  ${f.roadmapQuarter ?? "-"}`,
+    `release:  ${f.releaseId ?? "-"}`,
     `parent:   ${f.parentSpecId ?? "-"}`,
     `path:     ${f.path}`,
   ];
@@ -197,7 +192,6 @@ async function patchAndReport(specId: string, patch: FeaturePatch, label: string
 
 function describe(f: Feature, patch: FeaturePatch): string {
   if ("status" in patch) return f.status;
-  if ("priority" in patch) return f.priority == null ? "none" : String(f.priority);
   if ("assigneeId" in patch) return f.assigneeId ?? "unassigned";
   return "updated";
 }
@@ -209,16 +203,6 @@ async function cmdAssign(specId: string, who: string): Promise<void> {
   else assigneeId = who;
   if (who === "me" && assigneeId === null) fail("could not resolve your user id (local mode?).");
   await patchAndReport(specId, { assigneeId }, "assignee");
-}
-
-async function cmdPriority(specId: string, value: string): Promise<void> {
-  let priority: number | null;
-  if (value === "none") priority = null;
-  else {
-    priority = Number(value);
-    if (!Number.isFinite(priority)) fail(`priority must be a number or "none", got "${value}".`);
-  }
-  await patchAndReport(specId, { priority }, "priority");
 }
 
 async function cmdLink(specId: string, argv: string[]): Promise<void> {
@@ -289,9 +273,6 @@ async function main(): Promise<void> {
     case "assign":
       if (!rest[0] || !rest[1]) fail("usage: specboard assign <specId> <me|none|userId>");
       return cmdAssign(rest[0], rest[1]);
-    case "priority":
-      if (!rest[0] || !rest[1]) fail("usage: specboard priority <specId> <number|none>");
-      return cmdPriority(rest[0], rest[1]);
     case "link":
       if (!rest[0]) fail("usage: specboard link <specId> (--pr <n> | --issue <n> | --branch <name>)");
       return cmdLink(rest[0], rest.slice(1));

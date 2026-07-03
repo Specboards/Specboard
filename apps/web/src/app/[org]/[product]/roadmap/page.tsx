@@ -12,16 +12,13 @@ import {
 } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
+import { ReleaseCreate, ReleaseDelete } from "@/components/release-controls";
 import { StatusDot } from "@/components/status-dot";
 import { WorkItemCreate } from "@/components/work-item-create";
 import { resolveActiveLevel } from "@/lib/active-level";
 import { ALL_PRODUCTS, resolveActiveProduct } from "@/lib/active-product";
-import { itemPath, LOCAL_ORG_SLUG, orgProductPath } from "@/lib/org-path";
-import {
-  priorityLabel,
-  sortFeatures,
-  statusLabel,
-} from "@/lib/feature-helpers";
+import { itemPath, LOCAL_ORG_SLUG } from "@/lib/org-path";
+import { sortFeatures, statusLabel } from "@/lib/feature-helpers";
 import { productColorClasses } from "@/lib/product-color";
 import { getStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -30,7 +27,13 @@ import { canConnectRepos, requireWorkspaceAccess } from "@/lib/workspace-access"
 
 export const dynamic = "force-dynamic";
 
-/** Roadmap: features grouped by quarter, unscheduled work last. */
+const RELEASE_STATUS_LABELS: Record<string, string> = {
+  planned: "Planned",
+  in_progress: "In progress",
+  shipped: "Shipped",
+};
+
+/** Roadmap: items grouped by release (dated first), unscheduled work last. */
 export default async function RoadmapPage({
   params,
   searchParams,
@@ -40,6 +43,7 @@ export default async function RoadmapPage({
 }) {
   const access = await requireWorkspaceAccess();
   const canEdit = !access || canWrite(access.role);
+  const isAdmin = !access || access.role === "admin";
   const org = access?.orgSlug ?? LOCAL_ORG_SLUG;
   const { product: productSlug } = await params;
   const sp = await searchParams;
@@ -47,9 +51,10 @@ export default async function RoadmapPage({
   const allFeatures = sortFeatures(
     await store.listFeatures(access ?? undefined),
   ).filter((f) => f.status !== "archived");
+  const releases = await store.listReleases(access ?? undefined);
 
   // Roadmap scopes to the product in the URL (`all` = every product) and shows
-  // one hierarchy level at a time (default: the leaf/specs).
+  // one hierarchy level at a time (default: the Feature altitude).
   const products = await store.listProducts(access ?? undefined);
   const activeProduct = resolveActiveProduct(products, productSlug);
   if (productSlug !== ALL_PRODUCTS && !activeProduct) notFound();
@@ -75,14 +80,20 @@ export default async function RoadmapPage({
     : [];
   const parentLabel = levels.find((l) => l.key === parentKey)?.label ?? null;
 
-  const quarters = [
-    ...new Set(
-      features.flatMap((f) => (f.roadmapQuarter ? [f.roadmapQuarter] : [])),
-    ),
-  ].sort();
-  const groups: Array<{ label: string; quarter: string | null }> = [
-    ...quarters.map((q) => ({ label: q, quarter: q as string | null })),
-    { label: "Unscheduled", quarter: null },
+  // One column per release (already ordered: dated first), unscheduled last.
+  const groups: Array<{
+    releaseId: string | null;
+    name: string;
+    targetDate: string | null;
+    status: string | null;
+  }> = [
+    ...releases.map((r) => ({
+      releaseId: r.id as string | null,
+      name: r.name,
+      targetDate: r.targetDate,
+      status: r.status as string | null,
+    })),
+    { releaseId: null, name: "Unscheduled", targetDate: null, status: null },
   ];
 
   return (
@@ -92,35 +103,52 @@ export default async function RoadmapPage({
           <h1 className="text-lg font-semibold tracking-tight">Roadmap</h1>
           <LevelSwitcher levels={levels} active={activeLevel.key} />
         </div>
-        {canEdit && !activeLevel.isLeaf ? (
-          <WorkItemCreate
-            levelKey={activeLevel.key}
-            levelLabel={activeLevel.label}
-            parentLabel={parentLabel}
-            parents={parents}
-            productId={activeProduct?.id ?? null}
-            products={products.map((p) => ({ id: p.id, name: p.name }))}
-          />
-        ) : null}
+        <div className="flex items-center gap-2">
+          {isAdmin ? <ReleaseCreate /> : null}
+          {canEdit && !activeLevel.isLeaf ? (
+            <WorkItemCreate
+              levelKey={activeLevel.key}
+              levelLabel={activeLevel.label}
+              parentLabel={parentLabel}
+              parents={parents}
+              productId={activeProduct?.id ?? null}
+              products={products.map((p) => ({ id: p.id, name: p.name }))}
+            />
+          ) : null}
+        </div>
       </div>
-      {features.length === 0 ? (
+      {features.length === 0 && releases.length === 0 ? (
         activeLevel.isLeaf ? (
           <EmptyState canConnect={canConnectRepos(access)} />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No {activeLevel.label.toLowerCase()} items yet.
             {canEdit ? ` Use “New ${activeLevel.label.toLowerCase()}” to add one.` : ""}
+            {isAdmin ? " Create a release to start planning." : ""}
           </p>
         )
       ) : (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {groups.map(({ label, quarter }) => {
-          const items = features.filter((f) => f.roadmapQuarter === quarter);
+        {groups.map((group) => {
+          const items = features.filter((f) => f.releaseId === group.releaseId);
           return (
-            <div key={label} className="space-y-2">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                {label}
-              </h2>
+            <div key={group.releaseId ?? "unscheduled"} className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                  {group.name}
+                  {group.targetDate ? (
+                    <span className="ml-2 font-normal">{group.targetDate}</span>
+                  ) : null}
+                  {group.status && group.status !== "planned" ? (
+                    <span className="ml-2 font-normal">
+                      · {RELEASE_STATUS_LABELS[group.status] ?? group.status}
+                    </span>
+                  ) : null}
+                </h2>
+                {isAdmin && group.releaseId ? (
+                  <ReleaseDelete id={group.releaseId} name={group.name} />
+                ) : null}
+              </div>
               {items.map((f) => {
                 const product =
                   productsById && f.productId ? productsById[f.productId] : undefined;
@@ -146,12 +174,6 @@ export default async function RoadmapPage({
                     <CardDescription className="flex items-center gap-2 text-xs">
                       <StatusDot status={f.status} />
                       {statusLabel(f.status)}
-                      <Badge
-                        variant="outline"
-                        className="font-mono text-[10px]"
-                      >
-                        {priorityLabel(f.priority)}
-                      </Badge>
                     </CardDescription>
                   </CardHeader>
                 </Card>

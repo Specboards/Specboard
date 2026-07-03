@@ -1,4 +1,9 @@
-import { canTransition, isValidParentLevel } from "@specboard/core";
+import {
+  canTransition,
+  isPropertyType,
+  isValidParentLevel,
+  type PropertyDef,
+} from "@specboard/core";
 
 import { resolveWorkflowFor } from "@/lib/repo-config";
 import {
@@ -12,11 +17,18 @@ import {
 } from "@/lib/store";
 import {
   RELATION_DIRECTIONS,
+  RELEASE_STATUSES,
   type CreatableRelationDirection,
   type CreateFeatureInput,
   type FeatureRelation,
   type LevelUpdate,
+  type PropertyInput,
+  type PropertyPatch,
   type RelationInput,
+  type ReleaseInput,
+  type ReleasePatch,
+  type ReleaseRecord,
+  type ReleaseStatus,
 } from "@/lib/store/types";
 
 /**
@@ -52,36 +64,17 @@ export function parseFeaturePatch(body: unknown): FeaturePatch {
     }
     patch.status = raw.status;
   }
-  if ("priority" in raw) {
-    if (raw.priority !== null && (typeof raw.priority !== "number" || !Number.isInteger(raw.priority))) {
-      throw new InvalidPatchError("priority must be an integer or null.");
-    }
-    patch.priority = raw.priority as number | null;
-  }
-  if ("estimate" in raw) {
-    if (
-      raw.estimate !== null &&
-      (typeof raw.estimate !== "number" ||
-        !Number.isInteger(raw.estimate) ||
-        raw.estimate < 0)
-    ) {
-      throw new InvalidPatchError(
-        "estimate must be a non-negative integer or null.",
-      );
-    }
-    patch.estimate = raw.estimate as number | null;
-  }
   if ("rank" in raw) {
     if (raw.rank !== null && (typeof raw.rank !== "string" || raw.rank === "")) {
       throw new InvalidPatchError("rank must be a non-empty string or null.");
     }
     patch.rank = raw.rank as string | null;
   }
-  if ("roadmapQuarter" in raw) {
-    if (raw.roadmapQuarter !== null && typeof raw.roadmapQuarter !== "string") {
-      throw new InvalidPatchError("roadmapQuarter must be a string or null.");
+  if ("releaseId" in raw) {
+    if (raw.releaseId !== null && !isUuid(raw.releaseId)) {
+      throw new InvalidPatchError("releaseId must be a UUID or null.");
     }
-    patch.roadmapQuarter = (raw.roadmapQuarter as string | null)?.trim() || null;
+    patch.releaseId = raw.releaseId as string | null;
   }
   if ("tags" in raw) {
     if (!Array.isArray(raw.tags) || raw.tags.some((t) => typeof t !== "string")) {
@@ -107,7 +100,7 @@ export function parseFeaturePatch(body: unknown): FeaturePatch {
 
   if (Object.keys(patch).length === 0) {
     throw new InvalidPatchError(
-      "Patch must set at least one of: title, status, priority, estimate, rank, roadmapQuarter, tags, assigneeId, customFields, parentSpecId.",
+      "Patch must set at least one of: title, status, rank, tags, releaseId, assigneeId, customFields, parentSpecId.",
     );
   }
   return patch;
@@ -256,33 +249,11 @@ export function parseCreateFeatureInput(body: unknown): CreateFeatureInput {
     }
     input.status = raw.status;
   }
-  if ("priority" in raw && raw.priority !== null) {
-    if (typeof raw.priority !== "number" || !Number.isInteger(raw.priority)) {
-      throw new InvalidPatchError("priority must be an integer or null.");
-    }
-    input.priority = raw.priority;
-  }
-  if ("estimate" in raw && raw.estimate !== null) {
-    if (
-      typeof raw.estimate !== "number" ||
-      !Number.isInteger(raw.estimate) ||
-      raw.estimate < 0
-    ) {
-      throw new InvalidPatchError("estimate must be a non-negative integer or null.");
-    }
-    input.estimate = raw.estimate;
-  }
   if ("assigneeId" in raw && raw.assigneeId !== null) {
     if (!isUuid(raw.assigneeId)) {
       throw new InvalidPatchError("assigneeId must be a UUID or null.");
     }
     input.assigneeId = raw.assigneeId;
-  }
-  if ("roadmapQuarter" in raw && raw.roadmapQuarter !== null) {
-    if (typeof raw.roadmapQuarter !== "string") {
-      throw new InvalidPatchError("roadmapQuarter must be a string or null.");
-    }
-    input.roadmapQuarter = raw.roadmapQuarter.trim() || null;
   }
   if ("tags" in raw) {
     if (!Array.isArray(raw.tags) || raw.tags.some((t) => typeof t !== "string")) {
@@ -377,6 +348,202 @@ export async function updateLevelFields(
 ): Promise<WorkspaceLevel[]> {
   const store = await getStore();
   return store.updateLevelFields(fields, scope);
+}
+
+/** The workspace's custom property definitions, ordered by position. */
+export async function listProperties(
+  scope?: WorkspaceScope,
+): Promise<PropertyDef[]> {
+  const store = await getStore();
+  return store.listProperties(scope);
+}
+
+/** Parse and validate an untrusted property-create body. */
+export function parsePropertyInput(body: unknown): PropertyInput {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  if (typeof raw.label !== "string" || raw.label.trim() === "") {
+    throw new InvalidPatchError("label is required.");
+  }
+  if (!isPropertyType(raw.type)) {
+    throw new InvalidPatchError(
+      "type must be one of: text, number, select, multiselect, date, user.",
+    );
+  }
+  const input: PropertyInput = { label: raw.label.trim(), type: raw.type };
+  if ("options" in raw) input.options = parseStringArray(raw.options, "options");
+  if ("levels" in raw && raw.levels !== null) {
+    input.levels = parseStringArray(raw.levels, "levels");
+  }
+  return input;
+}
+
+/** Parse and validate an untrusted property PATCH body. */
+export function parsePropertyPatch(body: unknown): PropertyPatch {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  const patch: PropertyPatch = {};
+  if ("label" in raw) {
+    if (typeof raw.label !== "string" || raw.label.trim() === "") {
+      throw new InvalidPatchError("label must be a non-empty string.");
+    }
+    patch.label = raw.label.trim();
+  }
+  if ("options" in raw) patch.options = parseStringArray(raw.options, "options");
+  if ("levels" in raw) {
+    patch.levels =
+      raw.levels === null ? null : parseStringArray(raw.levels, "levels");
+  }
+  if ("position" in raw) {
+    if (typeof raw.position !== "number" || !Number.isInteger(raw.position)) {
+      throw new InvalidPatchError("position must be an integer.");
+    }
+    patch.position = raw.position;
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new InvalidPatchError(
+      "Patch must set at least one of: label, options, levels, position.",
+    );
+  }
+  return patch;
+}
+
+function parseStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
+    throw new InvalidPatchError(`${field} must be an array of strings.`);
+  }
+  if (value.length > 100) {
+    throw new InvalidPatchError(`${field} lists too many entries.`);
+  }
+  return (value as string[]).map((v) => v.trim()).filter(Boolean);
+}
+
+/** Create a custom property definition. */
+export async function createProperty(
+  input: PropertyInput,
+  scope?: WorkspaceScope,
+): Promise<PropertyDef> {
+  const store = await getStore();
+  return store.createProperty(input, scope);
+}
+
+/** Update a custom property definition. */
+export async function updateProperty(
+  id: string,
+  patch: PropertyPatch,
+  scope?: WorkspaceScope,
+): Promise<PropertyDef> {
+  const store = await getStore();
+  return store.updateProperty(id, patch, scope);
+}
+
+/** Delete a custom property definition. */
+export async function deleteProperty(
+  id: string,
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const store = await getStore();
+  await store.deleteProperty(id, scope);
+}
+
+/** Create a release. */
+export async function createRelease(
+  input: ReleaseInput,
+  scope?: WorkspaceScope,
+): Promise<ReleaseRecord> {
+  const store = await getStore();
+  return store.createRelease(input, scope);
+}
+
+/** Update a release. */
+export async function updateRelease(
+  id: string,
+  patch: ReleasePatch,
+  scope?: WorkspaceScope,
+): Promise<ReleaseRecord> {
+  const store = await getStore();
+  return store.updateRelease(id, patch, scope);
+}
+
+/** Delete a release; its items are unscheduled, not deleted. */
+export async function deleteRelease(
+  id: string,
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const store = await getStore();
+  await store.deleteRelease(id, scope);
+}
+
+/** The workspace's releases, dated first, undated last. */
+export async function listReleases(
+  scope?: WorkspaceScope,
+): Promise<ReleaseRecord[]> {
+  const store = await getStore();
+  return store.listReleases(scope);
+}
+
+/** Parse and validate an untrusted release-create body. */
+export function parseReleaseInput(body: unknown): ReleaseInput {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  if (typeof raw.name !== "string" || raw.name.trim() === "") {
+    throw new InvalidPatchError("name is required.");
+  }
+  const input: ReleaseInput = { name: raw.name.trim() };
+  if ("status" in raw) input.status = parseReleaseStatus(raw.status);
+  if ("targetDate" in raw) input.targetDate = parseTargetDate(raw.targetDate);
+  return input;
+}
+
+/** Parse and validate an untrusted release PATCH body. */
+export function parseReleasePatch(body: unknown): ReleasePatch {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  const patch: ReleasePatch = {};
+  if ("name" in raw) {
+    if (typeof raw.name !== "string" || raw.name.trim() === "") {
+      throw new InvalidPatchError("name must be a non-empty string.");
+    }
+    patch.name = raw.name.trim();
+  }
+  if ("status" in raw) patch.status = parseReleaseStatus(raw.status);
+  if ("targetDate" in raw) patch.targetDate = parseTargetDate(raw.targetDate);
+  if (Object.keys(patch).length === 0) {
+    throw new InvalidPatchError(
+      "Patch must set at least one of: name, status, targetDate.",
+    );
+  }
+  return patch;
+}
+
+function parseReleaseStatus(value: unknown): ReleaseStatus {
+  if (
+    typeof value !== "string" ||
+    !(RELEASE_STATUSES as readonly string[]).includes(value)
+  ) {
+    throw new InvalidPatchError(
+      `status must be one of: ${RELEASE_STATUSES.join(", ")}.`,
+    );
+  }
+  return value as ReleaseStatus;
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseTargetDate(value: unknown): string | null {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !DATE_RE.test(value)) {
+    throw new InvalidPatchError("targetDate must be YYYY-MM-DD or null.");
+  }
+  return value;
 }
 
 /** Create a DB-native work item (initiative/epic). Validation lives in the store. */

@@ -9,7 +9,6 @@ import {
   canWriteProduct,
   canTransition,
   resolveWorkflow,
-  rollUpEstimates,
   safeParseRepoConfig,
   type ProductAccess,
 } from "@specboard/core";
@@ -26,9 +25,9 @@ import {
 } from "@specboard/db";
 
 /**
- * Specboard MCP server. Gives coding agents a prioritized, status-aware view of
- * specs: they see not just the markdown (canonical in git) but the metadata
- * (status, assignee, priority) layered on top from the DB.
+ * Specboard MCP server. Gives coding agents a status-aware view of specs:
+ * they see not just the markdown (canonical in git) but the metadata
+ * (status, assignee, tags) layered on top from the DB.
  *
  * Requires DATABASE_URL (the same Postgres the web app uses).
  */
@@ -257,17 +256,9 @@ server.tool(
         if (r.status === "done")
           childDone.set(r.parentId, (childDone.get(r.parentId) ?? 0) + 1);
       }
-      const rolled = rollUpEstimates(
-        visibleRows.map((r) => ({
-          key: r.id,
-          parentKey:
-            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
-          estimate: r.estimate,
-        })),
-      );
       return text(
         visibleRows
-          .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
+          .sort((a, b) => a.title.localeCompare(b.title))
           .map((f) => ({
             specId: f.specId,
             title: f.title,
@@ -276,11 +267,7 @@ server.tool(
               ? (prodKeyById.get(f.productId) ?? null)
               : null,
             status: f.status,
-            priority: f.priority,
-            estimate: f.estimate,
-            rolledEstimate: rolled.get(f.id) ?? null,
             tags: f.tags,
-            roadmapQuarter: f.roadmapQuarter,
             path: f.index?.path,
             parentSpecId: f.parentId
               ? (specById.get(f.parentId) ?? null)
@@ -359,40 +346,13 @@ server.tool(
         });
         product = p?.key ?? null;
       }
-      // Roll the estimate up over this feature's subtree.
-      const estimateRows = (
-        await db()
-          .select({
-            id: features.id,
-            parentId: features.parentId,
-            estimate: features.estimate,
-            productId: features.productId,
-          })
-          .from(features)
-          .where(eq(features.workspaceId, scope.workspaceId))
-      ).filter((item) =>
-        canReadProductId(scope.access, productById, item.productId),
-      );
-      const visibleIds = new Set(estimateRows.map((item) => item.id));
-      const rolled = rollUpEstimates(
-        estimateRows.map((r) => ({
-          key: r.id,
-          parentKey:
-            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
-          estimate: r.estimate,
-        })),
-      );
       return text({
         specId: row.specId,
         title: row.title,
         level: row.level,
         product,
         status: row.status,
-        priority: row.priority,
-        estimate: row.estimate,
-        rolledEstimate: rolled.get(row.id) ?? null,
         tags: row.tags,
-        roadmapQuarter: row.roadmapQuarter,
         path: row.index?.path,
         parentSpecId,
         children,

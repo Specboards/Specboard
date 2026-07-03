@@ -5,6 +5,42 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.4.0] - 2026-07-03
+
+### Added
+
+- Custom properties, defined by admins in Settings → Cards (migration 0021):
+  create a property with a label, a type (text, number, select, multi-select,
+  date, or person), options where relevant, and the hierarchy levels it
+  applies to. Values are edited on each item's page and the board drawer, and
+  can be shown on board cards. Properties previously came from the repo's
+  `.specboard/config.yml`; the database is now the single source and the
+  `fields`/`estimate` config keys are ignored.
+- Releases (migration 0021): a workspace-wide record with a name, status
+  (planned/in progress/shipped), and optional target date. Items are
+  scheduled into a release from their detail page or the board drawer. The
+  Roadmap now groups items by release (dated releases first, "Unscheduled"
+  last) and admins create or delete releases right from the Roadmap. The
+  backlog list gains a release filter and a Release column.
+- Item pages have a dedicated Relationships section combining the parent
+  picker, the children list with roll-up progress, and the typed links
+  (blocks/relates/duplicates), previously split between the metadata sidebar
+  and a hierarchy block.
+
+### Changed
+
+- Cards start lean: every level now carries name, status, assignee, and tags
+  only. The built-in priority, estimate, and roadmap quarter fields are
+  removed (migration 0021 drops the columns; recreate any of them as custom
+  properties if needed). Backlog ordering falls back to manual board rank,
+  then title. The CLI's `priority` command is gone.
+- The Backlog and Roadmap now open on the Feature level by default
+  (previously the leaf Work Item level). The `?level=` switcher works as
+  before.
+- Per-level field availability (Settings → Cards) now covers the built-in
+  assignee and tags fields; custom-property availability lives on the
+  property itself. Existing per-level selections were reset to "all".
+
 ## [0.3.0] - 2026-07-03
 
 ### Added

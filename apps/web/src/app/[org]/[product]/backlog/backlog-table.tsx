@@ -17,7 +17,6 @@ import type { StatusWorkflow } from "@specboard/core";
 import { type ProductTag } from "@/components/feature-card";
 import { StatusDot } from "@/components/status-dot";
 import { StatusSelect } from "@/components/status-select";
-import { priorityLabel } from "@/lib/feature-helpers";
 import { productColorClasses } from "@/lib/product-color";
 import type { FeatureRecord } from "@/lib/store/types";
 import { useOrgProductPath } from "@/lib/use-org";
@@ -41,6 +40,7 @@ export function BacklogTable({
   canEdit,
   workflow,
   productsById,
+  releaseNames,
 }: {
   rows: BacklogRow[];
   canEdit: boolean;
@@ -48,6 +48,8 @@ export function BacklogTable({
   /** Product identity by id; when set, a Product column is shown (the
    * cross-product "All products" view). */
   productsById?: Record<string, ProductTag>;
+  /** Release name by id, for the Release column. */
+  releaseNames: Record<string, string>;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const orgHref = useOrgProductPath();
@@ -85,13 +87,11 @@ export function BacklogTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-14">Pri</TableHead>
           <TableHead>Feature</TableHead>
           {productsById ? <TableHead className="w-32">Product</TableHead> : null}
           <TableHead className="w-44">Status</TableHead>
-          <TableHead className="w-14">Est</TableHead>
           <TableHead>Tags</TableHead>
-          <TableHead className="w-24">Quarter</TableHead>
+          <TableHead className="w-32">Release</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -100,9 +100,6 @@ export function BacklogTable({
           const isCollapsed = collapsed.has(f.specId);
           return (
             <TableRow key={f.specId}>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {priorityLabel(f.priority)}
-              </TableCell>
               <TableCell>
                 <span
                   className="flex items-center gap-2"
@@ -177,22 +174,6 @@ export function BacklogTable({
                   />
                 </div>
               </TableCell>
-              <TableCell className="font-mono text-xs text-muted-foreground">
-                {f.rolledEstimate === null ? (
-                  "—"
-                ) : (
-                  <span
-                    title={
-                      isEpic
-                        ? "Subtree total (rolled up from children)"
-                        : undefined
-                    }
-                  >
-                    {isEpic ? "Σ" : ""}
-                    {f.rolledEstimate}
-                  </span>
-                )}
-              </TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {f.tags.map((tag) => (
@@ -203,7 +184,7 @@ export function BacklogTable({
                 </div>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {f.roadmapQuarter ?? "—"}
+                {f.releaseId ? (releaseNames[f.releaseId] ?? "—") : "—"}
               </TableCell>
             </TableRow>
           );

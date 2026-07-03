@@ -47,6 +47,8 @@ export async function ListView({
   const features = sortFeatures(await store.listFeatures(access ?? undefined))
     .filter((f) => f.status !== "archived")
     .filter((f) => !activeProduct || f.productId === activeProduct.id);
+  const releases = await store.listReleases(access ?? undefined);
+  const releaseNames = Object.fromEntries(releases.map((r) => [r.id, r.name]));
 
   // Cross-product view: show a Product column tagging each row's owner.
   const productsById = activeProduct
@@ -68,7 +70,7 @@ export async function ListView({
     epics: features
       .filter((f) => f.childCount > 0)
       .map((f) => ({ specId: f.specId, title: f.title })),
-    priorities: [0, 1, 2, 3, 4],
+    releases: releases.map((r) => ({ id: r.id, name: r.name })),
     products: productsById
       ? products.map((p) => ({ id: p.id, name: p.name }))
       : undefined,
@@ -89,8 +91,8 @@ export async function ListView({
       <div className="space-y-2">
         <WorkViewTabs />
         <p className="text-sm text-muted-foreground">
-          Prioritized features. Metadata edits land in the database; spec
-          content stays in git.
+          Your work items in a filterable table. Metadata edits land in the
+          database; spec content stays in git.
         </p>
       </div>
       {features.length === 0 ? (
@@ -113,6 +115,7 @@ export async function ListView({
               canEdit={canEdit}
               workflow={workflow}
               productsById={productsById}
+              releaseNames={releaseNames}
             />
           )}
         </>

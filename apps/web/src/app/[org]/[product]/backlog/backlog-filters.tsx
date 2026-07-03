@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { Select } from "@/components/ui/select";
-import { priorityLabel, statusLabel } from "@/lib/feature-helpers";
+import { statusLabel } from "@/lib/feature-helpers";
 import {
   filtersToQuery,
   hasActiveFilters,
@@ -16,7 +16,7 @@ export interface FilterOptions {
   assignees: { userId: string; name: string }[];
   tags: string[];
   epics: { specId: string; title: string }[];
-  priorities: number[];
+  releases: { id: string; name: string }[];
   /** Products to filter by; provided only in the cross-product view. */
   products?: { id: string; name: string }[];
 }
@@ -105,21 +105,22 @@ export function BacklogFilters({
         </Select>
       ) : null}
 
-      <Select
-        aria-label="Filter by priority"
-        className="h-8 w-auto"
-        value={filters.priority ?? ""}
-        onChange={(e) =>
-          set("priority", e.target.value === "" ? undefined : Number(e.target.value))
-        }
-      >
-        <option value="">Any priority</option>
-        {options.priorities.map((p) => (
-          <option key={p} value={p}>
-            {priorityLabel(p)}
-          </option>
-        ))}
-      </Select>
+      {options.releases.length > 0 ? (
+        <Select
+          aria-label="Filter by release"
+          className="h-8 w-auto"
+          value={filters.release ?? ""}
+          onChange={(e) => set("release", e.target.value || undefined)}
+        >
+          <option value="">Any release</option>
+          <option value="none">No release</option>
+          {options.releases.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </Select>
+      ) : null}
 
       {options.tags.length > 0 ? (
         <Select
