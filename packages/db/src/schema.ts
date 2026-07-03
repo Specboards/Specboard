@@ -60,6 +60,11 @@ export const workspaceLevels = pgTable(
     /** Depth, ascending: 0 is the top level; the largest is the leaf. */
     position: integer("position").notNull(),
     isLeaf: boolean("is_leaf").notNull().default(false),
+    /**
+     * Metadata field keys available on items at this level (see
+     * lib/card-fields metadata catalog). NULL = every field is available.
+     */
+    cardFields: jsonb("card_fields"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -201,6 +206,11 @@ export const repositories = pgTable(
     owner: text("owner").notNull(),
     name: text("name").notNull(),
     defaultBranch: text("default_branch").notNull().default("main"),
+    /**
+     * Marks the workspace's dedicated spec repository (created via the
+     * one-click onboarding flow). Spec-seeding flows target it by default.
+     */
+    isSpecRepo: boolean("is_spec_repo").notNull().default(false),
     /** Parsed `.specboard/config.yml`, refreshed on sync. */
     config: jsonb("config"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

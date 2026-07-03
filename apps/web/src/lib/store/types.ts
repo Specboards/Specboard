@@ -331,6 +331,15 @@ export interface FeatureStore {
     levels: LevelUpdate[],
     scope?: WorkspaceScope,
   ): Promise<WorkspaceLevel[]>;
+  /**
+   * Set which metadata fields are available per level (keyed by level key;
+   * null = all fields). Unlisted levels are left unchanged. Returns the
+   * resolved levels after the update.
+   */
+  updateLevelFields(
+    fields: Record<string, string[] | null>,
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]>;
   /** The acting user's effective product access (org-admin flag + per-product
    * grants), used for read-filtering and write authorization. */
   getProductAccess(scope?: WorkspaceScope): Promise<ProductAccess>;

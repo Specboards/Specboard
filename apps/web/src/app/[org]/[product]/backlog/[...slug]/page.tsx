@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { DetailSection } from "@/components/detail-section";
 import { FeatureGithubLinks } from "@/components/feature-github-links";
 import { FeatureMetaForm } from "@/components/feature-meta-form";
 import { FeatureRelations } from "@/components/feature-relations";
@@ -115,30 +116,125 @@ export default async function ItemPage({
         .map((f) => ({ specId: f.specId, title: f.title }))
     : [];
 
+  const canEdit = !access || canWrite(access.role);
+  const availableFields =
+    levels.find((l) => l.key === feature.level)?.fields ?? null;
+
   return (
-    <section className="grid gap-8 lg:grid-cols-[1fr_280px]">
-      <article>
-        <div className="mb-6 space-y-1">
-          <Link
-            href={backlogHref}
-            className="text-xs text-muted-foreground hover:underline"
-          >
-            ← Backlog
-          </Link>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-              {levelLabel}
-            </Badge>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {feature.title}
-            </h1>
-          </div>
-          {feature.path ? (
-            <p className="font-mono text-xs text-muted-foreground">
-              {feature.path}
-            </p>
-          ) : null}
+    <section className="mx-auto max-w-3xl space-y-4">
+      <div className="space-y-1">
+        <Link
+          href={backlogHref}
+          className="text-xs text-muted-foreground hover:underline"
+        >
+          ← Backlog
+        </Link>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+            {levelLabel}
+          </Badge>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {feature.title}
+          </h1>
         </div>
+        {feature.path ? (
+          <p className="font-mono text-xs text-muted-foreground">
+            {feature.path}
+          </p>
+        ) : null}
+      </div>
+
+      <DetailSection id="metadata" title="Metadata">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <StatusDot status={feature.status} />
+              {statusLabel(feature.status)}
+            </div>
+            <FeatureMetaForm
+              feature={feature}
+              members={members}
+              customFields={customFields}
+              candidates={parentCandidates}
+              estimate={estimateConfig}
+              workflow={workflow}
+              canEdit={canEdit}
+              availableFields={availableFields}
+            />
+          </div>
+          <div className="space-y-4">
+            {feature.parentSpecId || feature.children.length > 0 ? (
+              <>
+                <div className="space-y-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Hierarchy
+                  </span>
+                  {feature.parentSpecId && parentKey ? (
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Parent: </span>
+                      <Link
+                        href={orgProductPath(
+                          org,
+                          product,
+                          `/backlog/${parentKey}/${feature.parentSpecId}`,
+                        )}
+                        className="hover:underline"
+                      >
+                        {feature.parentTitle ?? feature.parentSpecId}
+                      </Link>
+                    </p>
+                  ) : null}
+                  {feature.children.length > 0 && childKey ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Children · {feature.childDoneCount}/{feature.childCount} done
+                      </p>
+                      {feature.children.map((c) => (
+                        <div key={c.specId} className="flex items-center gap-2 text-sm">
+                          <StatusDot status={c.status} />
+                          <Link
+                            href={orgProductPath(
+                              org,
+                              product,
+                              `/backlog/${childKey}/${c.specId}`,
+                            )}
+                            className="flex-1 truncate hover:underline"
+                            title={c.title}
+                          >
+                            {c.title}
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <Separator />
+              </>
+            ) : null}
+            <FeatureRelations
+              specId={feature.specId}
+              relations={feature.relations}
+              candidates={candidates}
+              canEdit={canEdit}
+            />
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {feature.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+              <p className="font-mono text-[10px] text-muted-foreground">
+                {feature.isDbNative ? "id" : "spec id"}: {feature.specId}
+              </p>
+            </div>
+          </div>
+        </div>
+      </DetailSection>
+
+      <DetailSection id="details" title="Details">
         {feature.isDbNative ? (
           <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
             {`This ${levelLabel.toLowerCase()} groups work and has no spec of its own.`}
@@ -151,108 +247,23 @@ export default async function ItemPage({
             <ReactMarkdown>{feature.content}</ReactMarkdown>
           </div>
         )}
-      </article>
+      </DetailSection>
 
-      <aside className="space-y-4 lg:border-l lg:pl-6">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <StatusDot status={feature.status} />
-          {statusLabel(feature.status)}
-        </div>
-        <Separator />
-        <FeatureMetaForm
-          feature={feature}
-          members={members}
-          customFields={customFields}
-          candidates={parentCandidates}
-          estimate={estimateConfig}
-          workflow={workflow}
-          canEdit={!access || canWrite(access.role)}
-        />
-        <Separator />
-        {feature.parentSpecId || feature.children.length > 0 ? (
-          <>
-            <div className="space-y-2">
-              <span className="text-xs font-medium text-muted-foreground">
-                Hierarchy
-              </span>
-              {feature.parentSpecId && parentKey ? (
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Parent: </span>
-                  <Link
-                    href={orgProductPath(
-                      org,
-                      product,
-                      `/backlog/${parentKey}/${feature.parentSpecId}`,
-                    )}
-                    className="hover:underline"
-                  >
-                    {feature.parentTitle ?? feature.parentSpecId}
-                  </Link>
-                </p>
-              ) : null}
-              {feature.children.length > 0 && childKey ? (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    Children · {feature.childDoneCount}/{feature.childCount} done
-                  </p>
-                  {feature.children.map((c) => (
-                    <div key={c.specId} className="flex items-center gap-2 text-sm">
-                      <StatusDot status={c.status} />
-                      <Link
-                        href={orgProductPath(
-                          org,
-                          product,
-                          `/backlog/${childKey}/${c.specId}`,
-                        )}
-                        className="flex-1 truncate hover:underline"
-                        title={c.title}
-                      >
-                        {c.title}
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <Separator />
-          </>
-        ) : null}
-        <FeatureRelations
-          specId={feature.specId}
-          relations={feature.relations}
-          candidates={candidates}
-          canEdit={!access || canWrite(access.role)}
-        />
-        <Separator />
+      <DetailSection id="integrations" title="Integrations">
         <FeatureGithubLinks
           specId={feature.specId}
           links={feature.githubLinks}
-          canEdit={!access || canWrite(access.role)}
+          canEdit={canEdit}
         />
-        <Separator />
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-1">
-            {feature.tags.map((tag) => (
-              <Badge key={tag} variant="secondary">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-          <p className="font-mono text-[10px] text-muted-foreground">
-            {feature.isDbNative ? "id" : "spec id"}: {feature.specId}
-          </p>
-        </div>
-        {feature.isDbNative && (!access || canWrite(access.role)) ? (
-          <>
-            <Separator />
-            <WorkItemControls
-              specId={feature.specId}
-              title={feature.title}
-              levelLabel={levelLabel}
-            />
-          </>
-        ) : null}
-      </aside>
+      </DetailSection>
+
+      {feature.isDbNative && canEdit ? (
+        <WorkItemControls
+          specId={feature.specId}
+          title={feature.title}
+          levelLabel={levelLabel}
+        />
+      ) : null}
     </section>
   );
 }

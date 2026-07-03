@@ -68,3 +68,41 @@ export function resolveCardFields(
 export function isBuiltinCardField(key: string): boolean {
   return BUILTIN_KEYS.has(key);
 }
+
+/**
+ * Built-in metadata fields admins can enable/disable per hierarchy level
+ * (Settings → Cards). Status and parent are structural and always available;
+ * display-only card decorations (blocked, epic, sub, github) stay per-user
+ * board preferences.
+ */
+export const BUILTIN_METADATA_FIELDS: CardFieldDef[] = [
+  { key: "priority", label: "Priority" },
+  { key: "estimate", label: "Estimate" },
+  { key: "assignee", label: "Assignee" },
+  { key: "quarter", label: "Roadmap quarter" },
+  { key: "tags", label: "Tags" },
+];
+
+/** The per-level manageable field set: built-ins plus `cf:` custom fields. */
+export function metadataFieldCatalog(
+  customFields: { key: string; label: string }[],
+): CardFieldDef[] {
+  return [
+    ...BUILTIN_METADATA_FIELDS,
+    ...customFields.map((f) => ({
+      key: `${CUSTOM_FIELD_PREFIX}${f.key}`,
+      label: f.label,
+    })),
+  ];
+}
+
+/**
+ * Whether a metadata field is available at a level. `available` is the
+ * level's configured list (WorkspaceLevel.fields); null/undefined = all.
+ */
+export function isFieldAvailable(
+  available: string[] | null | undefined,
+  key: string,
+): boolean {
+  return available == null || available.includes(key);
+}

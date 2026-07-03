@@ -179,12 +179,14 @@ export async function POST(req: Request) {
       owner: created.owner,
       name: created.name,
       defaultBranch: created.defaultBranch,
+      isSpecRepo: true,
     })
     .onConflictDoUpdate({
       target: [repositories.workspaceId, repositories.owner, repositories.name],
       set: {
         githubInstallationId: installation.installationId,
         defaultBranch: created.defaultBranch,
+        isSpecRepo: true,
       },
     })
     .returning();
