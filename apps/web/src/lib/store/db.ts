@@ -22,6 +22,7 @@ import {
   count,
   createDb,
   desc,
+  detailTemplates,
   eq,
   featureGithubLinks,
   featureLinks,
@@ -44,6 +45,7 @@ import {
 
 import {
   compareReleases,
+  DetailTemplateError,
   FeatureError,
   LevelError,
   ProductError,
@@ -54,6 +56,9 @@ import {
   type BoardPreferences,
   type CreateFeatureInput,
   type CreateProductInput,
+  type DetailTemplate,
+  type DetailTemplateInput,
+  type DetailTemplatePatch,
   type LevelUpdate,
   type CustomFieldValue,
   type FeatureDetail,
@@ -316,7 +321,9 @@ export class DbStore implements FeatureStore {
         this.productVisibilityIn(tx, scope!.workspaceId),
       ]);
       if (!canReadProductId(access, productById, row.productId)) return null;
-      const content = row.index?.content ?? "";
+      // Spec-backed items read their body from spec_index; DB-native items
+      // (initiatives/epics) keep it inline on features.details.
+      const content = row.index?.content ?? row.details ?? "";
       // Resolve the assignee's display name (separate lookup, since there's no
       // features→users relation, and assignees are usually few).
       let assigneeName: string | null = null;
@@ -552,14 +559,16 @@ export class DbStore implements FeatureStore {
         position: workspaceLevels.position,
         isLeaf: workspaceLevels.isLeaf,
         cardFields: workspaceLevels.cardFields,
+        detailTemplateId: workspaceLevels.detailTemplateId,
       })
       .from(workspaceLevels)
       .where(eq(workspaceLevels.workspaceId, workspaceId))
       .orderBy(asc(workspaceLevels.position));
     return resolveLevels(
-      rows.map(({ cardFields, ...rest }) => ({
+      rows.map(({ cardFields, detailTemplateId, ...rest }) => ({
         ...rest,
         fields: Array.isArray(cardFields) ? (cardFields as string[]) : null,
+        detailTemplateId: detailTemplateId ?? null,
       })),
     );
   }
@@ -672,6 +681,151 @@ export class DbStore implements FeatureStore {
     });
   }
 
+  async updateLevelTemplates(
+    templates: Record<string, string | null>,
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const current = await this.levelsIn(tx, ws);
+      const byKey = new Map(current.map((l) => [l.key, l]));
+      for (const key of Object.keys(templates)) {
+        if (!byKey.has(key)) throw new LevelError(`Unknown level: ${key}`);
+      }
+      // Validate the referenced templates belong to this workspace.
+      const wanted = [
+        ...new Set(Object.values(templates).filter((v): v is string => !!v)),
+      ];
+      if (wanted.length > 0) {
+        const known = await tx
+          .select({ id: detailTemplates.id })
+          .from(detailTemplates)
+          .where(
+            and(
+              eq(detailTemplates.workspaceId, ws),
+              inArray(detailTemplates.id, wanted),
+            ),
+          );
+        const knownIds = new Set(known.map((t) => t.id));
+        for (const id of wanted) {
+          if (!knownIds.has(id))
+            throw new LevelError(`Unknown detail template: ${id}`);
+        }
+      }
+      for (const [key, value] of Object.entries(templates)) {
+        const level = byKey.get(key)!;
+        await tx
+          .insert(workspaceLevels)
+          .values({
+            workspaceId: ws,
+            key: level.key,
+            label: level.label,
+            position: level.position,
+            isLeaf: level.isLeaf,
+            cardFields: level.fields ?? null,
+            detailTemplateId: value,
+          })
+          .onConflictDoUpdate({
+            target: [workspaceLevels.workspaceId, workspaceLevels.key],
+            set: { detailTemplateId: value },
+          });
+      }
+      return this.levelsIn(tx, ws);
+    });
+  }
+
+  async listDetailTemplates(scope?: WorkspaceScope): Promise<DetailTemplate[]> {
+    return this.scoped(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: detailTemplates.id,
+          name: detailTemplates.name,
+          body: detailTemplates.body,
+        })
+        .from(detailTemplates)
+        .where(eq(detailTemplates.workspaceId, scope!.workspaceId))
+        .orderBy(asc(detailTemplates.name));
+      return rows;
+    });
+  }
+
+  async createDetailTemplate(
+    input: DetailTemplateInput,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    return this.scoped(scope, async (tx) => {
+      const name = input.name.trim();
+      if (!name) throw new DetailTemplateError("Template name is required.");
+      const [row] = await tx
+        .insert(detailTemplates)
+        .values({
+          workspaceId: scope!.workspaceId,
+          name,
+          body: input.body ?? "",
+        })
+        .onConflictDoNothing({
+          target: [detailTemplates.workspaceId, detailTemplates.name],
+        })
+        .returning({
+          id: detailTemplates.id,
+          name: detailTemplates.name,
+          body: detailTemplates.body,
+        });
+      if (!row)
+        throw new DetailTemplateError(
+          `A template named "${name}" already exists.`,
+        );
+      return row;
+    });
+  }
+
+  async updateDetailTemplate(
+    id: string,
+    patch: DetailTemplatePatch,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const set: Record<string, unknown> = { updatedAt: new Date() };
+      if (patch.name !== undefined) {
+        const name = patch.name.trim();
+        if (!name) throw new DetailTemplateError("Template name is required.");
+        set.name = name;
+      }
+      if (patch.body !== undefined) set.body = patch.body;
+      const [row] = await tx
+        .update(detailTemplates)
+        .set(set)
+        .where(
+          and(eq(detailTemplates.id, id), eq(detailTemplates.workspaceId, ws)),
+        )
+        .returning({
+          id: detailTemplates.id,
+          name: detailTemplates.name,
+          body: detailTemplates.body,
+        });
+      if (!row) throw new DetailTemplateError(`Unknown template: ${id}`);
+      return row;
+    });
+  }
+
+  async deleteDetailTemplate(id: string, scope?: WorkspaceScope): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      // workspace_levels.detail_template_id is ON DELETE SET NULL, so pointing
+      // levels fall back to a blank body automatically.
+      const deleted = await tx
+        .delete(detailTemplates)
+        .where(
+          and(
+            eq(detailTemplates.id, id),
+            eq(detailTemplates.workspaceId, scope!.workspaceId),
+          ),
+        )
+        .returning({ id: detailTemplates.id });
+      if (!deleted[0]) throw new DetailTemplateError(`Unknown template: ${id}`);
+    });
+  }
+
   async createFeature(
     input: CreateFeatureInput,
     scope?: WorkspaceScope,
@@ -751,6 +905,7 @@ export class DbStore implements FeatureStore {
           status: input.status ?? "backlog",
           assigneeId: input.assigneeId ?? null,
           tags: input.tags ?? [],
+          details: input.details?.trim() ? input.details : null,
           parentId,
         })
         .returning();

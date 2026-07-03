@@ -20,6 +20,11 @@ export interface WorkspaceLevel {
    * Settings. `null`/`undefined` = every field is available.
    */
   fields?: string[] | null;
+  /**
+   * Id of the detail template (see DetailTemplate) seeded into a new card's
+   * body at this level, or `null`/`undefined` for a blank body.
+   */
+  detailTemplateId?: string | null;
 }
 
 /**

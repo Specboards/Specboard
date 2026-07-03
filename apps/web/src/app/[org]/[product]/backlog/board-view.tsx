@@ -40,11 +40,13 @@ export async function BoardView({
   const { product: productSlug } = await params;
   const sp = await searchParams;
   const store = await getStore();
-  const [allFeatures, properties, releases] = await Promise.all([
-    store.listFeatures(access ?? undefined),
-    store.listProperties(access ?? undefined),
-    store.listReleases(access ?? undefined),
-  ]);
+  const [allFeatures, properties, releases, detailTemplates] =
+    await Promise.all([
+      store.listFeatures(access ?? undefined),
+      store.listProperties(access ?? undefined),
+      store.listReleases(access ?? undefined),
+      store.listDetailTemplates(access ?? undefined),
+    ]);
 
   // The board scopes to the product in the URL (`all` = every product) and
   // shows one hierarchy level at a time (default: the leaf/specs).
@@ -74,6 +76,10 @@ export async function BoardView({
     : [];
   const parentLabel =
     levels.find((l) => l.key === parentKey)?.label ?? null;
+  // Seed the new-item Details editor with the active level's assigned template.
+  const templateBody =
+    detailTemplates.find((t) => t.id === activeLevel.detailTemplateId)?.body ??
+    "";
 
   const db = getDb();
   const members: WorkspaceMember[] =
@@ -103,6 +109,9 @@ export async function BoardView({
               parents={parents}
               productId={activeProduct?.id ?? null}
               products={products.map((p) => ({ id: p.id, name: p.name }))}
+              workflow={workflow}
+              members={members}
+              templateBody={templateBody}
             />
           ) : null}
           {features.length > 0 && canEdit ? (

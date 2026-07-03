@@ -20,6 +20,9 @@ import {
   RELEASE_STATUSES,
   type CreatableRelationDirection,
   type CreateFeatureInput,
+  type DetailTemplate,
+  type DetailTemplateInput,
+  type DetailTemplatePatch,
   type FeatureRelation,
   type LevelUpdate,
   type PropertyInput,
@@ -97,10 +100,19 @@ export function parseFeaturePatch(body: unknown): FeaturePatch {
     }
     patch.parentSpecId = raw.parentSpecId as string | null;
   }
+  if ("details" in raw) {
+    if (raw.details !== null && typeof raw.details !== "string") {
+      throw new InvalidPatchError("details must be a string or null.");
+    }
+    if (typeof raw.details === "string" && raw.details.length > 100_000) {
+      throw new InvalidPatchError("details is too long.");
+    }
+    patch.details = raw.details as string | null;
+  }
 
   if (Object.keys(patch).length === 0) {
     throw new InvalidPatchError(
-      "Patch must set at least one of: title, status, rank, tags, releaseId, assigneeId, customFields, parentSpecId.",
+      "Patch must set at least one of: title, status, rank, tags, releaseId, assigneeId, customFields, parentSpecId, details.",
     );
   }
   return patch;
@@ -260,6 +272,15 @@ export function parseCreateFeatureInput(body: unknown): CreateFeatureInput {
       throw new InvalidPatchError("tags must be an array of strings.");
     }
     input.tags = (raw.tags as string[]).map((t) => t.trim()).filter(Boolean);
+  }
+  if ("details" in raw && raw.details !== null) {
+    if (typeof raw.details !== "string") {
+      throw new InvalidPatchError("details must be a string or null.");
+    }
+    if (raw.details.length > 100_000) {
+      throw new InvalidPatchError("details is too long.");
+    }
+    input.details = raw.details;
   }
   return input;
 }
@@ -448,6 +469,125 @@ export async function deleteProperty(
 ): Promise<void> {
   const store = await getStore();
   await store.deleteProperty(id, scope);
+}
+
+/** The workspace's detail templates, ordered by name. */
+export async function listDetailTemplates(
+  scope?: WorkspaceScope,
+): Promise<DetailTemplate[]> {
+  const store = await getStore();
+  return store.listDetailTemplates(scope);
+}
+
+/** Parse and validate an untrusted detail-template-create body. */
+export function parseDetailTemplateInput(body: unknown): DetailTemplateInput {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  if (typeof raw.name !== "string" || raw.name.trim() === "") {
+    throw new InvalidPatchError("name is required.");
+  }
+  const body_ = "body" in raw ? raw.body : "";
+  if (typeof body_ !== "string") {
+    throw new InvalidPatchError("body must be a string.");
+  }
+  if (body_.length > 100_000) {
+    throw new InvalidPatchError("body is too long.");
+  }
+  return { name: raw.name.trim(), body: body_ };
+}
+
+/** Parse and validate an untrusted detail-template PATCH body. */
+export function parseDetailTemplatePatch(body: unknown): DetailTemplatePatch {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  const patch: DetailTemplatePatch = {};
+  if ("name" in raw) {
+    if (typeof raw.name !== "string" || raw.name.trim() === "") {
+      throw new InvalidPatchError("name must be a non-empty string.");
+    }
+    patch.name = raw.name.trim();
+  }
+  if ("body" in raw) {
+    if (typeof raw.body !== "string") {
+      throw new InvalidPatchError("body must be a string.");
+    }
+    if (raw.body.length > 100_000) {
+      throw new InvalidPatchError("body is too long.");
+    }
+    patch.body = raw.body;
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new InvalidPatchError("Patch must set at least one of: name, body.");
+  }
+  return patch;
+}
+
+/** Create a detail template. */
+export async function createDetailTemplate(
+  input: DetailTemplateInput,
+  scope?: WorkspaceScope,
+): Promise<DetailTemplate> {
+  const store = await getStore();
+  return store.createDetailTemplate(input, scope);
+}
+
+/** Update a detail template. */
+export async function updateDetailTemplate(
+  id: string,
+  patch: DetailTemplatePatch,
+  scope?: WorkspaceScope,
+): Promise<DetailTemplate> {
+  const store = await getStore();
+  return store.updateDetailTemplate(id, patch, scope);
+}
+
+/** Delete a detail template. */
+export async function deleteDetailTemplate(
+  id: string,
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const store = await getStore();
+  await store.deleteDetailTemplate(id, scope);
+}
+
+/** Parse an untrusted per-level template-assignment body. */
+export function parseLevelTemplatesUpdate(
+  body: unknown,
+): Record<string, string | null> {
+  if (typeof body !== "object" || body === null) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = (body as { templates?: unknown }).templates;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new InvalidPatchError(
+      "templates must be an object keyed by level key.",
+    );
+  }
+  const out: Record<string, string | null> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (value === null) {
+      out[key] = null;
+      continue;
+    }
+    if (!isUuid(value)) {
+      throw new InvalidPatchError(`templates.${key} must be a UUID or null.`);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+/** Assign default detail templates per level; returns the resolved levels. */
+export async function updateLevelTemplates(
+  templates: Record<string, string | null>,
+  scope?: WorkspaceScope,
+): Promise<WorkspaceLevel[]> {
+  const store = await getStore();
+  return store.updateLevelTemplates(templates, scope);
 }
 
 /** Create a release. */

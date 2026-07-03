@@ -20,6 +20,7 @@ import {
 
 import {
   compareReleases,
+  DetailTemplateError,
   FeatureError,
   LevelError,
   ProductError,
@@ -30,6 +31,9 @@ import {
   type BoardPreferences,
   type CreateFeatureInput,
   type CreateProductInput,
+  type DetailTemplate,
+  type DetailTemplateInput,
+  type DetailTemplatePatch,
   type LevelUpdate,
   type CustomFieldValue,
   type FeatureDetail,
@@ -70,6 +74,8 @@ interface LocalItem {
   releaseId?: string | null;
   /** Owning product id; defaults to the default product when absent. */
   productId?: string | null;
+  /** Markdown details body, or null/absent for a blank body. */
+  details?: string | null;
 }
 
 /** A release persisted in local file mode. */
@@ -221,6 +227,10 @@ export class LocalFileStore implements FeatureStore {
 
   private get releasesPath() {
     return path.join(this.root, ".specboard", "local-releases.json");
+  }
+
+  private get templatesPath() {
+    return path.join(this.root, ".specboard", "local-detail-templates.json");
   }
 
   /** Persisted products, seeded with the default product when none exist. */
@@ -393,7 +403,7 @@ export class LocalFileStore implements FeatureStore {
         assigneeName: null,
         customFields: {},
         path: "",
-        content: "",
+        content: item.details ?? "",
         sections: [],
         relations: [],
         blocksCount: 0,
@@ -491,6 +501,8 @@ export class LocalFileStore implements FeatureStore {
       if (patch.releaseId !== undefined) it.releaseId = patch.releaseId;
       if (patch.assigneeId !== undefined) it.assigneeId = patch.assigneeId;
       if (patch.parentSpecId !== undefined) it.parentSpecId = patch.parentSpecId;
+      if (patch.details !== undefined)
+        it.details = patch.details?.trim() ? patch.details : null;
       await this.writeItems(items);
       return;
     }
@@ -584,6 +596,7 @@ export class LocalFileStore implements FeatureStore {
       parentSpecId: input.parentSpecId ?? null,
       releaseId: null,
       productId,
+      details: input.details?.trim() ? input.details : null,
     };
     const items = await this.readItems();
     await this.writeItems([...items, item]);
@@ -844,6 +857,113 @@ export class LocalFileStore implements FeatureStore {
     if (!rows.some((p) => p.id === id))
       throw new PropertyError(`Unknown property: ${id}`);
     await this.writeProperties(rows.filter((p) => p.id !== id));
+  }
+
+  // Detail templates persist to `.specboard/local-detail-templates.json`.
+  private async readTemplates(): Promise<DetailTemplate[]> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.templatesPath, "utf8"),
+      ) as DetailTemplate[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeTemplates(rows: DetailTemplate[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.templatesPath), { recursive: true });
+    await fs.writeFile(
+      this.templatesPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  async listDetailTemplates(
+    _scope?: WorkspaceScope,
+  ): Promise<DetailTemplate[]> {
+    const rows = await this.readTemplates();
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createDetailTemplate(
+    input: DetailTemplateInput,
+    _scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    const name = input.name.trim();
+    if (!name) throw new DetailTemplateError("Template name is required.");
+    const rows = await this.readTemplates();
+    if (rows.some((t) => t.name === name))
+      throw new DetailTemplateError(`A template named "${name}" already exists.`);
+    const template: DetailTemplate = {
+      id: randomUUID(),
+      name,
+      body: input.body ?? "",
+    };
+    await this.writeTemplates([...rows, template]);
+    return template;
+  }
+
+  async updateDetailTemplate(
+    id: string,
+    patch: DetailTemplatePatch,
+    _scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    const rows = await this.readTemplates();
+    const template = rows.find((t) => t.id === id);
+    if (!template) throw new DetailTemplateError(`Unknown template: ${id}`);
+    if (patch.name !== undefined) {
+      const name = patch.name.trim();
+      if (!name) throw new DetailTemplateError("Template name is required.");
+      if (rows.some((t) => t.id !== id && t.name === name))
+        throw new DetailTemplateError(`A template named "${name}" already exists.`);
+      template.name = name;
+    }
+    if (patch.body !== undefined) template.body = patch.body;
+    await this.writeTemplates(rows);
+    return template;
+  }
+
+  async deleteDetailTemplate(
+    id: string,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
+    const rows = await this.readTemplates();
+    if (!rows.some((t) => t.id === id))
+      throw new DetailTemplateError(`Unknown template: ${id}`);
+    await this.writeTemplates(rows.filter((t) => t.id !== id));
+    // Clear the pointer from any level that referenced it.
+    const levels = resolveLevels(await this.readLevels());
+    if (levels.some((l) => l.detailTemplateId === id)) {
+      await this.writeLevels(
+        levels.map((l) =>
+          l.detailTemplateId === id ? { ...l, detailTemplateId: null } : l,
+        ),
+      );
+    }
+  }
+
+  async updateLevelTemplates(
+    templates: Record<string, string | null>,
+    _scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]> {
+    const current = resolveLevels(await this.readLevels());
+    const known = new Set(current.map((l) => l.key));
+    for (const key of Object.keys(templates)) {
+      if (!known.has(key)) throw new LevelError(`Unknown level: ${key}`);
+    }
+    const templateIds = new Set((await this.readTemplates()).map((t) => t.id));
+    for (const value of Object.values(templates)) {
+      if (value && !templateIds.has(value))
+        throw new LevelError(`Unknown detail template: ${value}`);
+    }
+    const updated = current.map((l) =>
+      Object.prototype.hasOwnProperty.call(templates, l.key)
+        ? { ...l, detailTemplateId: templates[l.key] ?? null }
+        : l,
+    );
+    await this.writeLevels(updated);
+    return updated;
   }
 
   // Releases persist to `.specboard/local-releases.json`.

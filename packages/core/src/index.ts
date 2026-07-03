@@ -2,6 +2,7 @@ export * from "./spec.js";
 export * from "./status.js";
 export * from "./config.js";
 export * from "./levels.js";
+export * from "./detail-templates.js";
 export * from "./properties.js";
 export * from "./products.js";
 export * from "./permissions.js";

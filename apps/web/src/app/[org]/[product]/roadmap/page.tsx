@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { parentLevelKey } from "@specboard/core";
+import { parentLevelKey, resolveWorkflow } from "@specboard/core";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
-import { ReleaseCreate, ReleaseDelete } from "@/components/release-controls";
+import {
+  ReleaseCreate,
+  ReleaseDelete,
+  ReleaseEdit,
+} from "@/components/release-controls";
 import { StatusDot } from "@/components/status-dot";
 import { WorkItemCreate } from "@/components/work-item-create";
 import { resolveActiveLevel } from "@/lib/active-level";
@@ -20,9 +24,15 @@ import { ALL_PRODUCTS, resolveActiveProduct } from "@/lib/active-product";
 import { itemPath, LOCAL_ORG_SLUG } from "@/lib/org-path";
 import { sortFeatures, statusLabel } from "@/lib/feature-helpers";
 import { productColorClasses } from "@/lib/product-color";
+import { getDb } from "@/lib/db";
+import { resolveRepoConfig } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { canWrite } from "@/lib/workspace";
+import {
+  canWrite,
+  listWorkspaceMembers,
+  type WorkspaceMember,
+} from "@/lib/workspace";
 import { canConnectRepos, requireWorkspaceAccess } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +62,15 @@ export default async function RoadmapPage({
     await store.listFeatures(access ?? undefined),
   ).filter((f) => f.status !== "archived");
   const releases = await store.listReleases(access ?? undefined);
+  const detailTemplates = await store.listDetailTemplates(access ?? undefined);
+
+  // Card creation needs the workspace status workflow (first status is the
+  // default) and the assignable members.
+  const repoConfig = await resolveRepoConfig(access);
+  const workflow = resolveWorkflow(repoConfig);
+  const db = getDb();
+  const members: WorkspaceMember[] =
+    access && db ? await listWorkspaceMembers(db, access.workspaceId) : [];
 
   // Roadmap scopes to the product in the URL (`all` = every product) and shows
   // one hierarchy level at a time (default: the Feature altitude).
@@ -79,21 +98,35 @@ export default async function RoadmapPage({
         .map((f) => ({ specId: f.specId, title: f.title, productId: f.productId }))
     : [];
   const parentLabel = levels.find((l) => l.key === parentKey)?.label ?? null;
+  // Seed the new-item Details editor with the active level's assigned template.
+  const templateBody =
+    detailTemplates.find((t) => t.id === activeLevel.detailTemplateId)?.body ??
+    "";
 
   // One column per release (already ordered: dated first), unscheduled last.
+  // `release` carries the full record so admins can edit it inline; it is null
+  // for the trailing "Unscheduled" bucket.
   const groups: Array<{
     releaseId: string | null;
     name: string;
     targetDate: string | null;
     status: string | null;
+    release: (typeof releases)[number] | null;
   }> = [
     ...releases.map((r) => ({
       releaseId: r.id as string | null,
       name: r.name,
       targetDate: r.targetDate,
       status: r.status as string | null,
+      release: r,
     })),
-    { releaseId: null, name: "Unscheduled", targetDate: null, status: null },
+    {
+      releaseId: null,
+      name: "Unscheduled",
+      targetDate: null,
+      status: null,
+      release: null,
+    },
   ];
 
   return (
@@ -113,6 +146,9 @@ export default async function RoadmapPage({
               parents={parents}
               productId={activeProduct?.id ?? null}
               products={products.map((p) => ({ id: p.id, name: p.name }))}
+              workflow={workflow}
+              members={members}
+              templateBody={templateBody}
             />
           ) : null}
         </div>
@@ -145,8 +181,19 @@ export default async function RoadmapPage({
                     </span>
                   ) : null}
                 </h2>
-                {isAdmin && group.releaseId ? (
-                  <ReleaseDelete id={group.releaseId} name={group.name} />
+                {isAdmin && group.release ? (
+                  <span className="flex shrink-0 items-center gap-2">
+                    <ReleaseEdit
+                      id={group.release.id}
+                      name={group.release.name}
+                      status={group.release.status}
+                      targetDate={group.release.targetDate}
+                    />
+                    <ReleaseDelete
+                      id={group.release.id}
+                      name={group.release.name}
+                    />
+                  </span>
                 ) : null}
               </div>
               {items.map((f) => {

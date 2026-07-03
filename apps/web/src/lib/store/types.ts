@@ -1,4 +1,7 @@
 import type {
+  DetailTemplate,
+  DetailTemplateInput,
+  DetailTemplatePatch,
   ProductAccess,
   ProductRole,
   ProductVisibility,
@@ -9,6 +12,9 @@ import type {
 } from "@specboard/core";
 
 export type {
+  DetailTemplate,
+  DetailTemplateInput,
+  DetailTemplatePatch,
   ProductAccess,
   ProductRole,
   ProductVisibility,
@@ -16,6 +22,9 @@ export type {
   PropertyType,
   WorkspaceLevel,
 };
+
+/** Raised when a detail template can't be created/updated/deleted. */
+export class DetailTemplateError extends Error {}
 
 /** A value stored for an admin-defined custom property (see PropertyDef). */
 export type CustomFieldValue = string | number | boolean | string[] | null;
@@ -182,7 +191,10 @@ export type FeaturePatch = Partial<
     | "customFields"
     | "parentSpecId"
   >
->;
+> & {
+  /** Markdown body for a DB-native item; ignored for spec-backed items. */
+  details?: string | null;
+};
 
 /**
  * Fields to create a DB-native work item (an initiative/epic — a non-leaf
@@ -198,6 +210,8 @@ export interface CreateFeatureInput {
   status?: string;
   assigneeId?: string | null;
   tags?: string[];
+  /** Markdown body for the new DB-native item, or null/omitted for a blank body. */
+  details?: string | null;
 }
 
 /** A product (sibling backlog) as the UI consumes it. */
@@ -418,6 +432,29 @@ export interface FeatureStore {
   ): Promise<PropertyDef>;
   /** Delete a property definition (stored item values are left in place). */
   deleteProperty(id: string, scope?: WorkspaceScope): Promise<void>;
+  /** The workspace's detail templates, ordered by name. */
+  listDetailTemplates(scope?: WorkspaceScope): Promise<DetailTemplate[]>;
+  /** Create a detail template; returns the new record. */
+  createDetailTemplate(
+    input: DetailTemplateInput,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate>;
+  /** Update a detail template's name/body. */
+  updateDetailTemplate(
+    id: string,
+    patch: DetailTemplatePatch,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate>;
+  /** Delete a detail template; levels pointing at it fall back to a blank body. */
+  deleteDetailTemplate(id: string, scope?: WorkspaceScope): Promise<void>;
+  /**
+   * Assign a default detail template per level (keyed by level key; null clears
+   * it). Unlisted levels are left unchanged. Returns the resolved levels.
+   */
+  updateLevelTemplates(
+    templates: Record<string, string | null>,
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]>;
   /** The workspace's releases, dated first (ascending), undated last. */
   listReleases(scope?: WorkspaceScope): Promise<ReleaseRecord[]>;
   /** Create a release; returns the new record. */

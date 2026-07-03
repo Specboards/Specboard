@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 
 import { Badge } from "@/components/ui/badge";
 import { DetailSection } from "@/components/detail-section";
+import { FeatureDetailsEditor } from "@/components/feature-details-editor";
 import { FeatureGithubLinks } from "@/components/feature-github-links";
 import { FeatureMetaForm } from "@/components/feature-meta-form";
 import { FeatureParentSelect } from "@/components/feature-parent-select";
@@ -251,12 +252,24 @@ export default async function ItemPage({
 
       <DetailSection id="details" title="Details">
         {feature.isDbNative ? (
-          <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-            {`This ${levelLabel.toLowerCase()} groups work and has no spec of its own.`}
-            {childLabel
-              ? ` Add ${childLabel.toLowerCase()} items beneath it to build it out.`
-              : ""}
-          </div>
+          canEdit ? (
+            // DB-native items have an inline Markdown body editable here.
+            <FeatureDetailsEditor
+              specId={feature.specId}
+              initial={feature.content}
+            />
+          ) : feature.content.trim() === "" ? (
+            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+              {`This ${levelLabel.toLowerCase()} groups work and has no spec of its own.`}
+              {childLabel
+                ? ` Add ${childLabel.toLowerCase()} items beneath it to build it out.`
+                : ""}
+            </div>
+          ) : (
+            <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
+              <ReactMarkdown>{feature.content}</ReactMarkdown>
+            </div>
+          )
         ) : (
           <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
             <ReactMarkdown>{feature.content}</ReactMarkdown>

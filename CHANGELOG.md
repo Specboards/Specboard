@@ -5,6 +5,28 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.5.0] - 2026-07-03
+
+### Added
+
+- Card details are now first-class. Creating an initiative/epic/feature captures
+  a **Details** body in a rich-text editor that stores Markdown behind the
+  scenes, with a "Raw" toggle to edit the Markdown source directly. Details are
+  shown and editable on the item page after creation (migration 0022 adds
+  `features.details`).
+- New-card creation also captures **Status** (defaults to the first stage in the
+  workflow) and **Assigned To**, alongside the title.
+- **Details Templates** (Settings → Cards): admins define reusable Markdown
+  skeletons and assign a default template per hierarchy level, so new cards at
+  that level start pre-filled. Ships with example templates to copy from.
+- **Release editing** on the Roadmap: rename a release and change its status or
+  target date inline, in addition to the existing create/delete.
+
+### Changed
+
+- The Roadmap and Backlog "New {level}" drawer now includes status, assignee,
+  and the Details editor.
+
 ## [0.4.0] - 2026-07-03
 
 ### Added

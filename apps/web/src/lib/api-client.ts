@@ -5,6 +5,9 @@ import type {
   CreatableRelationDirection,
   CreateFeatureInput,
   CreateProductInput,
+  DetailTemplate,
+  DetailTemplateInput,
+  DetailTemplatePatch,
   FeatureDetail,
   FeaturePatch,
   FeatureRecord,
@@ -167,6 +170,83 @@ export async function updateLevelFields(
     throw new Error(body?.error ?? `Update failed with ${res.status}`);
   }
   return body.levels;
+}
+
+/**
+ * Assign a default detail template per level (admin-only). Keys are level
+ * keys; null clears the assignment. Returns the refreshed levels.
+ */
+export async function updateLevelTemplates(
+  templates: Record<string, string | null>,
+): Promise<WorkspaceLevel[]> {
+  const res = await fetch("/api/v1/levels/templates", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ templates }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { levels?: WorkspaceLevel[]; error?: string }
+    | null;
+  if (!res.ok || !body?.levels) {
+    throw new Error(body?.error ?? `Update failed with ${res.status}`);
+  }
+  return body.levels;
+}
+
+/** Create a detail template (admin-only on the server); returns it. */
+export async function createDetailTemplate(
+  input: DetailTemplateInput,
+): Promise<DetailTemplate> {
+  const res = await fetch("/api/v1/detail-templates", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { template?: DetailTemplate; error?: string }
+    | null;
+  if (!res.ok || !body?.template) {
+    throw new Error(body?.error ?? `Create template failed with ${res.status}`);
+  }
+  return body.template;
+}
+
+/** Update a detail template (admin-only); returns the updated record. */
+export async function updateDetailTemplate(
+  id: string,
+  patch: DetailTemplatePatch,
+): Promise<DetailTemplate> {
+  const res = await fetch(
+    `/api/v1/detail-templates/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+  );
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { template?: DetailTemplate; error?: string }
+    | null;
+  if (!res.ok || !body?.template) {
+    throw new Error(body?.error ?? `Update template failed with ${res.status}`);
+  }
+  return body.template;
+}
+
+/** Delete a detail template (admin-only). */
+export async function deleteDetailTemplate(id: string): Promise<void> {
+  const res = await fetch(
+    `/api/v1/detail-templates/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Delete template failed with ${res.status}`);
+  }
 }
 
 /** Define a custom property (admin-only on the server); returns it. */

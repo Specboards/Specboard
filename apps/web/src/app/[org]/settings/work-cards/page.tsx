@@ -1,4 +1,5 @@
 import { CardsFieldsEditor } from "@/components/cards-fields-editor";
+import { DetailTemplatesManager } from "@/components/detail-templates-manager";
 import { PropertiesManager } from "@/components/properties-manager";
 import { BUILTIN_METADATA_FIELDS } from "@/lib/card-fields";
 import { getStore } from "@/lib/store";
@@ -16,9 +17,10 @@ export const dynamic = "force-dynamic";
 export default async function CardsSettingsPage() {
   const access = await requireWorkspaceAccess();
   const store = await getStore();
-  const [levels, properties] = await Promise.all([
+  const [levels, properties, detailTemplates] = await Promise.all([
     store.listLevels(access ?? undefined),
     store.listProperties(access ?? undefined),
+    store.listDetailTemplates(access ?? undefined),
   ]);
   const canEdit = !access || access.role === "admin";
 
@@ -52,6 +54,22 @@ export default async function CardsSettingsPage() {
         <PropertiesManager
           levels={levels}
           properties={properties}
+          canEdit={canEdit}
+        />
+      </div>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">
+            Details templates
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Define reusable detail skeletons and assign one per level. New cards
+            at that level start from the template.
+          </p>
+        </div>
+        <DetailTemplatesManager
+          levels={levels}
+          templates={detailTemplates}
           canEdit={canEdit}
         />
       </div>
