@@ -23,8 +23,16 @@ end $$;
 -- 2. Schema + object privileges. RLS still gates every row; these grants just
 --    let the role reach the tables at all. SELECT on the Better Auth tables
 --    (users, sessions, ...) is intentional: the store reads `users` for
---    assignee display names. Those tables carry no RLS and are never written
---    through this connection.
+--    assignee display names and membership validation. Those tables carry no
+--    RLS and are never written through this connection.
+--
+--    NOTE (2026-07-03): the live test/prod clusters predate this script and
+--    use a `writer` group role (specboard_app is a member) with per-table
+--    grants on the tenant tables only. Auth tables were NOT granted there,
+--    which made the PR #75 assignee validation 500 (42501 on `users`); fixed
+--    with `grant select on users to writer;` on both DBs. If a store query
+--    ever touches another auth table (sessions, accounts, api_keys), grant it
+--    to `writer` the same way.
 grant usage on schema public to specboard_app;
 grant select, insert, update, delete on all tables in schema public to specboard_app;
 grant usage, select on all sequences in schema public to specboard_app;

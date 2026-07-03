@@ -5,6 +5,43 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.3.0] - 2026-07-03
+
+### Added
+
+- Settings → Cards (renamed from "Work cards"): admins choose which metadata
+  fields (priority, estimate, assignee, roadmap quarter, tags, and custom
+  fields) are available at each hierarchy level. Levels with no restriction
+  automatically pick up new custom fields. Stored per level (migration 0020)
+  and enforced in the metadata form on the item page and the board drawer.
+- The workspace's dedicated spec repository (created by the one-click
+  onboarding flow) is now marked as such (migration 0020) and shown with a
+  "(spec repo)" tag.
+
+### Changed
+
+- Work item details are organized into three collapsible sections: Metadata,
+  Details (the spec content), and Integrations (GitHub links). Collapsed or
+  expanded state is remembered between sessions. The board's edit drawer uses
+  the same Metadata and Integrations sections.
+- Metadata on cards now saves automatically: selects commit on change and
+  text fields when you pause or leave them. The "Save metadata" button is
+  gone; a subtle Saving/Saved indicator replaces it.
+- The guided "create your first spec" walkthrough now targets the dedicated
+  spec repo by default (previously it defaulted to the first connected
+  repository, which could silently commit the starter spec into an
+  application repo), lists the spec repo first in the picker, and names the
+  repository it committed to in the confirmation.
+- The "Prefer a dedicated repo just for specs?" instructions disappear from
+  the first-spec walkthrough once a dedicated spec repo exists.
+
+### Fixed
+
+- Saving metadata on cards no longer fails with a 500 on hosted deployments:
+  the app's row-level-security database role was missing SELECT on `users`,
+  which the assignee validation introduced in 0.2.0 reads. (Database grant,
+  applied to both test and production.)
+
 ## [0.2.2] - 2026-07-03
 
 ### Fixed

@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { EstimateConfig, RepoConfig, StatusWorkflow } from "@specboard/core";
 
 import { AuthRequiredError, patchFeature } from "@/lib/api-client";
-import { Button } from "@/components/ui/button";
+import { CUSTOM_FIELD_PREFIX, isFieldAvailable } from "@/lib/card-fields";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { statusLabel, statusOptions } from "@/lib/feature-helpers";
@@ -15,7 +15,11 @@ import type { WorkspaceMember } from "@/lib/workspace";
 
 type FieldDef = RepoConfig["fields"][number];
 
-/** Metadata sidebar form; saves through the public /api/v1 surface. */
+/**
+ * Metadata form; saves through the public /api/v1 surface. Saves are
+ * automatic: selects commit on change, text inputs debounce and commit on
+ * blur. There is no manual save button.
+ */
 export function FeatureMetaForm({
   feature,
   members = [],
@@ -24,7 +28,7 @@ export function FeatureMetaForm({
   estimate,
   workflow,
   canEdit = true,
-  onSaved,
+  availableFields = null,
 }: {
   feature: FeatureDetail;
   members?: WorkspaceMember[];
@@ -36,52 +40,106 @@ export function FeatureMetaForm({
   /** Workspace status workflow (custom statuses/transitions); default if omitted. */
   workflow?: StatusWorkflow;
   canEdit?: boolean;
-  /** Called after a successful save (e.g. to close a drawer / toast). */
-  onSaved?: () => void;
+  /** Metadata field keys available at this item's level; null = all. */
+  availableFields?: string[] | null;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlightRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const show = (key: string) => isFieldAvailable(availableFields, key);
+  const visibleCustomFields = customFields.filter((f) =>
+    show(`${CUSTOM_FIELD_PREFIX}${f.key}`),
+  );
+
+  async function save() {
+    const form = formRef.current;
+    if (!form) return;
+    if (inFlightRef.current) {
+      // A save is running; remember to run once more with the latest values.
+      dirtyRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
+    setStatus("saving");
+    setError(null);
+
+    const data = new FormData(form);
     const rawPriority = String(data.get("priority") ?? "");
     const rawEstimate = String(data.get("estimate") ?? "");
-    startTransition(async () => {
-      setError(null);
-      try {
-        await patchFeature(feature.specId, {
-          status: String(data.get("status") ?? feature.status),
-          priority: rawPriority === "" ? null : Number(rawPriority),
-          estimate: rawEstimate === "" ? null : Number(rawEstimate),
-          roadmapQuarter: String(data.get("roadmapQuarter") ?? "").trim() || null,
-          tags: String(data.get("tags") ?? "")
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-          ...(members.length > 0
-            ? { assigneeId: String(data.get("assigneeId") ?? "") || null }
-            : {}),
-          ...(candidates.length > 0
-            ? { parentSpecId: String(data.get("parentSpecId") ?? "") || null }
-            : {}),
-          ...(customFields.length > 0
-            ? { customFields: collectCustomFields(customFields, data) }
-            : {}),
-        });
-        router.refresh();
-        onSaved?.();
-      } catch (err) {
-        if (err instanceof AuthRequiredError) {
-          router.push(
-            `/sign-in?from=${encodeURIComponent(window.location.pathname)}`,
-          );
-          return;
-        }
-        setError(err instanceof Error ? err.message : "Save failed.");
+    try {
+      await patchFeature(feature.specId, {
+        status: String(data.get("status") ?? feature.status),
+        ...(show("priority")
+          ? { priority: rawPriority === "" ? null : Number(rawPriority) }
+          : {}),
+        ...(show("estimate")
+          ? { estimate: rawEstimate === "" ? null : Number(rawEstimate) }
+          : {}),
+        ...(show("quarter")
+          ? {
+              roadmapQuarter:
+                String(data.get("roadmapQuarter") ?? "").trim() || null,
+            }
+          : {}),
+        ...(show("tags")
+          ? {
+              tags: String(data.get("tags") ?? "")
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean),
+            }
+          : {}),
+        ...(members.length > 0 && show("assignee")
+          ? { assigneeId: String(data.get("assigneeId") ?? "") || null }
+          : {}),
+        ...(candidates.length > 0
+          ? { parentSpecId: String(data.get("parentSpecId") ?? "") || null }
+          : {}),
+        ...(customFields.length > 0
+          ? {
+              customFields: collectCustomFields(
+                visibleCustomFields,
+                data,
+                feature.customFields,
+              ),
+            }
+          : {}),
+      });
+      setStatus("saved");
+      router.refresh();
+    } catch (err) {
+      if (err instanceof AuthRequiredError) {
+        router.push(
+          `/sign-in?from=${encodeURIComponent(window.location.pathname)}`,
+        );
+        return;
       }
-    });
+      setStatus("idle");
+      setError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      inFlightRef.current = false;
+      if (dirtyRef.current) {
+        dirtyRef.current = false;
+        void save();
+      }
+    }
+  }
+
+  /** Debounced save: selects commit fast, typing settles before a request. */
+  function queueSave(delay: number) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => void save(), delay);
   }
 
   if (!canEdit) {
@@ -94,7 +152,16 @@ export function FeatureMetaForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form
+      ref={formRef}
+      onSubmit={(e) => {
+        e.preventDefault();
+        queueSave(0);
+      }}
+      onChange={() => queueSave(600)}
+      onBlur={() => queueSave(0)}
+      className="space-y-3"
+    >
       <label className="block space-y-1.5">
         <span className="text-xs font-medium text-muted-foreground">
           Status
@@ -107,7 +174,7 @@ export function FeatureMetaForm({
           ))}
         </Select>
       </label>
-      {members.length > 0 ? (
+      {members.length > 0 && show("assignee") ? (
         <label className="block space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">
             Assignee
@@ -145,63 +212,71 @@ export function FeatureMetaForm({
           </Select>
         </label>
       ) : null}
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">
-          Priority (0 = highest)
-        </span>
-        <Input
-          name="priority"
-          type="number"
-          min={0}
-          max={4}
-          defaultValue={feature.priority ?? ""}
-          className="h-8"
-        />
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">
-          {estimate.label}
-        </span>
-        <Select
-          name="estimate"
-          defaultValue={feature.estimate ?? ""}
-          className="h-8"
-        >
-          <option value="">—</option>
-          {estimate.scale.map((points) => (
-            <option key={points} value={points}>
-              {points}
-            </option>
-          ))}
-        </Select>
-        {feature.childCount > 0 && feature.rolledEstimate !== null ? (
-          <span className="text-[11px] text-muted-foreground">
-            Subtree total: {feature.rolledEstimate}
+      {show("priority") ? (
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Priority (0 = highest)
           </span>
-        ) : null}
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">
-          Roadmap quarter
-        </span>
-        <Input
-          name="roadmapQuarter"
-          placeholder="2026-Q3"
-          defaultValue={feature.roadmapQuarter ?? ""}
-          className="h-8"
-        />
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium text-muted-foreground">
-          Tags (comma-separated)
-        </span>
-        <Input
-          name="tags"
-          defaultValue={feature.tags.join(", ")}
-          className="h-8"
-        />
-      </label>
-      {customFields.map((field) => (
+          <Input
+            name="priority"
+            type="number"
+            min={0}
+            max={4}
+            defaultValue={feature.priority ?? ""}
+            className="h-8"
+          />
+        </label>
+      ) : null}
+      {show("estimate") ? (
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            {estimate.label}
+          </span>
+          <Select
+            name="estimate"
+            defaultValue={feature.estimate ?? ""}
+            className="h-8"
+          >
+            <option value="">—</option>
+            {estimate.scale.map((points) => (
+              <option key={points} value={points}>
+                {points}
+              </option>
+            ))}
+          </Select>
+          {feature.childCount > 0 && feature.rolledEstimate !== null ? (
+            <span className="text-[11px] text-muted-foreground">
+              Subtree total: {feature.rolledEstimate}
+            </span>
+          ) : null}
+        </label>
+      ) : null}
+      {show("quarter") ? (
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Roadmap quarter
+          </span>
+          <Input
+            name="roadmapQuarter"
+            placeholder="2026-Q3"
+            defaultValue={feature.roadmapQuarter ?? ""}
+            className="h-8"
+          />
+        </label>
+      ) : null}
+      {show("tags") ? (
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Tags (comma-separated)
+          </span>
+          <Input
+            name="tags"
+            defaultValue={feature.tags.join(", ")}
+            className="h-8"
+          />
+        </label>
+      ) : null}
+      {visibleCustomFields.map((field) => (
         <label key={field.key} className="block space-y-1.5">
           <span className="text-xs font-medium text-muted-foreground">
             {field.label}
@@ -214,9 +289,13 @@ export function FeatureMetaForm({
         </label>
       ))}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        {pending ? "Saving…" : "Save metadata"}
-      </Button>
+      <p
+        className="h-4 text-[11px] text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
+        {status === "saving" ? "Saving…" : status === "saved" ? "Saved" : ""}
+      </p>
     </form>
   );
 }
@@ -283,13 +362,18 @@ function asString(value: CustomFieldValue): string {
   return typeof value === "string" ? value : "";
 }
 
-/** Read custom-field values out of the form into the patch's customFields map. */
+/**
+ * Read custom-field values out of the form into the patch's customFields map.
+ * The server replaces the whole map, so values for fields hidden at this
+ * level are carried over from the current record untouched.
+ */
 function collectCustomFields(
-  fields: FieldDef[],
+  visibleFields: FieldDef[],
   data: FormData,
+  current: Record<string, CustomFieldValue>,
 ): Record<string, CustomFieldValue> {
-  const out: Record<string, CustomFieldValue> = {};
-  for (const field of fields) {
+  const out: Record<string, CustomFieldValue> = { ...current };
+  for (const field of visibleFields) {
     const raw = String(data.get(`cf:${field.key}`) ?? "").trim();
     if (field.type === "number") {
       out[field.key] = raw === "" ? null : Number(raw);

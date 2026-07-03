@@ -57,6 +57,7 @@ export default async function RepositoriesSettingsPage({
       name: repositories.name,
       defaultBranch: repositories.defaultBranch,
       githubInstallationId: repositories.githubInstallationId,
+      isSpecRepo: repositories.isSpecRepo,
     })
     .from(repositories)
     .where(eq(repositories.workspaceId, access.workspaceId));

@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 
 import type { EstimateConfig, RepoConfig, StatusWorkflow } from "@specboard/core";
 
+import { DetailSection } from "@/components/detail-section";
 import { FeatureGithubLinks } from "@/components/feature-github-links";
 import { FeatureMetaForm } from "@/components/feature-meta-form";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -16,7 +15,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { AuthRequiredError, getFeature } from "@/lib/api-client";
+import { AuthRequiredError, getFeature, listLevels } from "@/lib/api-client";
 import type { FeatureDetail } from "@/lib/store/types";
 import { useOrgProductPath } from "@/lib/use-org";
 import type { WorkspaceMember } from "@/lib/workspace";
@@ -49,21 +48,28 @@ export function FeatureEditSheet({
   canEdit: boolean;
 }) {
   const [feature, setFeature] = useState<FeatureDetail | null>(null);
+  const [availableFields, setAvailableFields] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const orgHref = useOrgProductPath();
 
   useEffect(() => {
     if (!specId) {
       setFeature(null);
+      setAvailableFields(null);
       setError(null);
       return;
     }
     let cancelled = false;
     setFeature(null);
+    setAvailableFields(null);
     setError(null);
-    getFeature(specId)
-      .then((f) => {
-        if (!cancelled) setFeature(f);
+    Promise.all([getFeature(specId), listLevels()])
+      .then(([f, levels]) => {
+        if (cancelled) return;
+        setFeature(f);
+        setAvailableFields(
+          levels.find((l) => l.key === f.level)?.fields ?? null,
+        );
       })
       .catch((err) => {
         if (cancelled) return;
@@ -94,27 +100,27 @@ export function FeatureEditSheet({
         {error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : feature ? (
-          <>
-            <FeatureMetaForm
-              feature={feature}
-              members={members}
-              customFields={customFields}
-              candidates={candidates.filter((c) => c.specId !== feature.specId)}
-              estimate={estimate}
-              workflow={workflow}
-              canEdit={canEdit}
-              onSaved={() => {
-                toast.success("Saved");
-                onClose();
-              }}
-            />
-            <Separator />
-            <FeatureGithubLinks
-              specId={feature.specId}
-              links={feature.githubLinks}
-              canEdit={canEdit}
-            />
-          </>
+          <div className="space-y-3">
+            <DetailSection id="metadata" title="Metadata">
+              <FeatureMetaForm
+                feature={feature}
+                members={members}
+                customFields={customFields}
+                candidates={candidates.filter((c) => c.specId !== feature.specId)}
+                estimate={estimate}
+                workflow={workflow}
+                canEdit={canEdit}
+                availableFields={availableFields}
+              />
+            </DetailSection>
+            <DetailSection id="integrations" title="Integrations">
+              <FeatureGithubLinks
+                specId={feature.specId}
+                links={feature.githubLinks}
+                canEdit={canEdit}
+              />
+            </DetailSection>
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}

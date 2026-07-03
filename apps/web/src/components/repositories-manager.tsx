@@ -39,6 +39,8 @@ export interface ConnectedRepo {
   name: string;
   defaultBranch: string;
   githubInstallationId: string;
+  /** The workspace's dedicated spec repository (one-click created). */
+  isSpecRepo?: boolean;
 }
 
 export type SetupNotice = { kind: "ok" | "error"; message: string } | null;
@@ -380,10 +382,15 @@ function EmptySpecsState({
 }) {
   const router = useRouter();
   const [featureName, setFeatureName] = useState("");
-  const [repoId, setRepoId] = useState(repos[0]?.id ?? "");
+  // Target the dedicated spec repo when there is one; otherwise the first
+  // connected repo. A manual pick always wins.
+  const specRepo = repos.find((r) => r.isSpecRepo) ?? null;
+  const [pickedRepoId, setPickedRepoId] = useState<string | null>(null);
+  const repoId = pickedRepoId ?? specRepo?.id ?? repos[0]?.id ?? "";
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<StarterSpecResult | null>(null);
+  const targetRepo = repos.find((r) => r.id === repoId) ?? null;
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -412,8 +419,17 @@ function EmptySpecsState({
     return (
       <div className="space-y-3">
         <p className="text-sm">
-          Committed <code>{created.path}</code> and added it to your board. Edit the file in your
-          repo anytime, the card stays in sync.
+          Committed <code>{created.path}</code>
+          {targetRepo ? (
+            <>
+              {" "}to{" "}
+              <span className="font-medium">
+                {targetRepo.owner}/{targetRepo.name}
+              </span>
+            </>
+          ) : null}{" "}
+          and added it to your board. Edit the file in your repo anytime, the
+          card stays in sync.
         </p>
         <div className="flex items-center gap-2">
           <Link href={boardHref}>
@@ -450,15 +466,18 @@ function EmptySpecsState({
             <span className="text-xs font-medium text-muted-foreground">Repository</span>
             <select
               value={repoId}
-              onChange={(e) => setRepoId(e.target.value)}
+              onChange={(e) => setPickedRepoId(e.target.value)}
               disabled={pending}
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
             >
-              {repos.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.owner}/{r.name}
-                </option>
-              ))}
+              {[...repos]
+                .sort((a, b) => Number(b.isSpecRepo ?? false) - Number(a.isSpecRepo ?? false))
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.owner}/{r.name}
+                    {r.isSpecRepo ? " (spec repo)" : ""}
+                  </option>
+                ))}
             </select>
           </label>
         ) : null}
@@ -478,11 +497,15 @@ function EmptySpecsState({
           </Button>
         </div>
       </form>
-      <CreateSpecRepoNudge
-        installUrl={installUrl}
-        orgInstallationId={orgInstallationId}
-        onCreated={onRepoCreated}
-      />
+      {/* Once a dedicated spec repo exists, the "prefer a dedicated repo?"
+          instructions have served their purpose. */}
+      {specRepo ? null : (
+        <CreateSpecRepoNudge
+          installUrl={installUrl}
+          orgInstallationId={orgInstallationId}
+          onCreated={onRepoCreated}
+        />
+      )}
     </div>
   );
 }

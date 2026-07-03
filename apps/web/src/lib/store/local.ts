@@ -520,6 +520,24 @@ export class LocalFileStore implements FeatureStore {
     return resolved.levels;
   }
 
+  async updateLevelFields(
+    fields: Record<string, string[] | null>,
+    _scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]> {
+    const current = resolveLevels(await this.readLevels());
+    const known = new Set(current.map((l) => l.key));
+    for (const key of Object.keys(fields)) {
+      if (!known.has(key)) throw new LevelError(`Unknown level: ${key}`);
+    }
+    const updated = current.map((l) =>
+      Object.prototype.hasOwnProperty.call(fields, l.key)
+        ? { ...l, fields: fields[l.key] ?? null }
+        : l,
+    );
+    await this.writeLevels(updated);
+    return updated;
+  }
+
   async createFeature(
     input: CreateFeatureInput,
     _scope?: WorkspaceScope,

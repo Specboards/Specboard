@@ -561,11 +561,17 @@ export class DbStore implements FeatureStore {
         label: workspaceLevels.label,
         position: workspaceLevels.position,
         isLeaf: workspaceLevels.isLeaf,
+        cardFields: workspaceLevels.cardFields,
       })
       .from(workspaceLevels)
       .where(eq(workspaceLevels.workspaceId, workspaceId))
       .orderBy(asc(workspaceLevels.position));
-    return resolveLevels(rows);
+    return resolveLevels(
+      rows.map(({ cardFields, ...rest }) => ({
+        ...rest,
+        fields: Array.isArray(cardFields) ? (cardFields as string[]) : null,
+      })),
+    );
   }
 
   async listLevels(scope?: WorkspaceScope): Promise<WorkspaceLevel[]> {
@@ -626,6 +632,7 @@ export class DbStore implements FeatureStore {
             label: level.label,
             position: level.position,
             isLeaf: level.isLeaf,
+            cardFields: level.fields ?? null,
           })
           .onConflictDoUpdate({
             target: [workspaceLevels.workspaceId, workspaceLevels.key],
@@ -633,10 +640,45 @@ export class DbStore implements FeatureStore {
               label: level.label,
               position: level.position,
               isLeaf: level.isLeaf,
+              cardFields: level.fields ?? null,
             },
           });
       }
       return resolved.levels;
+    });
+  }
+
+  async updateLevelFields(
+    fields: Record<string, string[] | null>,
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const current = await this.levelsIn(tx, ws);
+      const byKey = new Map(current.map((l) => [l.key, l]));
+      for (const key of Object.keys(fields)) {
+        if (!byKey.has(key)) throw new LevelError(`Unknown level: ${key}`);
+      }
+      // Upsert: a fresh workspace may still be on the unpersisted default
+      // levels, so the row might not exist yet.
+      for (const [key, value] of Object.entries(fields)) {
+        const level = byKey.get(key)!;
+        await tx
+          .insert(workspaceLevels)
+          .values({
+            workspaceId: ws,
+            key: level.key,
+            label: level.label,
+            position: level.position,
+            isLeaf: level.isLeaf,
+            cardFields: value,
+          })
+          .onConflictDoUpdate({
+            target: [workspaceLevels.workspaceId, workspaceLevels.key],
+            set: { cardFields: value },
+          });
+      }
+      return this.levelsIn(tx, ws);
     });
   }
 

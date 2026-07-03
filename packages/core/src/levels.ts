@@ -15,6 +15,11 @@ export interface WorkspaceLevel {
   position: number;
   /** The single spec-backed leaf level. Higher levels are DB-native. */
   isLeaf: boolean;
+  /**
+   * Metadata field keys available on items at this level, chosen by admins in
+   * Settings. `null`/`undefined` = every field is available.
+   */
+  fields?: string[] | null;
 }
 
 /**
@@ -174,7 +179,9 @@ export function resolveLevelUpdate(
       key = levelKeyFromLabel(label, new Set([...seenKeys, ...currentKeys]));
     }
     seenKeys.add(key);
-    return { key, label, position: i, isLeaf: false };
+    // A kept level retains its field availability; new levels default to all.
+    const fields = currentLevels.find((l) => l.key === key)?.fields ?? null;
+    return { key, label, position: i, isLeaf: false, fields };
   });
 
   const leaf = levels[levels.length - 1]!;

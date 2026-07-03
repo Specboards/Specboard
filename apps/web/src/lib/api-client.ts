@@ -111,6 +111,17 @@ export async function deleteWorkItem(specId: string): Promise<void> {
   }
 }
 
+/** The workspace's hierarchy levels, ordered top → leaf. */
+export async function listLevels(): Promise<WorkspaceLevel[]> {
+  const res = await fetch("/api/v1/levels");
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { levels?: WorkspaceLevel[]; error?: string }
+    | null;
+  if (!res.ok) throw new Error(body?.error ?? `Failed to load levels (${res.status}).`);
+  return body?.levels ?? [];
+}
+
 /** Replace the workspace's hierarchy levels (admin-only); returns the new set. */
 export async function updateLevels(
   levels: LevelUpdate[],
@@ -119,6 +130,28 @@ export async function updateLevels(
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ levels }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { levels?: WorkspaceLevel[]; error?: string }
+    | null;
+  if (!res.ok || !body?.levels) {
+    throw new Error(body?.error ?? `Update failed with ${res.status}`);
+  }
+  return body.levels;
+}
+
+/**
+ * Set which metadata fields are available per level (admin-only). Keys are
+ * level keys; null = all fields. Returns the refreshed levels.
+ */
+export async function updateLevelFields(
+  fields: Record<string, string[] | null>,
+): Promise<WorkspaceLevel[]> {
+  const res = await fetch("/api/v1/levels/fields", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fields }),
   });
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as

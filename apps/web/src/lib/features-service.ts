@@ -338,6 +338,47 @@ export async function updateLevels(
   return store.updateLevels(levels, scope);
 }
 
+/** Parse an untrusted per-level field-availability update body. */
+export function parseLevelFieldsUpdate(
+  body: unknown,
+): Record<string, string[] | null> {
+  if (typeof body !== "object" || body === null) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = (body as { fields?: unknown }).fields;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new InvalidPatchError(
+      "fields must be an object keyed by level key.",
+    );
+  }
+  const out: Record<string, string[] | null> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (value === null) {
+      out[key] = null;
+      continue;
+    }
+    if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
+      throw new InvalidPatchError(
+        `fields.${key} must be null or an array of field keys.`,
+      );
+    }
+    if (value.length > 100) {
+      throw new InvalidPatchError(`fields.${key} lists too many fields.`);
+    }
+    out[key] = (value as string[]).map((v) => v.trim()).filter(Boolean);
+  }
+  return out;
+}
+
+/** Set per-level metadata field availability; returns the resolved levels. */
+export async function updateLevelFields(
+  fields: Record<string, string[] | null>,
+  scope?: WorkspaceScope,
+): Promise<WorkspaceLevel[]> {
+  const store = await getStore();
+  return store.updateLevelFields(fields, scope);
+}
+
 /** Create a DB-native work item (initiative/epic). Validation lives in the store. */
 export async function createWorkItem(
   input: CreateFeatureInput,
