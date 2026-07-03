@@ -14,9 +14,7 @@ interface SampleFeature {
   specId: string;
   title: string;
   status: string;
-  priority: number | null;
   tags: string[];
-  roadmapQuarter: string | null;
   path: string;
   content: string;
 }
@@ -26,20 +24,16 @@ const SAMPLE_FEATURES: SampleFeature[] = [
     specId: "a0000000-0000-4000-8000-000000000001",
     title: "Welcome to Specboard",
     status: "ready",
-    priority: 1,
     tags: ["welcome"],
-    roadmapQuarter: null,
     path: "specs/welcome/spec.md",
     content:
-      "## What this is\n\nSpecboard manages product work as **git-native specs**. Each feature is a `spec.md` in your repo; the board adds status, priority, and roadmap metadata on top.\n\n## Try it\n\nChange this card's status with the dropdown. The edit lands in the database, while the spec content stays canonical in git.",
+      "## What this is\n\nSpecboard manages product work as **git-native specs**. Each feature is a `spec.md` in your repo; the board adds status, assignee, and release metadata on top.\n\n## Try it\n\nChange this card's status with the dropdown. The edit lands in the database, while the spec content stays canonical in git.",
   },
   {
     specId: "a0000000-0000-4000-8000-000000000002",
     title: "Connect your GitHub repository",
     status: "backlog",
-    priority: 0,
     tags: ["setup", "git-sync"],
-    roadmapQuarter: "2026-Q3",
     path: "specs/connect-repo/spec.md",
     content:
       "## Goal\n\nConnect the GitHub repo where your specs live. Specboard installs a GitHub App, imports every `specs/**/spec.md`, and keeps the board in sync on every push.\n\n## Next\n\nAn admin connects the repo; once specs import, this sample board can be cleared.",
@@ -48,9 +42,7 @@ const SAMPLE_FEATURES: SampleFeature[] = [
     specId: "a0000000-0000-4000-8000-000000000003",
     title: "Write your first spec",
     status: "defining",
-    priority: 2,
     tags: ["specs"],
-    roadmapQuarter: null,
     path: "specs/first-spec/spec.md",
     content:
       "## Format\n\nA spec is markdown with `id` and `title` frontmatter. Specboard injects a stable `id` automatically on first import, so you only write the `title`.\n\n## Sections\n\nUse `##` headings. They're parsed into structured sections shown on the feature page.",
@@ -59,9 +51,7 @@ const SAMPLE_FEATURES: SampleFeature[] = [
     specId: "a0000000-0000-4000-8000-000000000004",
     title: "Invite your team",
     status: "backlog",
-    priority: 3,
     tags: ["team"],
-    roadmapQuarter: "2026-Q4",
     path: "specs/invite-team/spec.md",
     content:
       "## Roles\n\nThe first user is the admin. Everyone who signs up after joins as a viewer; an admin promotes them to an editor role to change metadata.",
@@ -101,9 +91,7 @@ export async function seedSampleData(db: Database, workspaceId: string): Promise
         specId: sample.specId,
         title: sample.title,
         status: sample.status,
-        priority: sample.priority,
         tags: sample.tags,
-        roadmapQuarter: sample.roadmapQuarter,
       })
       .onConflictDoUpdate({
         target: [features.repoId, features.specId],

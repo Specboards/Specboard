@@ -6,11 +6,13 @@ import {
   DEFAULT_PRODUCT_KEY,
   extractSections,
   isLeafLevel,
+  isPropertyType,
   isValidParentLevel,
   productKeyFromName,
+  propertyKeyFromLabel,
   resolveLevels,
   resolveLevelUpdate,
-  rollUpEstimates,
+  type PropertyDef,
   type WorkspaceLevel,
 } from "@specboard/core";
 import {
@@ -20,6 +22,7 @@ import {
   count,
   createDb,
   desc,
+  detailTemplates,
   eq,
   featureGithubLinks,
   featureLinks,
@@ -29,23 +32,33 @@ import {
   or,
   productMembers,
   products,
+  releases,
   repositories,
   savedViews,
   sql,
   specIndex,
   users,
   workspaceLevels,
+  workspaceProperties,
   type Database,
 } from "@specboard/db";
 
 import {
+  compareReleases,
+  DetailTemplateError,
   FeatureError,
   LevelError,
   ProductError,
+  PropertyError,
   RelationError,
+  ReleaseError,
+  RELEASE_STATUSES,
   type BoardPreferences,
   type CreateFeatureInput,
   type CreateProductInput,
+  type DetailTemplate,
+  type DetailTemplateInput,
+  type DetailTemplatePatch,
   type LevelUpdate,
   type CustomFieldValue,
   type FeatureDetail,
@@ -61,8 +74,14 @@ import {
   type ProductMemberRecord,
   type ProductPatch,
   type ProductRecord,
+  type PropertyInput,
+  type PropertyPatch,
   type RelationDirection,
   type RelationInput,
+  type ReleaseInput,
+  type ReleasePatch,
+  type ReleaseRecord,
+  type ReleaseStatus,
   type ResolvedGithubLink,
   type SavedView,
   type SavedViewFilters,
@@ -230,14 +249,6 @@ export class DbStore implements FeatureStore {
         if (isDone(r.status))
           childDone.set(r.parentId, (childDone.get(r.parentId) ?? 0) + 1);
       }
-      const rolled = rollUpEstimates(
-        rows.map((r) => ({
-          key: r.id,
-          parentKey:
-            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
-          estimate: r.estimate,
-        })),
-      );
       // GitHub link aggregate, rolled up over each visible feature's subtree.
       const ghLinks = (
         await tx
@@ -274,12 +285,9 @@ export class DbStore implements FeatureStore {
         isDbNative: row.repoId === null,
         productId: row.productId,
         status: row.status,
-        priority: row.priority,
-        estimate: row.estimate,
-        rolledEstimate: rolled.get(row.id) ?? null,
         rank: row.rank,
         tags: row.tags,
-        roadmapQuarter: row.roadmapQuarter,
+        releaseId: row.releaseId,
         assigneeId: row.assigneeId,
         customFields: toCustomFields(row.customFields),
         path: row.index?.path ?? "",
@@ -313,7 +321,9 @@ export class DbStore implements FeatureStore {
         this.productVisibilityIn(tx, scope!.workspaceId),
       ]);
       if (!canReadProductId(access, productById, row.productId)) return null;
-      const content = row.index?.content ?? "";
+      // Spec-backed items read their body from spec_index; DB-native items
+      // (initiatives/epics) keep it inline on features.details.
+      const content = row.index?.content ?? row.details ?? "";
       // Resolve the assignee's display name (separate lookup, since there's no
       // features→users relation, and assignees are usually few).
       let assigneeName: string | null = null;
@@ -420,34 +430,24 @@ export class DbStore implements FeatureStore {
         )
         .map(({ productId: _productId, ...child }) => child);
 
-      // Roll the estimate up over this feature's subtree. Needs the whole
-      // workspace tree, so pull just the three columns the roll-up uses.
-      const estimateRows = await tx
+      // The whole workspace tree (id + parent), for the subtree walks below.
+      const treeRows = await tx
         .select({
           id: features.id,
           parentId: features.parentId,
-          estimate: features.estimate,
           productId: features.productId,
         })
         .from(features)
         .where(eq(features.workspaceId, scope!.workspaceId));
-      const visibleEstimateRows = estimateRows.filter((r) =>
+      const visibleTreeRows = treeRows.filter((r) =>
         canReadProductId(access, productById, r.productId),
       );
-      const visibleIds = new Set(visibleEstimateRows.map((r) => r.id));
-      const rolled = rollUpEstimates(
-        visibleEstimateRows.map((r) => ({
-          key: r.id,
-          parentKey:
-            r.parentId && visibleIds.has(r.parentId) ? r.parentId : null,
-          estimate: r.estimate,
-        })),
-      );
+      const visibleIds = new Set(visibleTreeRows.map((r) => r.id));
 
       // GitHub links: this item's own + all descendants' (rolled up). Walk the
       // parent map down from `row.id` to collect the subtree feature ids.
       const childrenOf = new Map<string, string[]>();
-      for (const r of visibleEstimateRows) {
+      for (const r of visibleTreeRows) {
         if (!r.parentId || !visibleIds.has(r.parentId)) continue;
         (
           childrenOf.get(r.parentId) ??
@@ -523,12 +523,9 @@ export class DbStore implements FeatureStore {
         isDbNative: row.repoId === null,
         productId: row.productId,
         status: row.status,
-        priority: row.priority,
-        estimate: row.estimate,
-        rolledEstimate: rolled.get(row.id) ?? null,
         rank: row.rank,
         tags: row.tags,
-        roadmapQuarter: row.roadmapQuarter,
+        releaseId: row.releaseId,
         assigneeId: row.assigneeId,
         assigneeName,
         customFields: toCustomFields(row.customFields),
@@ -562,14 +559,16 @@ export class DbStore implements FeatureStore {
         position: workspaceLevels.position,
         isLeaf: workspaceLevels.isLeaf,
         cardFields: workspaceLevels.cardFields,
+        detailTemplateId: workspaceLevels.detailTemplateId,
       })
       .from(workspaceLevels)
       .where(eq(workspaceLevels.workspaceId, workspaceId))
       .orderBy(asc(workspaceLevels.position));
     return resolveLevels(
-      rows.map(({ cardFields, ...rest }) => ({
+      rows.map(({ cardFields, detailTemplateId, ...rest }) => ({
         ...rest,
         fields: Array.isArray(cardFields) ? (cardFields as string[]) : null,
+        detailTemplateId: detailTemplateId ?? null,
       })),
     );
   }
@@ -682,6 +681,151 @@ export class DbStore implements FeatureStore {
     });
   }
 
+  async updateLevelTemplates(
+    templates: Record<string, string | null>,
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const current = await this.levelsIn(tx, ws);
+      const byKey = new Map(current.map((l) => [l.key, l]));
+      for (const key of Object.keys(templates)) {
+        if (!byKey.has(key)) throw new LevelError(`Unknown level: ${key}`);
+      }
+      // Validate the referenced templates belong to this workspace.
+      const wanted = [
+        ...new Set(Object.values(templates).filter((v): v is string => !!v)),
+      ];
+      if (wanted.length > 0) {
+        const known = await tx
+          .select({ id: detailTemplates.id })
+          .from(detailTemplates)
+          .where(
+            and(
+              eq(detailTemplates.workspaceId, ws),
+              inArray(detailTemplates.id, wanted),
+            ),
+          );
+        const knownIds = new Set(known.map((t) => t.id));
+        for (const id of wanted) {
+          if (!knownIds.has(id))
+            throw new LevelError(`Unknown detail template: ${id}`);
+        }
+      }
+      for (const [key, value] of Object.entries(templates)) {
+        const level = byKey.get(key)!;
+        await tx
+          .insert(workspaceLevels)
+          .values({
+            workspaceId: ws,
+            key: level.key,
+            label: level.label,
+            position: level.position,
+            isLeaf: level.isLeaf,
+            cardFields: level.fields ?? null,
+            detailTemplateId: value,
+          })
+          .onConflictDoUpdate({
+            target: [workspaceLevels.workspaceId, workspaceLevels.key],
+            set: { detailTemplateId: value },
+          });
+      }
+      return this.levelsIn(tx, ws);
+    });
+  }
+
+  async listDetailTemplates(scope?: WorkspaceScope): Promise<DetailTemplate[]> {
+    return this.scoped(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: detailTemplates.id,
+          name: detailTemplates.name,
+          body: detailTemplates.body,
+        })
+        .from(detailTemplates)
+        .where(eq(detailTemplates.workspaceId, scope!.workspaceId))
+        .orderBy(asc(detailTemplates.name));
+      return rows;
+    });
+  }
+
+  async createDetailTemplate(
+    input: DetailTemplateInput,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    return this.scoped(scope, async (tx) => {
+      const name = input.name.trim();
+      if (!name) throw new DetailTemplateError("Template name is required.");
+      const [row] = await tx
+        .insert(detailTemplates)
+        .values({
+          workspaceId: scope!.workspaceId,
+          name,
+          body: input.body ?? "",
+        })
+        .onConflictDoNothing({
+          target: [detailTemplates.workspaceId, detailTemplates.name],
+        })
+        .returning({
+          id: detailTemplates.id,
+          name: detailTemplates.name,
+          body: detailTemplates.body,
+        });
+      if (!row)
+        throw new DetailTemplateError(
+          `A template named "${name}" already exists.`,
+        );
+      return row;
+    });
+  }
+
+  async updateDetailTemplate(
+    id: string,
+    patch: DetailTemplatePatch,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const set: Record<string, unknown> = { updatedAt: new Date() };
+      if (patch.name !== undefined) {
+        const name = patch.name.trim();
+        if (!name) throw new DetailTemplateError("Template name is required.");
+        set.name = name;
+      }
+      if (patch.body !== undefined) set.body = patch.body;
+      const [row] = await tx
+        .update(detailTemplates)
+        .set(set)
+        .where(
+          and(eq(detailTemplates.id, id), eq(detailTemplates.workspaceId, ws)),
+        )
+        .returning({
+          id: detailTemplates.id,
+          name: detailTemplates.name,
+          body: detailTemplates.body,
+        });
+      if (!row) throw new DetailTemplateError(`Unknown template: ${id}`);
+      return row;
+    });
+  }
+
+  async deleteDetailTemplate(id: string, scope?: WorkspaceScope): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      // workspace_levels.detail_template_id is ON DELETE SET NULL, so pointing
+      // levels fall back to a blank body automatically.
+      const deleted = await tx
+        .delete(detailTemplates)
+        .where(
+          and(
+            eq(detailTemplates.id, id),
+            eq(detailTemplates.workspaceId, scope!.workspaceId),
+          ),
+        )
+        .returning({ id: detailTemplates.id });
+      if (!deleted[0]) throw new DetailTemplateError(`Unknown template: ${id}`);
+    });
+  }
+
   async createFeature(
     input: CreateFeatureInput,
     scope?: WorkspaceScope,
@@ -759,11 +903,9 @@ export class DbStore implements FeatureStore {
           level: input.level,
           title,
           status: input.status ?? "backlog",
-          priority: input.priority ?? null,
-          estimate: input.estimate ?? null,
           assigneeId: input.assigneeId ?? null,
-          roadmapQuarter: input.roadmapQuarter ?? null,
           tags: input.tags ?? [],
+          details: input.details?.trim() ? input.details : null,
           parentId,
         })
         .returning();
@@ -776,12 +918,9 @@ export class DbStore implements FeatureStore {
         isDbNative: true,
         productId: row.productId,
         status: row.status,
-        priority: row.priority,
-        estimate: row.estimate,
-        rolledEstimate: row.estimate,
         rank: row.rank,
         tags: row.tags,
-        roadmapQuarter: row.roadmapQuarter,
+        releaseId: row.releaseId,
         assigneeId: row.assigneeId,
         customFields: toCustomFields(row.customFields),
         path: "",
@@ -850,6 +989,19 @@ export class DbStore implements FeatureStore {
       }
       if (typeof rest.assigneeId === "string" && rest.assigneeId) {
         await this.assertWorkspaceMember(tx, ws, rest.assigneeId);
+      }
+      // A release assignment must point at a release in this workspace.
+      if (typeof rest.releaseId === "string" && rest.releaseId) {
+        const release = await tx
+          .select({ id: releases.id })
+          .from(releases)
+          .where(
+            and(eq(releases.id, rest.releaseId), eq(releases.workspaceId, ws)),
+          )
+          .limit(1);
+        if (!release[0]) {
+          throw new RelationError(`Unknown release: ${rest.releaseId}`);
+        }
       }
       const set: Record<string, unknown> = { ...rest, updatedAt: new Date() };
       if (parentSpecId !== undefined) {
@@ -1222,6 +1374,220 @@ export class DbStore implements FeatureStore {
             updatedAt: new Date(),
           },
         });
+    });
+  }
+
+  // ── Custom properties ─────────────────────────────────────────────────
+
+  private async propertiesIn(tx: Tx, ws: string): Promise<PropertyDef[]> {
+    const rows = await tx
+      .select()
+      .from(workspaceProperties)
+      .where(eq(workspaceProperties.workspaceId, ws))
+      .orderBy(asc(workspaceProperties.position), asc(workspaceProperties.createdAt));
+    return rows.map(toPropertyDef);
+  }
+
+  async listProperties(scope?: WorkspaceScope): Promise<PropertyDef[]> {
+    return this.scoped(scope, (tx) => this.propertiesIn(tx, scope!.workspaceId));
+  }
+
+  async createProperty(
+    input: PropertyInput,
+    scope?: WorkspaceScope,
+  ): Promise<PropertyDef> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const label = input.label.trim();
+      if (!label) throw new PropertyError("Property label is required.");
+      if (!isPropertyType(input.type)) {
+        throw new PropertyError(`Unknown property type: ${String(input.type)}`);
+      }
+      const existing = await this.propertiesIn(tx, ws);
+      const key = propertyKeyFromLabel(label, new Set(existing.map((p) => p.key)));
+      const levels = await this.normalizeLevels(tx, ws, input.levels);
+      const position =
+        existing.reduce((m, p) => Math.max(m, p.position), -1) + 1;
+      const [row] = await tx
+        .insert(workspaceProperties)
+        .values({
+          workspaceId: ws,
+          key,
+          label,
+          type: input.type,
+          options: normalizeOptions(input.type, input.options),
+          levels,
+          position,
+        })
+        .returning();
+      if (!row) throw new PropertyError("Failed to create property.");
+      return toPropertyDef(row);
+    });
+  }
+
+  async updateProperty(
+    id: string,
+    patch: PropertyPatch,
+    scope?: WorkspaceScope,
+  ): Promise<PropertyDef> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const current = await tx.query.workspaceProperties.findFirst({
+        where: and(
+          eq(workspaceProperties.id, id),
+          eq(workspaceProperties.workspaceId, ws),
+        ),
+      });
+      if (!current) throw new PropertyError(`Unknown property: ${id}`);
+      const set: Record<string, unknown> = {};
+      if (patch.label !== undefined) {
+        const label = patch.label.trim();
+        if (!label) throw new PropertyError("Property label is required.");
+        set.label = label;
+      }
+      if (patch.options !== undefined) {
+        set.options = normalizeOptions(
+          current.type as PropertyDef["type"],
+          patch.options,
+        );
+      }
+      if (patch.levels !== undefined) {
+        set.levels = await this.normalizeLevels(tx, ws, patch.levels);
+      }
+      if (patch.position !== undefined) set.position = patch.position;
+      if (Object.keys(set).length === 0) return toPropertyDef(current);
+      const [row] = await tx
+        .update(workspaceProperties)
+        .set(set)
+        .where(
+          and(
+            eq(workspaceProperties.id, id),
+            eq(workspaceProperties.workspaceId, ws),
+          ),
+        )
+        .returning();
+      if (!row) throw new PropertyError(`Unknown property: ${id}`);
+      return toPropertyDef(row);
+    });
+  }
+
+  async deleteProperty(id: string, scope?: WorkspaceScope): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      const deleted = await tx
+        .delete(workspaceProperties)
+        .where(
+          and(
+            eq(workspaceProperties.id, id),
+            eq(workspaceProperties.workspaceId, scope!.workspaceId),
+          ),
+        )
+        .returning({ id: workspaceProperties.id });
+      if (!deleted[0]) throw new PropertyError(`Unknown property: ${id}`);
+    });
+  }
+
+  /** Validate a property's level list against the workspace hierarchy. */
+  private async normalizeLevels(
+    tx: Tx,
+    ws: string,
+    levels: string[] | null | undefined,
+  ): Promise<string[] | null> {
+    if (levels == null) return null;
+    const known = new Set((await this.levelsIn(tx, ws)).map((l) => l.key));
+    const cleaned = [...new Set(levels.map((l) => l.trim()).filter(Boolean))];
+    for (const key of cleaned) {
+      if (!known.has(key)) throw new PropertyError(`Unknown level: ${key}`);
+    }
+    return cleaned;
+  }
+
+  // ── Releases ──────────────────────────────────────────────────────────
+
+  async listReleases(scope?: WorkspaceScope): Promise<ReleaseRecord[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const [rows, counts] = await Promise.all([
+        tx.select().from(releases).where(eq(releases.workspaceId, ws)),
+        tx
+          .select({ releaseId: features.releaseId, n: count() })
+          .from(features)
+          .where(eq(features.workspaceId, ws))
+          .groupBy(features.releaseId),
+      ]);
+      const countById = new Map<string, number>();
+      for (const c of counts) {
+        if (c.releaseId) countById.set(c.releaseId, Number(c.n));
+      }
+      return rows
+        .map((r) => toReleaseRecord(r, countById.get(r.id) ?? 0))
+        .sort(compareReleases);
+    });
+  }
+
+  async createRelease(
+    input: ReleaseInput,
+    scope?: WorkspaceScope,
+  ): Promise<ReleaseRecord> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const name = input.name.trim();
+      if (!name) throw new ReleaseError("Release name is required.");
+      const [row] = await tx
+        .insert(releases)
+        .values({
+          workspaceId: ws,
+          name,
+          status: normalizeReleaseStatus(input.status),
+          targetDate: input.targetDate ?? null,
+        })
+        .onConflictDoNothing({ target: [releases.workspaceId, releases.name] })
+        .returning();
+      if (!row) throw new ReleaseError(`A release named "${name}" already exists.`);
+      return toReleaseRecord(row, 0);
+    });
+  }
+
+  async updateRelease(
+    id: string,
+    patch: ReleasePatch,
+    scope?: WorkspaceScope,
+  ): Promise<ReleaseRecord> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const set: Record<string, unknown> = { updatedAt: new Date() };
+      if (patch.name !== undefined) {
+        const name = patch.name.trim();
+        if (!name) throw new ReleaseError("Release name is required.");
+        set.name = name;
+      }
+      if (patch.status !== undefined) {
+        set.status = normalizeReleaseStatus(patch.status);
+      }
+      if (patch.targetDate !== undefined) set.targetDate = patch.targetDate;
+      const [row] = await tx
+        .update(releases)
+        .set(set)
+        .where(and(eq(releases.id, id), eq(releases.workspaceId, ws)))
+        .returning();
+      if (!row) throw new ReleaseError(`Unknown release: ${id}`);
+      const items = await tx
+        .select({ n: count() })
+        .from(features)
+        .where(and(eq(features.workspaceId, ws), eq(features.releaseId, id)));
+      return toReleaseRecord(row, Number(items[0]?.n ?? 0));
+    });
+  }
+
+  async deleteRelease(id: string, scope?: WorkspaceScope): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      // features.release_id is ON DELETE SET NULL, so items are unscheduled.
+      const deleted = await tx
+        .delete(releases)
+        .where(
+          and(eq(releases.id, id), eq(releases.workspaceId, scope!.workspaceId)),
+        )
+        .returning({ id: releases.id });
+      if (!deleted[0]) throw new ReleaseError(`Unknown release: ${id}`);
     });
   }
 
@@ -1608,6 +1974,57 @@ export class DbStore implements FeatureStore {
         );
     });
   }
+}
+
+/** Normalize a workspace_properties row into the UI's PropertyDef. */
+function toPropertyDef(row: {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  options: unknown;
+  levels: unknown;
+  position: number;
+}): PropertyDef {
+  return {
+    id: row.id,
+    key: row.key,
+    label: row.label,
+    type: row.type as PropertyDef["type"],
+    options: Array.isArray(row.options) ? (row.options as string[]) : [],
+    levels: Array.isArray(row.levels) ? (row.levels as string[]) : null,
+    position: row.position,
+  };
+}
+
+/** Options only make sense for select/multiselect; other types store none. */
+function normalizeOptions(
+  type: PropertyDef["type"],
+  options: string[] | undefined,
+): string[] {
+  if (type !== "select" && type !== "multiselect") return [];
+  return [...new Set((options ?? []).map((o) => o.trim()).filter(Boolean))];
+}
+
+function normalizeReleaseStatus(status: string | undefined): ReleaseStatus {
+  if (status === undefined) return "planned";
+  if (!(RELEASE_STATUSES as readonly string[]).includes(status)) {
+    throw new ReleaseError(`Unknown release status: ${status}`);
+  }
+  return status as ReleaseStatus;
+}
+
+function toReleaseRecord(
+  row: { id: string; name: string; status: string; targetDate: string | null },
+  itemCount: number,
+): ReleaseRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status as ReleaseStatus,
+    targetDate: row.targetDate,
+    itemCount,
+  };
 }
 
 /** Map a viewer-relative direction to a canonical stored edge. */

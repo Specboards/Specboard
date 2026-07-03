@@ -148,6 +148,20 @@
       "when": 1783087697420,
       "tag": "0020_woozy_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1783094060479,
+      "tag": "0021_careless_terrax",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783103516871,
+      "tag": "0022_fine_demogoblin",
+      "breakpoints": true
     }
   ]
 }

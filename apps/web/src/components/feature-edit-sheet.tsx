@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import type { EstimateConfig, RepoConfig, StatusWorkflow } from "@specboard/core";
+import {
+  propertyAppliesToLevel,
+  type PropertyDef,
+  type StatusWorkflow,
+} from "@specboard/core";
 
 import { DetailSection } from "@/components/detail-section";
 import { FeatureGithubLinks } from "@/components/feature-github-links";
@@ -16,24 +20,21 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { AuthRequiredError, getFeature, listLevels } from "@/lib/api-client";
-import type { FeatureDetail } from "@/lib/store/types";
+import type { FeatureDetail, ReleaseRecord } from "@/lib/store/types";
 import { useOrgProductPath } from "@/lib/use-org";
 import type { WorkspaceMember } from "@/lib/workspace";
-
-type FieldDef = RepoConfig["fields"][number];
 
 /**
  * In-context editor: opens a drawer for `specId`, loads its full detail, and
  * reuses {@link FeatureMetaForm}. Lets users edit a card without leaving the
- * board. `candidates` are parent options (filtered to exclude the open card).
+ * board. Hierarchy (parent/children) is edited on the item's detail page.
  */
 export function FeatureEditSheet({
   specId,
   onClose,
   members,
-  customFields,
-  candidates,
-  estimate,
+  properties,
+  releases,
   workflow,
   canEdit,
 }: {
@@ -41,9 +42,9 @@ export function FeatureEditSheet({
   specId: string | null;
   onClose: () => void;
   members: WorkspaceMember[];
-  customFields: FieldDef[];
-  candidates: { specId: string; title: string }[];
-  estimate: EstimateConfig;
+  /** The workspace's custom properties (filtered per item level here). */
+  properties: PropertyDef[];
+  releases: ReleaseRecord[];
   workflow?: StatusWorkflow;
   canEdit: boolean;
 }) {
@@ -105,9 +106,10 @@ export function FeatureEditSheet({
               <FeatureMetaForm
                 feature={feature}
                 members={members}
-                customFields={customFields}
-                candidates={candidates.filter((c) => c.specId !== feature.specId)}
-                estimate={estimate}
+                properties={properties.filter((p) =>
+                  propertyAppliesToLevel(p, feature.level),
+                )}
+                releases={releases}
                 workflow={workflow}
                 canEdit={canEdit}
                 availableFields={availableFields}

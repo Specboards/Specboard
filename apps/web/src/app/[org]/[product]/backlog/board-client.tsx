@@ -21,7 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 
-import type { EstimateConfig, RepoConfig, StatusWorkflow } from "@specboard/core";
+import type { PropertyDef, StatusWorkflow } from "@specboard/core";
 
 import { FeatureCard, type ProductTag } from "@/components/feature-card";
 import { FeatureEditSheet } from "@/components/feature-edit-sheet";
@@ -33,10 +33,8 @@ import {
   statusLabel,
   statusOptions,
 } from "@/lib/feature-helpers";
-import type { FeatureRecord } from "@/lib/store/types";
+import type { FeatureRecord, ReleaseRecord } from "@/lib/store/types";
 import type { WorkspaceMember } from "@/lib/workspace";
-
-type FieldDef = RepoConfig["fields"][number];
 
 const COL_PREFIX = "col:";
 
@@ -48,7 +46,6 @@ const COL_PREFIX = "col:";
  */
 export function BoardClient({
   features,
-  parentCandidates,
   columns,
   workflow,
   canEdit,
@@ -57,13 +54,11 @@ export function BoardClient({
   customFieldLabels,
   memberNames,
   members,
-  customFields,
-  estimate,
+  properties,
+  releases,
   productsById,
 }: {
   features: FeatureRecord[];
-  /** Items one level up — valid parents for the cards on this board. */
-  parentCandidates: { specId: string; title: string }[];
   columns: string[];
   workflow: StatusWorkflow;
   canEdit: boolean;
@@ -72,8 +67,10 @@ export function BoardClient({
   customFieldLabels: Record<string, string>;
   memberNames: Record<string, string>;
   members: WorkspaceMember[];
-  customFields: FieldDef[];
-  estimate: EstimateConfig;
+  /** The workspace's custom properties (for the edit drawer). */
+  properties: PropertyDef[];
+  /** The workspace's releases (release badge + edit drawer picker). */
+  releases: ReleaseRecord[];
   /** Product identity by id, for the per-card attribution badge in the
    * cross-product view. Omitted when the board is scoped to one product. */
   productsById?: Record<string, ProductTag>;
@@ -174,6 +171,7 @@ export function BoardClient({
   }
 
   const activeRecord = activeId ? records[activeId] : null;
+  const releaseNames = Object.fromEntries(releases.map((r) => [r.id, r.name]));
 
   return (
     <>
@@ -194,6 +192,7 @@ export function BoardClient({
               featured={featured}
               customFieldLabels={customFieldLabels}
               memberNames={memberNames}
+              releaseNames={releaseNames}
               workflow={workflow}
               canEdit={canEdit}
               onOpen={setEditingSpecId}
@@ -209,6 +208,7 @@ export function BoardClient({
               featured={featured}
               customFieldLabels={customFieldLabels}
               memberNames={memberNames}
+              releaseNames={releaseNames}
               workflow={workflow}
               canEdit={false}
               onOpen={() => {}}
@@ -225,9 +225,8 @@ export function BoardClient({
         specId={editingSpecId}
         onClose={() => setEditingSpecId(null)}
         members={members}
-        customFields={customFields}
-        candidates={parentCandidates}
-        estimate={estimate}
+        properties={properties}
+        releases={releases}
         workflow={workflow}
         canEdit={canEdit}
       />
@@ -243,6 +242,7 @@ function Column({
   featured,
   customFieldLabels,
   memberNames,
+  releaseNames,
   workflow,
   canEdit,
   onOpen,
@@ -255,6 +255,7 @@ function Column({
   featured: string | null;
   customFieldLabels: Record<string, string>;
   memberNames: Record<string, string>;
+  releaseNames: Record<string, string>;
   workflow: StatusWorkflow;
   canEdit: boolean;
   onOpen: (specId: string) => void;
@@ -286,6 +287,7 @@ function Column({
                   featured={featured}
                   customFieldLabels={customFieldLabels}
                   memberNames={memberNames}
+                  releaseNames={releaseNames}
                   workflow={workflow}
                   canEdit={canEdit}
                   onOpen={() => onOpen(id)}

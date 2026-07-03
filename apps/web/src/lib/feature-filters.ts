@@ -3,12 +3,13 @@ import type { FeatureRecord } from "@/lib/store/types";
 /**
  * Backlog filter state. Each dimension is single-valued and round-trips through
  * the URL query string so a filtered view is shareable/bookmarkable. Special
- * sentinels: `assignee="unassigned"` and `parent="none"` (top-level only).
+ * sentinels: `assignee="unassigned"`, `parent="none"` (top-level only), and
+ * `release="none"` (unscheduled only).
  */
 export interface FeatureFilters {
   status?: string;
   assignee?: string;
-  priority?: number;
+  release?: string;
   tag?: string;
   parent?: string;
   /** Owning product id; only meaningful in the cross-product view. */
@@ -19,7 +20,7 @@ export interface FeatureFilters {
 export const FILTER_KEYS = [
   "status",
   "assignee",
-  "priority",
+  "release",
   "tag",
   "parent",
   "product",
@@ -39,11 +40,8 @@ export function parseFeatureFilters(params: RawParams): FeatureFilters {
   if (status) filters.status = status;
   const assignee = first(params.assignee);
   if (assignee) filters.assignee = assignee;
-  const priority = first(params.priority);
-  if (priority !== undefined) {
-    const n = Number(priority);
-    if (Number.isInteger(n)) filters.priority = n;
-  }
+  const release = first(params.release);
+  if (release) filters.release = release;
   const tag = first(params.tag);
   if (tag) filters.tag = tag;
   const parent = first(params.parent);
@@ -72,8 +70,13 @@ export function applyFeatureFilters(
         return false;
       }
     }
-    if (filters.priority !== undefined && f.priority !== filters.priority)
-      return false;
+    if (filters.release) {
+      if (filters.release === "none") {
+        if (f.releaseId !== null) return false;
+      } else if (f.releaseId !== filters.release) {
+        return false;
+      }
+    }
     if (filters.tag && !f.tags.includes(filters.tag)) return false;
     if (filters.parent) {
       if (filters.parent === "none") {

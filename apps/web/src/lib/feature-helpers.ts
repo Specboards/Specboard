@@ -47,10 +47,6 @@ export function statusDotClassFor(status: string): string {
   return FALLBACK_DOT_CLASSES[hash % FALLBACK_DOT_CLASSES.length] ?? "bg-zinc-400";
 }
 
-export function priorityLabel(priority: number | null): string {
-  return priority === null ? "—" : `P${priority}`;
-}
-
 /** Statuses a feature may move to from `status` (current first, for selects). */
 export function statusOptions(
   status: string,
@@ -60,30 +56,22 @@ export function statusOptions(
   return [status, ...next.filter((s) => s !== status)];
 }
 
-/** Priority ascending (P0 first, unset last), then title. */
+/** Stable default ordering: by title. */
 export function sortFeatures(features: FeatureRecord[]): FeatureRecord[] {
-  return [...features].sort((a, b) => {
-    const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
-    const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
-    if (pa !== pb) return pa - pb;
-    return a.title.localeCompare(b.title);
-  });
+  return [...features].sort((a, b) => a.title.localeCompare(b.title));
 }
 
 /**
  * Order cards within a board column: manually-ranked cards first (by lexical
- * rank), then unranked cards by the default priority/title order. Cards gain a
- * rank lazily the first time they're dragged, so a fresh board keeps today's
- * ordering and converges on manual order as it's used.
+ * rank), then unranked cards by title. Cards gain a rank lazily the first
+ * time they're dragged, so a fresh board keeps today's ordering and converges
+ * on manual order as it's used.
  */
 export function sortBoardCards(features: FeatureRecord[]): FeatureRecord[] {
   return [...features].sort((a, b) => {
     if (a.rank !== null && b.rank !== null) return a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0;
     if (a.rank !== null) return -1;
     if (b.rank !== null) return 1;
-    const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
-    const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
-    if (pa !== pb) return pa - pb;
     return a.title.localeCompare(b.title);
   });
 }

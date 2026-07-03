@@ -5,25 +5,35 @@ import path from "node:path";
 import {
   DEFAULT_PRODUCT_KEY,
   isLeafLevel,
+  isPropertyType,
   isValidParentLevel,
   leafLevel,
   LOCAL_PRODUCT_ACCESS,
   parseSpec,
   productKeyFromName,
+  propertyKeyFromLabel,
   resolveLevels,
   resolveLevelUpdate,
-  rollUpEstimates,
+  type PropertyDef,
   type WorkspaceLevel,
 } from "@specboard/core";
 
 import {
+  compareReleases,
+  DetailTemplateError,
   FeatureError,
   LevelError,
   ProductError,
+  PropertyError,
   RelationError,
+  ReleaseError,
+  RELEASE_STATUSES,
   type BoardPreferences,
   type CreateFeatureInput,
   type CreateProductInput,
+  type DetailTemplate,
+  type DetailTemplateInput,
+  type DetailTemplatePatch,
   type LevelUpdate,
   type CustomFieldValue,
   type FeatureDetail,
@@ -37,6 +47,11 @@ import {
   type ProductMemberRecord,
   type ProductPatch,
   type ProductRecord,
+  type PropertyInput,
+  type PropertyPatch,
+  type ReleaseInput,
+  type ReleasePatch,
+  type ReleaseRecord,
   type ResolvedGithubLink,
   type RelationDirection,
   type RelationInput,
@@ -52,14 +67,23 @@ interface LocalItem {
   title: string;
   level: string;
   status: string;
-  priority: number | null;
-  estimate: number | null;
   assigneeId: string | null;
-  roadmapQuarter: string | null;
   tags: string[];
   parentSpecId: string | null;
+  /** Owning release id, or null when unscheduled. */
+  releaseId?: string | null;
   /** Owning product id; defaults to the default product when absent. */
   productId?: string | null;
+  /** Markdown details body, or null/absent for a blank body. */
+  details?: string | null;
+}
+
+/** A release persisted in local file mode. */
+interface LocalRelease {
+  id: string;
+  name: string;
+  status: "planned" | "in_progress" | "shipped";
+  targetDate: string | null;
 }
 
 /** A product (sibling backlog) persisted in local file mode. */
@@ -99,11 +123,10 @@ interface LocalLink {
 
 interface LocalMetadata {
   status?: string;
-  priority?: number | null;
-  estimate?: number | null;
   rank?: string | null;
   tags?: string[];
-  roadmapQuarter?: string | null;
+  /** Owning release id, or null when unscheduled. */
+  releaseId?: string | null;
   assigneeId?: string | null;
   customFields?: Record<string, CustomFieldValue>;
   /** Outgoing relations from this spec (see ./types FeatureRelation). */
@@ -196,6 +219,18 @@ export class LocalFileStore implements FeatureStore {
 
   private get productsPath() {
     return path.join(this.root, ".specboard", "local-products.json");
+  }
+
+  private get propertiesPath() {
+    return path.join(this.root, ".specboard", "local-properties.json");
+  }
+
+  private get releasesPath() {
+    return path.join(this.root, ".specboard", "local-releases.json");
+  }
+
+  private get templatesPath() {
+    return path.join(this.root, ".specboard", "local-detail-templates.json");
   }
 
   /** Persisted products, seeded with the default product when none exist. */
@@ -330,12 +365,9 @@ export class LocalFileStore implements FeatureStore {
         isDbNative: false,
         productId: m.productId ?? defaultProductId,
         status: m.status ?? "backlog",
-        priority: m.priority ?? null,
-        estimate: m.estimate ?? null,
-        rolledEstimate: null, // filled in by attachHierarchy
         rank: m.rank ?? null,
         tags: m.tags ?? [],
-        roadmapQuarter: m.roadmapQuarter ?? null,
+        releaseId: m.releaseId ?? null,
         assigneeId: m.assigneeId ?? null,
         assigneeName: null, // no user records in local file mode
         customFields: m.customFields ?? {},
@@ -364,17 +396,14 @@ export class LocalFileStore implements FeatureStore {
         isDbNative: true,
         productId: item.productId ?? defaultProductId,
         status: item.status,
-        priority: item.priority,
-        estimate: item.estimate,
-        rolledEstimate: null, // filled in by attachHierarchy
         rank: null,
         tags: item.tags ?? [],
-        roadmapQuarter: item.roadmapQuarter,
+        releaseId: item.releaseId ?? null,
         assigneeId: item.assigneeId,
         assigneeName: null,
         customFields: {},
         path: "",
-        content: "",
+        content: item.details ?? "",
         sections: [],
         relations: [],
         blocksCount: 0,
@@ -393,7 +422,7 @@ export class LocalFileStore implements FeatureStore {
     return features;
   }
 
-  /** Resolve parent titles + direct children + roll-up counts/estimates. */
+  /** Resolve parent titles + direct children + roll-up counts. */
   private attachHierarchy(features: FeatureDetail[]): void {
     const bySpec = new Map(features.map((f) => [f.specId, f]));
     for (const f of features) {
@@ -408,15 +437,6 @@ export class LocalFileStore implements FeatureStore {
       parent.childCount += 1;
       if (isDone(f.status)) parent.childDoneCount += 1;
     }
-    // Roll estimates up each subtree (parent pointers are now sanitized).
-    const rolled = rollUpEstimates(
-      features.map((f) => ({
-        key: f.specId,
-        parentKey: f.parentSpecId,
-        estimate: f.estimate,
-      })),
-    );
-    for (const f of features) f.rolledEstimate = rolled.get(f.specId) ?? null;
   }
 
   /** Resolve stored edges into per-feature relations + blocked counts. */
@@ -477,12 +497,12 @@ export class LocalFileStore implements FeatureStore {
       const it = items[idx]!;
       if (patch.title !== undefined) it.title = patch.title;
       if (patch.status !== undefined) it.status = patch.status;
-      if (patch.priority !== undefined) it.priority = patch.priority;
-      if (patch.estimate !== undefined) it.estimate = patch.estimate;
       if (patch.tags !== undefined) it.tags = patch.tags;
-      if (patch.roadmapQuarter !== undefined) it.roadmapQuarter = patch.roadmapQuarter;
+      if (patch.releaseId !== undefined) it.releaseId = patch.releaseId;
       if (patch.assigneeId !== undefined) it.assigneeId = patch.assigneeId;
       if (patch.parentSpecId !== undefined) it.parentSpecId = patch.parentSpecId;
+      if (patch.details !== undefined)
+        it.details = patch.details?.trim() ? patch.details : null;
       await this.writeItems(items);
       return;
     }
@@ -571,13 +591,12 @@ export class LocalFileStore implements FeatureStore {
       title,
       level: input.level,
       status: input.status ?? "backlog",
-      priority: input.priority ?? null,
-      estimate: input.estimate ?? null,
       assigneeId: input.assigneeId ?? null,
-      roadmapQuarter: input.roadmapQuarter ?? null,
       tags: input.tags ?? [],
       parentSpecId: input.parentSpecId ?? null,
+      releaseId: null,
       productId,
+      details: input.details?.trim() ? input.details : null,
     };
     const items = await this.readItems();
     await this.writeItems([...items, item]);
@@ -589,12 +608,9 @@ export class LocalFileStore implements FeatureStore {
       isDbNative: true,
       productId,
       status: item.status,
-      priority: item.priority,
-      estimate: item.estimate,
-      rolledEstimate: item.estimate,
       rank: null,
       tags: item.tags,
-      roadmapQuarter: item.roadmapQuarter,
+      releaseId: null,
       assigneeId: item.assigneeId,
       customFields: {},
       path: "",
@@ -766,6 +782,299 @@ export class LocalFileStore implements FeatureStore {
     );
   }
 
+  // Custom properties persist to `.specboard/local-properties.json`.
+  private async readProperties(): Promise<PropertyDef[]> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.propertiesPath, "utf8"),
+      ) as PropertyDef[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeProperties(rows: PropertyDef[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.propertiesPath), { recursive: true });
+    await fs.writeFile(
+      this.propertiesPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  async listProperties(_scope?: WorkspaceScope): Promise<PropertyDef[]> {
+    const rows = await this.readProperties();
+    return rows.sort((a, b) => a.position - b.position);
+  }
+
+  async createProperty(
+    input: PropertyInput,
+    _scope?: WorkspaceScope,
+  ): Promise<PropertyDef> {
+    const label = input.label.trim();
+    if (!label) throw new PropertyError("Property label is required.");
+    if (!isPropertyType(input.type)) {
+      throw new PropertyError(`Unknown property type: ${String(input.type)}`);
+    }
+    const rows = await this.readProperties();
+    const property: PropertyDef = {
+      id: randomUUID(),
+      key: propertyKeyFromLabel(label, new Set(rows.map((p) => p.key))),
+      label,
+      type: input.type,
+      options: localNormalizeOptions(input.type, input.options),
+      levels: input.levels ?? null,
+      position: rows.reduce((m, p) => Math.max(m, p.position), -1) + 1,
+    };
+    await this.writeProperties([...rows, property]);
+    return property;
+  }
+
+  async updateProperty(
+    id: string,
+    patch: PropertyPatch,
+    _scope?: WorkspaceScope,
+  ): Promise<PropertyDef> {
+    const rows = await this.readProperties();
+    const property = rows.find((p) => p.id === id);
+    if (!property) throw new PropertyError(`Unknown property: ${id}`);
+    if (patch.label !== undefined) {
+      const label = patch.label.trim();
+      if (!label) throw new PropertyError("Property label is required.");
+      property.label = label;
+    }
+    if (patch.options !== undefined) {
+      property.options = localNormalizeOptions(property.type, patch.options);
+    }
+    if (patch.levels !== undefined) property.levels = patch.levels;
+    if (patch.position !== undefined) property.position = patch.position;
+    await this.writeProperties(rows);
+    return property;
+  }
+
+  async deleteProperty(id: string, _scope?: WorkspaceScope): Promise<void> {
+    const rows = await this.readProperties();
+    if (!rows.some((p) => p.id === id))
+      throw new PropertyError(`Unknown property: ${id}`);
+    await this.writeProperties(rows.filter((p) => p.id !== id));
+  }
+
+  // Detail templates persist to `.specboard/local-detail-templates.json`.
+  private async readTemplates(): Promise<DetailTemplate[]> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.templatesPath, "utf8"),
+      ) as DetailTemplate[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeTemplates(rows: DetailTemplate[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.templatesPath), { recursive: true });
+    await fs.writeFile(
+      this.templatesPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  async listDetailTemplates(
+    _scope?: WorkspaceScope,
+  ): Promise<DetailTemplate[]> {
+    const rows = await this.readTemplates();
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createDetailTemplate(
+    input: DetailTemplateInput,
+    _scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    const name = input.name.trim();
+    if (!name) throw new DetailTemplateError("Template name is required.");
+    const rows = await this.readTemplates();
+    if (rows.some((t) => t.name === name))
+      throw new DetailTemplateError(`A template named "${name}" already exists.`);
+    const template: DetailTemplate = {
+      id: randomUUID(),
+      name,
+      body: input.body ?? "",
+    };
+    await this.writeTemplates([...rows, template]);
+    return template;
+  }
+
+  async updateDetailTemplate(
+    id: string,
+    patch: DetailTemplatePatch,
+    _scope?: WorkspaceScope,
+  ): Promise<DetailTemplate> {
+    const rows = await this.readTemplates();
+    const template = rows.find((t) => t.id === id);
+    if (!template) throw new DetailTemplateError(`Unknown template: ${id}`);
+    if (patch.name !== undefined) {
+      const name = patch.name.trim();
+      if (!name) throw new DetailTemplateError("Template name is required.");
+      if (rows.some((t) => t.id !== id && t.name === name))
+        throw new DetailTemplateError(`A template named "${name}" already exists.`);
+      template.name = name;
+    }
+    if (patch.body !== undefined) template.body = patch.body;
+    await this.writeTemplates(rows);
+    return template;
+  }
+
+  async deleteDetailTemplate(
+    id: string,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
+    const rows = await this.readTemplates();
+    if (!rows.some((t) => t.id === id))
+      throw new DetailTemplateError(`Unknown template: ${id}`);
+    await this.writeTemplates(rows.filter((t) => t.id !== id));
+    // Clear the pointer from any level that referenced it.
+    const levels = resolveLevels(await this.readLevels());
+    if (levels.some((l) => l.detailTemplateId === id)) {
+      await this.writeLevels(
+        levels.map((l) =>
+          l.detailTemplateId === id ? { ...l, detailTemplateId: null } : l,
+        ),
+      );
+    }
+  }
+
+  async updateLevelTemplates(
+    templates: Record<string, string | null>,
+    _scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]> {
+    const current = resolveLevels(await this.readLevels());
+    const known = new Set(current.map((l) => l.key));
+    for (const key of Object.keys(templates)) {
+      if (!known.has(key)) throw new LevelError(`Unknown level: ${key}`);
+    }
+    const templateIds = new Set((await this.readTemplates()).map((t) => t.id));
+    for (const value of Object.values(templates)) {
+      if (value && !templateIds.has(value))
+        throw new LevelError(`Unknown detail template: ${value}`);
+    }
+    const updated = current.map((l) =>
+      Object.prototype.hasOwnProperty.call(templates, l.key)
+        ? { ...l, detailTemplateId: templates[l.key] ?? null }
+        : l,
+    );
+    await this.writeLevels(updated);
+    return updated;
+  }
+
+  // Releases persist to `.specboard/local-releases.json`.
+  private async readReleases(): Promise<LocalRelease[]> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.releasesPath, "utf8"),
+      ) as LocalRelease[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeReleases(rows: LocalRelease[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.releasesPath), { recursive: true });
+    await fs.writeFile(
+      this.releasesPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  async listReleases(_scope?: WorkspaceScope): Promise<ReleaseRecord[]> {
+    const [rows, all] = await Promise.all([this.readReleases(), this.loadAll()]);
+    const counts = new Map<string, number>();
+    for (const f of all) {
+      if (f.releaseId) counts.set(f.releaseId, (counts.get(f.releaseId) ?? 0) + 1);
+    }
+    return rows
+      .map((r) => ({ ...r, itemCount: counts.get(r.id) ?? 0 }))
+      .sort(compareReleases);
+  }
+
+  async createRelease(
+    input: ReleaseInput,
+    _scope?: WorkspaceScope,
+  ): Promise<ReleaseRecord> {
+    const name = input.name.trim();
+    if (!name) throw new ReleaseError("Release name is required.");
+    const rows = await this.readReleases();
+    if (rows.some((r) => r.name === name)) {
+      throw new ReleaseError(`A release named "${name}" already exists.`);
+    }
+    const status = input.status ?? "planned";
+    if (!(RELEASE_STATUSES as readonly string[]).includes(status)) {
+      throw new ReleaseError(`Unknown release status: ${status}`);
+    }
+    const release: LocalRelease = {
+      id: randomUUID(),
+      name,
+      status,
+      targetDate: input.targetDate ?? null,
+    };
+    await this.writeReleases([...rows, release]);
+    return { ...release, itemCount: 0 };
+  }
+
+  async updateRelease(
+    id: string,
+    patch: ReleasePatch,
+    _scope?: WorkspaceScope,
+  ): Promise<ReleaseRecord> {
+    const rows = await this.readReleases();
+    const release = rows.find((r) => r.id === id);
+    if (!release) throw new ReleaseError(`Unknown release: ${id}`);
+    if (patch.name !== undefined) {
+      const name = patch.name.trim();
+      if (!name) throw new ReleaseError("Release name is required.");
+      release.name = name;
+    }
+    if (patch.status !== undefined) {
+      if (!(RELEASE_STATUSES as readonly string[]).includes(patch.status)) {
+        throw new ReleaseError(`Unknown release status: ${patch.status}`);
+      }
+      release.status = patch.status;
+    }
+    if (patch.targetDate !== undefined) release.targetDate = patch.targetDate;
+    await this.writeReleases(rows);
+    const all = await this.loadAll();
+    return {
+      ...release,
+      itemCount: all.filter((f) => f.releaseId === id).length,
+    };
+  }
+
+  async deleteRelease(id: string, _scope?: WorkspaceScope): Promise<void> {
+    const rows = await this.readReleases();
+    if (!rows.some((r) => r.id === id))
+      throw new ReleaseError(`Unknown release: ${id}`);
+    await this.writeReleases(rows.filter((r) => r.id !== id));
+    // Unschedule the deleted release's items (mirrors the DB's SET NULL).
+    const items = await this.readItems();
+    let itemsChanged = false;
+    for (const item of items) {
+      if (item.releaseId === id) {
+        item.releaseId = null;
+        itemsChanged = true;
+      }
+    }
+    if (itemsChanged) await this.writeItems(items);
+    const meta = await this.readMetadata();
+    let metaChanged = false;
+    for (const m of Object.values(meta)) {
+      if (m.releaseId === id) {
+        m.releaseId = null;
+        metaChanged = true;
+      }
+    }
+    if (metaChanged) await this.writeMetadata(meta);
+  }
+
   // Products. Local file mode is a single all-powerful user (see core
   // LOCAL_PRODUCT_ACCESS), so visibility/permissions aren't enforced; products
   // persist to `.specboard/local-products.json` for switcher parity.
@@ -900,6 +1209,15 @@ export class LocalFileStore implements FeatureStore {
   ): Promise<void> {
     // Nothing to remove in file mode.
   }
+}
+
+/** Options only make sense for select/multiselect; other types store none. */
+function localNormalizeOptions(
+  type: PropertyDef["type"],
+  options: string[] | undefined,
+): string[] {
+  if (type !== "select" && type !== "multiselect") return [];
+  return [...new Set((options ?? []).map((o) => o.trim()).filter(Boolean))];
 }
 
 /** Walk upward from cwd to find the repo root (the dir holding `specs/`). */

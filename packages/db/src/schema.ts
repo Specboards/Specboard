@@ -65,11 +65,43 @@ export const workspaceLevels = pgTable(
      * lib/card-fields metadata catalog). NULL = every field is available.
      */
     cardFields: jsonb("card_fields"),
+    /**
+     * Default detail template seeded into a new item's body at this level, or
+     * NULL for a blank body. Cleared (SET NULL) if the template is deleted.
+     */
+    detailTemplateId: uuid("detail_template_id").references(
+      () => detailTemplates.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique("workspace_levels_ws_key_uq").on(t.workspaceId, t.key),
     index("workspace_levels_ws_idx").on(t.workspaceId),
+  ],
+);
+
+/**
+ * An admin-defined "Details Template" (Settings -> Cards): a Markdown skeleton
+ * of headings/body that seeds a new card's details. A level can point at one as
+ * its default via `workspace_levels.detail_template_id`.
+ */
+export const detailTemplates = pgTable(
+  "detail_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Markdown body used as the starting point for a card's details. */
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("detail_templates_ws_name_uq").on(t.workspaceId, t.name),
+    index("detail_templates_ws_idx").on(t.workspaceId),
   ],
 );
 
@@ -275,15 +307,24 @@ export const features = pgTable(
     parentId: uuid("parent_id").references((): AnyPgColumn => features.id, {
       onDelete: "set null",
     }),
-    priority: integer("priority"),
-    /** Effort estimate in points (validated against RepoConfig.estimate.scale). */
-    estimate: integer("estimate"),
+    /**
+     * Owning release, or null when unscheduled. `set null` on delete so
+     * removing a release unschedules its items rather than deleting them.
+     */
+    releaseId: uuid("release_id").references(() => releases.id, {
+      onDelete: "set null",
+    }),
     /** Fractional/lexical rank for manual backlog ordering. */
     rank: text("rank"),
     tags: text("tags").array().notNull().default([]),
-    roadmapQuarter: text("roadmap_quarter"),
-    /** Values for team-defined custom fields (see RepoConfig.fields). */
+    /** Values for admin-defined custom properties (see workspace_properties). */
     customFields: jsonb("custom_fields").notNull().default({}),
+    /**
+     * Markdown body for DB-native items (initiatives/epics), which have no
+     * spec file. Spec-backed leaf items read their body from spec_index
+     * instead; this stays null for them.
+     */
+    details: text("details"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -294,11 +335,69 @@ export const features = pgTable(
     index("features_product_idx").on(t.productId),
     index("features_workspace_level_idx").on(t.workspaceId, t.level),
     index("features_external_key_idx").on(t.workspaceId, t.externalKey),
+    index("features_release_idx").on(t.releaseId),
     foreignKey({
       columns: [t.workspaceId, t.level],
       foreignColumns: [workspaceLevels.workspaceId, workspaceLevels.key],
       name: "features_workspace_level_fk",
     }),
+  ],
+);
+
+/**
+ * An admin-defined custom item property (Settings -> Cards). `key` is the
+ * stable slug values are stored under in `features.custom_fields`; `levels`
+ * lists the hierarchy level keys the property applies to (null = every level).
+ */
+export const workspaceProperties = pgTable(
+  "workspace_properties",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    /** One of core PROPERTY_TYPES: text/number/select/multiselect/date/user. */
+    type: text("type").notNull(),
+    /** string[] of choices for select/multiselect. */
+    options: jsonb("options").notNull().default([]),
+    /** string[] of level keys the property applies to; null = all levels. */
+    levels: jsonb("levels"),
+    /** Manual ordering in forms and settings; ascending. */
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("workspace_properties_ws_key_uq").on(t.workspaceId, t.key),
+    index("workspace_properties_ws_idx").on(t.workspaceId),
+  ],
+);
+
+/**
+ * A release: a named ship vehicle items are scheduled into
+ * (`features.release_id`). Drives the Roadmap grouping and the Backlog
+ * release filter. Workspace-scoped (not per product) so a release can span
+ * sibling backlogs.
+ */
+export const releases = pgTable(
+  "releases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** planned / in_progress / shipped. */
+    status: text("status").notNull().default("planned"),
+    /** Target ship date (date-only), or null when undated. */
+    targetDate: text("target_date"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("releases_ws_name_uq").on(t.workspaceId, t.name),
+    index("releases_ws_idx").on(t.workspaceId),
   ],
 );
 

@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import type { StatusWorkflow } from "@specboard/core";
+
+import { MarkdownEditor } from "@/components/markdown-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -14,6 +17,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { AuthRequiredError, createWorkItem } from "@/lib/api-client";
+import { statusLabel } from "@/lib/feature-helpers";
+import type { WorkspaceMember } from "@/lib/workspace";
 
 /**
  * "New {level}" button + drawer for creating a DB-native work item (an
@@ -28,6 +33,9 @@ export function WorkItemCreate({
   parents,
   productId,
   products,
+  workflow,
+  members = [],
+  templateBody = "",
 }: {
   levelKey: string;
   levelLabel: string;
@@ -39,11 +47,20 @@ export function WorkItemCreate({
   /** Products to choose from in the cross-product ("All products") view, where
    * no single product is in context. Omitted/empty when scoped to a product. */
   products?: { id: string; name: string }[];
+  /** Workspace status workflow; the first status is the default for new items. */
+  workflow: StatusWorkflow;
+  /** Assignable workspace members. */
+  members?: WorkspaceMember[];
+  /** Markdown seeded into the Details editor (from the level's template). */
+  templateBody?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const statuses = workflow.statuses;
+  const defaultStatus = statuses[0] ?? "backlog";
 
   // Offer a product picker only when no product is in context (all-products
   // view) and there's more than one to choose between.
@@ -68,6 +85,9 @@ export function WorkItemCreate({
     }
     const parentSpecId = String(data.get("parentSpecId") ?? "") || null;
     const chosenProductId = showProductPicker ? selectedProduct : productId;
+    const status = String(data.get("status") ?? defaultStatus) || defaultStatus;
+    const assigneeId = String(data.get("assigneeId") ?? "") || null;
+    const details = String(data.get("details") ?? "").trim() || null;
     startTransition(async () => {
       setError(null);
       try {
@@ -76,6 +96,9 @@ export function WorkItemCreate({
           level: levelKey,
           parentSpecId,
           productId: chosenProductId,
+          status,
+          assigneeId,
+          details,
         });
         toast.success(`${levelLabel} created`);
         setOpen(false);
@@ -98,17 +121,56 @@ export function WorkItemCreate({
         New {levelLabel.toLowerCase()}
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent>
+        <SheetContent className="overflow-y-auto sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>New {levelLabel.toLowerCase()}</SheetTitle>
           </SheetHeader>
-          <form onSubmit={onSubmit} className="space-y-3">
+          {/* Remount the form each time the drawer opens so a fresh status,
+              empty assignee, and the level's template body are restored. */}
+          <form key={open ? "open" : "closed"} onSubmit={onSubmit} className="space-y-3">
             <label className="block space-y-1.5">
               <span className="text-xs font-medium text-muted-foreground">
                 Title
               </span>
               <Input name="title" autoFocus className="h-8" />
             </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Status
+              </span>
+              <Select name="status" defaultValue={defaultStatus} className="h-8">
+                {statuses.map((s) => (
+                  <option key={s} value={s}>
+                    {statusLabel(s)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            {members.length > 0 ? (
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Assigned to
+                </span>
+                <Select name="assigneeId" defaultValue="" className="h-8">
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                Details
+              </span>
+              <MarkdownEditor
+                name="details"
+                defaultValue={templateBody}
+                placeholder="Describe the problem to solve, or the spec…"
+              />
+            </div>
             {showProductPicker ? (
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">

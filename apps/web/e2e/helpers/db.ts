@@ -1,11 +1,14 @@
 import {
   createDb,
+  detailTemplates,
   eq,
   features,
   githubInstallations,
+  releases,
   repositories,
   schema,
   sql,
+  workspaceProperties,
   workspaces,
 } from "@specboard/db";
 
@@ -49,6 +52,25 @@ export async function resetBoard(workspaceId: string): Promise<void> {
   await db()
     .delete(githubInstallations)
     .where(eq(githubInstallations.workspaceId, workspaceId));
+}
+
+/** Remove every release in the workspace (items are unscheduled by SET NULL). */
+export async function resetReleases(workspaceId: string): Promise<void> {
+  await db().delete(releases).where(eq(releases.workspaceId, workspaceId));
+}
+
+/** Remove every custom property definition in the workspace. */
+export async function resetProperties(workspaceId: string): Promise<void> {
+  await db()
+    .delete(workspaceProperties)
+    .where(eq(workspaceProperties.workspaceId, workspaceId));
+}
+
+/** Remove every detail template (levels pointing at them are SET NULL). */
+export async function resetDetailTemplates(workspaceId: string): Promise<void> {
+  await db()
+    .delete(detailTemplates)
+    .where(eq(detailTemplates.workspaceId, workspaceId));
 }
 
 /** Bind a GitHub App installation to the workspace (mirrors the setup callback). */

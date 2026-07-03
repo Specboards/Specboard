@@ -29,10 +29,9 @@ export interface Feature {
   isDbNative: boolean;
   productId: string | null;
   status: string;
-  priority: number | null;
   assigneeId: string | null;
   tags: string[];
-  roadmapQuarter: string | null;
+  releaseId: string | null;
   parentSpecId: string | null;
   path: string;
 }
@@ -47,11 +46,10 @@ export type GithubLinkKind = "pull_request" | "issue" | "branch";
 
 export interface FeaturePatch {
   status?: string;
-  priority?: number | null;
   assigneeId?: string | null;
   title?: string;
   tags?: string[];
-  roadmapQuarter?: string | null;
+  releaseId?: string | null;
 }
 
 export class SpecboardClient {

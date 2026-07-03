@@ -1,14 +1,32 @@
 import type {
+  DetailTemplate,
+  DetailTemplateInput,
+  DetailTemplatePatch,
   ProductAccess,
   ProductRole,
   ProductVisibility,
+  PropertyDef,
+  PropertyType,
   SpecSection,
   WorkspaceLevel,
 } from "@specboard/core";
 
-export type { ProductAccess, ProductRole, ProductVisibility, WorkspaceLevel };
+export type {
+  DetailTemplate,
+  DetailTemplateInput,
+  DetailTemplatePatch,
+  ProductAccess,
+  ProductRole,
+  ProductVisibility,
+  PropertyDef,
+  PropertyType,
+  WorkspaceLevel,
+};
 
-/** A value stored for a team-defined custom field (see RepoConfig.fields). */
+/** Raised when a detail template can't be created/updated/deleted. */
+export class DetailTemplateError extends Error {}
+
+/** A value stored for an admin-defined custom property (see PropertyDef). */
 export type CustomFieldValue = string | number | boolean | string[] | null;
 
 /** A feature as the UI consumes it: spec identity + PM metadata. */
@@ -27,21 +45,14 @@ export interface FeatureRecord {
   /** Owning product (sibling backlog), or null for legacy/unassigned rows. */
   productId: string | null;
   status: string;
-  priority: number | null;
-  /** Effort estimate in points (against RepoConfig.estimate.scale), or null. */
-  estimate: number | null;
   /** Fractional/lexical rank for manual board ordering; null until first dragged. */
   rank: string | null;
-  /**
-   * Estimate rolled up over this feature's subtree (itself + all descendants).
-   * Equals `estimate` for a leaf; null when nothing in the subtree is estimated.
-   */
-  rolledEstimate: number | null;
   tags: string[];
-  roadmapQuarter: string | null;
+  /** Owning release, or null when unscheduled. */
+  releaseId: string | null;
   /** Assigned user id, or null when unassigned. */
   assigneeId: string | null;
-  /** Values keyed by custom-field key (see RepoConfig.fields). */
+  /** Values keyed by custom-property key (see PropertyDef). */
   customFields: Record<string, CustomFieldValue>;
   /** Spec path relative to the repo root. */
   path: string;
@@ -173,16 +184,17 @@ export type FeaturePatch = Partial<
     FeatureRecord,
     | "title"
     | "status"
-    | "priority"
-    | "estimate"
     | "rank"
     | "tags"
-    | "roadmapQuarter"
+    | "releaseId"
     | "assigneeId"
     | "customFields"
     | "parentSpecId"
   >
->;
+> & {
+  /** Markdown body for a DB-native item; ignored for spec-backed items. */
+  details?: string | null;
+};
 
 /**
  * Fields to create a DB-native work item (an initiative/epic — a non-leaf
@@ -196,11 +208,10 @@ export interface CreateFeatureInput {
   productId?: string | null;
   parentSpecId?: string | null;
   status?: string;
-  priority?: number | null;
-  estimate?: number | null;
   assigneeId?: string | null;
-  roadmapQuarter?: string | null;
   tags?: string[];
+  /** Markdown body for the new DB-native item, or null/omitted for a blank body. */
+  details?: string | null;
 }
 
 /** A product (sibling backlog) as the UI consumes it. */
@@ -261,6 +272,72 @@ export class ProductError extends Error {}
 export interface LevelUpdate {
   key?: string;
   label: string;
+}
+
+/** Fields to create a custom property; key/position are assigned by the store. */
+export interface PropertyInput {
+  label: string;
+  type: PropertyType;
+  options?: string[];
+  /** Level keys the property applies to; null/omitted = every level. */
+  levels?: string[] | null;
+}
+
+export type PropertyPatch = Partial<{
+  label: string;
+  options: string[];
+  levels: string[] | null;
+  position: number;
+}>;
+
+/** Raised when a property can't be created/updated/deleted. */
+export class PropertyError extends Error {}
+
+export type ReleaseStatus = "planned" | "in_progress" | "shipped";
+
+export const RELEASE_STATUSES: readonly ReleaseStatus[] = [
+  "planned",
+  "in_progress",
+  "shipped",
+];
+
+/** A release (ship vehicle) as the UI consumes it. */
+export interface ReleaseRecord {
+  id: string;
+  name: string;
+  status: ReleaseStatus;
+  /** Target ship date as YYYY-MM-DD, or null when undated. */
+  targetDate: string | null;
+  /** Count of items scheduled into this release. */
+  itemCount: number;
+}
+
+export interface ReleaseInput {
+  name: string;
+  status?: ReleaseStatus;
+  targetDate?: string | null;
+}
+
+export type ReleasePatch = Partial<{
+  name: string;
+  status: ReleaseStatus;
+  targetDate: string | null;
+}>;
+
+/** Raised when a release can't be created/updated/deleted. */
+export class ReleaseError extends Error {}
+
+/** Dated releases first (ascending target date), undated last, then by name. */
+export function compareReleases(
+  a: Pick<ReleaseRecord, "targetDate" | "name">,
+  b: Pick<ReleaseRecord, "targetDate" | "name">,
+): number {
+  if (a.targetDate !== b.targetDate) {
+    if (a.targetDate === null) return 1;
+    if (b.targetDate === null) return -1;
+    return a.targetDate < b.targetDate ? -1 : 1;
+  }
+  return a.name.localeCompare(b.name);
 }
 
 /** Raised when a work item can't be created/deleted (bad level, has a spec, …). */
@@ -340,6 +417,59 @@ export interface FeatureStore {
     fields: Record<string, string[] | null>,
     scope?: WorkspaceScope,
   ): Promise<WorkspaceLevel[]>;
+  /** The workspace's custom properties, ordered by position. */
+  listProperties(scope?: WorkspaceScope): Promise<PropertyDef[]>;
+  /** Create a custom property definition; returns it with its key/id. */
+  createProperty(
+    input: PropertyInput,
+    scope?: WorkspaceScope,
+  ): Promise<PropertyDef>;
+  /** Update a property's label/options/levels/position (type is fixed). */
+  updateProperty(
+    id: string,
+    patch: PropertyPatch,
+    scope?: WorkspaceScope,
+  ): Promise<PropertyDef>;
+  /** Delete a property definition (stored item values are left in place). */
+  deleteProperty(id: string, scope?: WorkspaceScope): Promise<void>;
+  /** The workspace's detail templates, ordered by name. */
+  listDetailTemplates(scope?: WorkspaceScope): Promise<DetailTemplate[]>;
+  /** Create a detail template; returns the new record. */
+  createDetailTemplate(
+    input: DetailTemplateInput,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate>;
+  /** Update a detail template's name/body. */
+  updateDetailTemplate(
+    id: string,
+    patch: DetailTemplatePatch,
+    scope?: WorkspaceScope,
+  ): Promise<DetailTemplate>;
+  /** Delete a detail template; levels pointing at it fall back to a blank body. */
+  deleteDetailTemplate(id: string, scope?: WorkspaceScope): Promise<void>;
+  /**
+   * Assign a default detail template per level (keyed by level key; null clears
+   * it). Unlisted levels are left unchanged. Returns the resolved levels.
+   */
+  updateLevelTemplates(
+    templates: Record<string, string | null>,
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceLevel[]>;
+  /** The workspace's releases, dated first (ascending), undated last. */
+  listReleases(scope?: WorkspaceScope): Promise<ReleaseRecord[]>;
+  /** Create a release; returns the new record. */
+  createRelease(
+    input: ReleaseInput,
+    scope?: WorkspaceScope,
+  ): Promise<ReleaseRecord>;
+  /** Update a release's name/status/target date. */
+  updateRelease(
+    id: string,
+    patch: ReleasePatch,
+    scope?: WorkspaceScope,
+  ): Promise<ReleaseRecord>;
+  /** Delete a release; its items are unscheduled, not deleted. */
+  deleteRelease(id: string, scope?: WorkspaceScope): Promise<void>;
   /** The acting user's effective product access (org-admin flag + per-product
    * grants), used for read-filtering and write authorization. */
   getProductAccess(scope?: WorkspaceScope): Promise<ProductAccess>;

@@ -20,6 +20,11 @@ export interface WorkspaceLevel {
    * Settings. `null`/`undefined` = every field is available.
    */
   fields?: string[] | null;
+  /**
+   * Id of the detail template (see DetailTemplate) seeded into a new card's
+   * body at this level, or `null`/`undefined` for a blank body.
+   */
+  detailTemplateId?: string | null;
 }
 
 /**
@@ -56,6 +61,18 @@ export function leafLevel(levels?: readonly WorkspaceLevel[] | null): WorkspaceL
   const leaf = resolved.at(-1);
   if (!leaf) throw new Error("resolveLevels returned no levels");
   return leaf;
+}
+
+/**
+ * The default browsing level for list views (Backlog/Roadmap): the level one
+ * above the leaf when the hierarchy has one (e.g. Feature in the default
+ * Initiative → Epic → Feature → Work Item setup), else the leaf itself.
+ */
+export function defaultBrowseLevel(
+  levels?: readonly WorkspaceLevel[] | null,
+): WorkspaceLevel {
+  const resolved = resolveLevels(levels);
+  return resolved.at(-2) ?? resolved.at(-1)!;
 }
 
 /** Whether `key` is the leaf (spec-backed) level. */

@@ -41,7 +41,13 @@ test.describe("onboarding: scan + import", () => {
     await expect(page.getByText(/Imported\s+2\s+specs/i)).toBeVisible();
     await page.getByRole("link", { name: /View your board/i }).click();
 
-    // The imported specs are now real cards on the board.
+    // The board opens on the Feature level: import auto-created one Feature
+    // grouping per spec folder (titled from the folder name).
+    await expect(page.getByText("Checkout", { exact: true })).toBeVisible();
+    await expect(page.getByText("Search", { exact: true })).toBeVisible();
+
+    // Switching to the leaf level shows the imported specs themselves.
+    await page.getByRole("link", { name: "Work Items" }).click();
     await expect(page.getByText("Checkout Flow")).toBeVisible();
     await expect(page.getByText("Search Ranking")).toBeVisible();
   });
