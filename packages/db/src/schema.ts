@@ -375,6 +375,33 @@ export const workspaceProperties = pgTable(
 );
 
 /**
+ * An admin-defined workflow stage (Settings -> Workflow). The ordered set of
+ * stages a feature moves through on the board. `key` is the stable slug stored
+ * in `features.status`; `label` is the editable display name (renaming a stage
+ * changes only the label, so items keep their status). When a workspace has no
+ * rows, the built-in default workflow applies. `archived` is a system status
+ * and is not stored here.
+ */
+export const workspaceStatuses = pgTable(
+  "workspace_statuses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    /** Manual ordering of stages (board column order); ascending. */
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("workspace_statuses_ws_key_uq").on(t.workspaceId, t.key),
+    index("workspace_statuses_ws_idx").on(t.workspaceId),
+  ],
+);
+
+/**
  * A release: a named ship vehicle items are scheduled into
  * (`features.release_id`). Drives the Roadmap grouping and the Backlog
  * release filter. Workspace-scoped (not per product) so a release can span

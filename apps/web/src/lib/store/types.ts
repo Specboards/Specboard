@@ -293,6 +293,22 @@ export type PropertyPatch = Partial<{
 /** Raised when a property can't be created/updated/deleted. */
 export class PropertyError extends Error {}
 
+/** An admin-defined workflow stage as the UI consumes it. */
+export interface WorkspaceStatus {
+  /** Stable slug stored in `features.status`. */
+  key: string;
+  /** Editable display name (renaming changes only this, not the key). */
+  label: string;
+  /** Board column / ordering position; ascending. */
+  position: number;
+}
+
+/** One stage in a workflow-replacement request. */
+export interface StatusStageInput {
+  key: string;
+  label: string;
+}
+
 export type ReleaseStatus = "planned" | "in_progress" | "shipped";
 
 export const RELEASE_STATUSES: readonly ReleaseStatus[] = [
@@ -421,6 +437,20 @@ export interface FeatureStore {
     fields: Record<string, string[] | null>,
     scope?: WorkspaceScope,
   ): Promise<WorkspaceLevel[]>;
+  /**
+   * The workspace's admin-defined workflow stages, ordered by position, or `[]`
+   * when the workspace uses the built-in default workflow.
+   */
+  listStatuses(scope?: WorkspaceScope): Promise<WorkspaceStatus[]>;
+  /**
+   * Replace the workspace's workflow stages. Items whose status is no longer a
+   * stage (and isn't the system `archived` status) are moved to the first
+   * stage. Returns the resolved, ordered stages after the update.
+   */
+  replaceStatuses(
+    stages: StatusStageInput[],
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceStatus[]>;
   /** The workspace's custom properties, ordered by position. */
   listProperties(scope?: WorkspaceScope): Promise<PropertyDef[]>;
   /** Create a custom property definition; returns it with its key/id. */

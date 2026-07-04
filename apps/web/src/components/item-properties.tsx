@@ -7,7 +7,9 @@ import {
   AlignLeft,
   Calendar,
   ChevronDownCircle,
+  ExternalLink,
   Hash,
+  Link as LinkIcon,
   List,
   Loader,
   Rocket,
@@ -40,6 +42,7 @@ const PROPERTY_TYPE_ICON: Record<PropertyType, LucideIcon> = {
   multiselect: List,
   date: Calendar,
   user: Users,
+  url: LinkIcon,
 };
 
 /**
@@ -153,7 +156,16 @@ export function ItemProperties({
   }
 
   if (!canEdit) {
-    return <ReadOnlyProperties feature={feature} members={members} properties={properties} releases={releases} show={show} />;
+    return (
+      <ReadOnlyProperties
+        feature={feature}
+        members={members}
+        properties={properties}
+        releases={releases}
+        workflow={workflow}
+        show={show}
+      />
+    );
   }
 
   return (
@@ -173,7 +185,7 @@ export function ItemProperties({
           <Select name="status" defaultValue={feature.status} className={INLINE_SELECT}>
             {statusOptions(feature.status, workflow).map((s) => (
               <option key={s} value={s}>
-                {statusLabel(s)}
+                {statusLabel(s, workflow)}
               </option>
             ))}
           </Select>
@@ -330,6 +342,33 @@ function CustomFieldInput({
     );
   }
 
+  if (property.type === "url") {
+    const current = asString(value);
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          name={name}
+          type="url"
+          inputMode="url"
+          defaultValue={current}
+          className={INLINE_INPUT}
+          placeholder="https://…"
+        />
+        {current ? (
+          <a
+            href={current}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open link"
+            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ExternalLink className="size-3.5" />
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
   if (property.type === "multiselect") {
     return (
       <Input
@@ -357,12 +396,14 @@ function ReadOnlyProperties({
   members,
   properties,
   releases,
+  workflow,
   show,
 }: {
   feature: FeatureDetail;
   members: WorkspaceMember[];
   properties: PropertyDef[];
   releases: ReleaseRecord[];
+  workflow?: StatusWorkflow;
   show: (key: string) => boolean;
 }) {
   const assignee = members.find((m) => m.userId === feature.assigneeId)?.name;
@@ -372,7 +413,7 @@ function ReadOnlyProperties({
       <PropertyRow icon={Loader} label="Status">
         <div className="flex items-center gap-2 px-2 py-1 text-sm">
           <StatusDot status={feature.status} />
-          {statusLabel(feature.status)}
+          {statusLabel(feature.status, workflow)}
         </div>
       </PropertyRow>
       {show("assignee") && assignee ? (
@@ -399,9 +440,22 @@ function ReadOnlyProperties({
             icon={PROPERTY_TYPE_ICON[property.type]}
             label={property.label}
           >
-            <span className={cn("px-2 py-1 text-sm", !text && "text-muted-foreground")}>
-              {text || "—"}
-            </span>
+            {property.type === "url" && text ? (
+              <a
+                href={text}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-2 py-1 text-sm text-primary hover:underline"
+              >
+                {text}
+              </a>
+            ) : (
+              <span
+                className={cn("px-2 py-1 text-sm", !text && "text-muted-foreground")}
+              >
+                {text || "—"}
+              </span>
+            )}
           </PropertyRow>
         );
       })}

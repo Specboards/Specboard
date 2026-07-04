@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -10,7 +10,9 @@ import {
   canTransition,
   resolveWorkflow,
   safeParseRepoConfig,
+  workflowFromStages,
   type ProductAccess,
+  type StatusWorkflow,
 } from "@specboard/core";
 import {
   createDb,
@@ -21,6 +23,7 @@ import {
   products,
   repositories,
   workspaces,
+  workspaceStatuses,
   type Database,
 } from "@specboard/db";
 
@@ -517,11 +520,7 @@ server.tool(
         );
       }
       // Validate against the workspace's (possibly custom) status workflow.
-      const [repo] = await db()
-        .select({ config: repositories.config })
-        .from(repositories)
-        .where(eq(repositories.workspaceId, scope.workspaceId));
-      const workflow = resolveWorkflow(safeParseRepoConfig(repo?.config));
+      const workflow = await resolveWorkspaceWorkflow(scope.workspaceId);
       if (!canTransition(row.status, status, workflow)) {
         return errorResult(
           new Error(`Illegal transition: ${row.status} -> ${status}`),
@@ -537,6 +536,28 @@ server.tool(
     }
   },
 );
+
+/**
+ * The workspace's status workflow. Precedence mirrors the web app: admin-defined
+ * stages (workspace_statuses) first, then the repo config's statuses, then the
+ * built-in default.
+ */
+async function resolveWorkspaceWorkflow(
+  workspaceId: string,
+): Promise<StatusWorkflow> {
+  const stages = await db()
+    .select({ key: workspaceStatuses.key, label: workspaceStatuses.label })
+    .from(workspaceStatuses)
+    .where(eq(workspaceStatuses.workspaceId, workspaceId))
+    .orderBy(asc(workspaceStatuses.position));
+  const custom = workflowFromStages(stages);
+  if (custom) return custom;
+  const [repo] = await db()
+    .select({ config: repositories.config })
+    .from(repositories)
+    .where(eq(repositories.workspaceId, workspaceId));
+  return resolveWorkflow(safeParseRepoConfig(repo?.config));
+}
 
 async function main() {
   const transport = new StdioServerTransport();

@@ -52,6 +52,8 @@ import {
   type ReleaseInput,
   type ReleasePatch,
   type ReleaseRecord,
+  type StatusStageInput,
+  type WorkspaceStatus,
   type ResolvedGithubLink,
   type RelationDirection,
   type RelationInput,
@@ -228,6 +230,10 @@ export class LocalFileStore implements FeatureStore {
 
   private get releasesPath() {
     return path.join(this.root, ".specboard", "local-releases.json");
+  }
+
+  private get statusesPath() {
+    return path.join(this.root, ".specboard", "local-statuses.json");
   }
 
   private get templatesPath() {
@@ -968,6 +974,38 @@ export class LocalFileStore implements FeatureStore {
   }
 
   // Releases persist to `.specboard/local-releases.json`.
+  async listStatuses(_scope?: WorkspaceScope): Promise<WorkspaceStatus[]> {
+    try {
+      const rows = JSON.parse(
+        await fs.readFile(this.statusesPath, "utf8"),
+      ) as WorkspaceStatus[];
+      return rows
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((r, i) => ({ ...r, position: i }));
+    } catch {
+      return [];
+    }
+  }
+
+  async replaceStatuses(
+    stages: StatusStageInput[],
+    _scope?: WorkspaceScope,
+  ): Promise<WorkspaceStatus[]> {
+    const rows: WorkspaceStatus[] = stages.map((s, i) => ({
+      key: s.key,
+      label: s.label,
+      position: i,
+    }));
+    await fs.mkdir(path.dirname(this.statusesPath), { recursive: true });
+    await fs.writeFile(
+      this.statusesPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+    return rows;
+  }
+
   private async readReleases(): Promise<LocalRelease[]> {
     try {
       return JSON.parse(

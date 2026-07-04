@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { parentLevelKey, resolveWorkflow } from "@specboard/core";
+import { parentLevelKey } from "@specboard/core";
 
 import { BoardClient } from "./board-client";
+import { BoardPrefsProvider } from "./board-prefs";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
 import { EmptyState } from "@/components/empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
@@ -13,7 +14,7 @@ import { ALL_PRODUCTS, resolveActiveProduct } from "@/lib/active-product";
 import { getBoardPreferences } from "@/lib/board-preferences-service";
 import { cardFieldCatalog, resolveCardFields } from "@/lib/card-fields";
 import { getDb } from "@/lib/db";
-import { resolveRepoConfig } from "@/lib/repo-config";
+import { resolveWorkflowFor } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
 import { canWrite, listWorkspaceMembers, type WorkspaceMember } from "@/lib/workspace";
 import { canConnectRepos, requireWorkspaceAccess } from "@/lib/workspace-access";
@@ -33,8 +34,7 @@ export async function BoardView({
   const access = await requireWorkspaceAccess();
   const canEdit = !access || canWrite(access.role);
 
-  const repoConfig = await resolveRepoConfig(access);
-  const workflow = resolveWorkflow(repoConfig);
+  const workflow = await resolveWorkflowFor(access);
   const columns = workflow.statuses.filter((s) => s !== "archived");
 
   const { product: productSlug } = await params;
@@ -99,65 +99,67 @@ export async function BoardView({
   );
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <WorkViewTabs />
-          <LevelSwitcher levels={levels} active={activeLevel.key} />
+    <BoardPrefsProvider
+      initialFields={cardFields}
+      initialFeatured={featured}
+      orderedKeys={catalog.map((f) => f.key)}
+    >
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <WorkViewTabs />
+            <LevelSwitcher levels={levels} active={activeLevel.key} />
+          </div>
+          <div className="flex items-center gap-2">
+            {canEdit && !activeLevel.isLeaf ? (
+              <WorkItemCreate
+                levelKey={activeLevel.key}
+                levelLabel={activeLevel.label}
+                parentLabel={parentLabel}
+                parents={parents}
+                productId={activeProduct?.id ?? null}
+                products={products.map((p) => ({ id: p.id, name: p.name }))}
+                workflow={workflow}
+                members={members}
+                templateBody={templateBody}
+              />
+            ) : null}
+            {features.length > 0 && canEdit ? (
+              <CardFieldsMenu
+                catalog={catalog}
+                customFields={properties.map((f) => ({
+                  key: f.key,
+                  label: f.label,
+                }))}
+              />
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {canEdit && !activeLevel.isLeaf ? (
-            <WorkItemCreate
-              levelKey={activeLevel.key}
-              levelLabel={activeLevel.label}
-              parentLabel={parentLabel}
-              parents={parents}
-              productId={activeProduct?.id ?? null}
-              products={products.map((p) => ({ id: p.id, name: p.name }))}
-              workflow={workflow}
-              members={members}
-              templateBody={templateBody}
-            />
-          ) : null}
-          {features.length > 0 && canEdit ? (
-            <CardFieldsMenu
-              catalog={catalog}
-              customFields={properties.map((f) => ({ key: f.key, label: f.label }))}
-              selected={cardFields}
-              featured={featured}
-            />
-          ) : null}
-        </div>
-      </div>
-      {features.length === 0 ? (
-        activeLevel.isLeaf ? (
-          <EmptyState canConnect={canConnectRepos(access)} />
+        {features.length === 0 ? (
+          activeLevel.isLeaf ? (
+            <EmptyState canConnect={canConnectRepos(access)} />
+          ) : (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No {activeLevel.label.toLowerCase()} items yet.
+              {canEdit ? ` Use “New ${activeLevel.label.toLowerCase()}” to add one.` : ""}
+            </p>
+          )
         ) : (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            No {activeLevel.label.toLowerCase()} items yet.
-            {canEdit ? ` Use “New ${activeLevel.label.toLowerCase()}” to add one.` : ""}
-          </p>
-        )
-      ) : (
-        <BoardClient
-          // Remount when the board's data set changes (level or product scope).
-          // BoardClient seeds drag-and-drop state from `features` once on mount,
-          // so without a fresh key it would keep showing the prior level's cards.
-          key={`${activeProduct?.id ?? ALL_PRODUCTS}:${activeLevel.key}`}
-          features={features}
-          columns={columns}
-          workflow={workflow}
-          canEdit={canEdit}
-          cardFields={cardFields}
-          featured={featured}
-          customFieldLabels={customFieldLabels}
-          memberNames={memberNames}
-          members={members}
-          properties={properties}
-          releases={releases}
-          productsById={productsById}
-        />
-      )}
-    </section>
+          <BoardClient
+            // Remount when the board's data set changes (level or product scope).
+            // BoardClient seeds drag-and-drop state from `features` once on mount,
+            // so without a fresh key it would keep showing the prior level's cards.
+            key={`${activeProduct?.id ?? ALL_PRODUCTS}:${activeLevel.key}`}
+            features={features}
+            columns={columns}
+            workflow={workflow}
+            customFieldLabels={customFieldLabels}
+            memberNames={memberNames}
+            releases={releases}
+            productsById={productsById}
+          />
+        )}
+      </section>
+    </BoardPrefsProvider>
   );
 }

@@ -4,13 +4,16 @@ import path from "node:path";
 import {
   parseRepoConfigYaml,
   resolveWorkflow,
+  workflowFromStages,
   type RepoConfig,
   type StatusWorkflow,
 } from "@specboard/core";
 
 import { getDb } from "@/lib/db";
 import { getWorkspaceRepoConfig } from "@/lib/github-sync";
+import { getStore } from "@/lib/store";
 import { findRepoRoot } from "@/lib/store/local";
+import type { WorkspaceScope } from "@/lib/store/types";
 
 /**
  * Resolve the active {@link RepoConfig} for a content page or request. In DB
@@ -37,12 +40,17 @@ export async function resolveRepoConfig(
 }
 
 /**
- * Resolve the workspace's status workflow (custom statuses/transitions from
- * config, or the built-in default). Drives board columns, status selects, and
- * transition validation.
+ * Resolve the workspace's status workflow. Precedence: admin-defined stages in
+ * the DB (Settings -> Workflow) first; then the repo config's statuses; then
+ * the built-in default. Drives board columns, status selects, and transition
+ * validation.
  */
 export async function resolveWorkflowFor(
-  scope: { workspaceId: string } | null,
+  scope: WorkspaceScope | null,
 ): Promise<StatusWorkflow> {
-  return resolveWorkflow(await resolveRepoConfig(scope));
+  const store = await getStore();
+  const stages = await store.listStatuses(scope ?? undefined);
+  return (
+    workflowFromStages(stages) ?? resolveWorkflow(await resolveRepoConfig(scope))
+  );
 }

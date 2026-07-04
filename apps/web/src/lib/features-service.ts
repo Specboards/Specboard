@@ -2,6 +2,7 @@ import {
   canTransition,
   isPropertyType,
   isValidParentLevel,
+  propertyKeyFromLabel,
   type PropertyDef,
 } from "@specboard/core";
 
@@ -32,6 +33,8 @@ import {
   type ReleasePatch,
   type ReleaseRecord,
   type ReleaseStatus,
+  type StatusStageInput,
+  type WorkspaceStatus,
 } from "@/lib/store/types";
 
 /**
@@ -624,6 +627,61 @@ export async function listReleases(
 ): Promise<ReleaseRecord[]> {
   const store = await getStore();
   return store.listReleases(scope);
+}
+
+/** The workspace's workflow stages, or `[]` when using the built-in default. */
+export async function listStatuses(
+  scope?: WorkspaceScope,
+): Promise<WorkspaceStatus[]> {
+  const store = await getStore();
+  return store.listStatuses(scope);
+}
+
+/** Replace the workspace's workflow stages. */
+export async function replaceStatuses(
+  stages: StatusStageInput[],
+  scope?: WorkspaceScope,
+): Promise<WorkspaceStatus[]> {
+  const store = await getStore();
+  return store.replaceStatuses(stages, scope);
+}
+
+/**
+ * Parse and validate an untrusted workflow-replacement body: `{ statuses:
+ * [{ key?, label }] }`. Requires at least two stages, each with a non-empty
+ * label. A caller-supplied `key` is honored when it's a valid, unique slug (so
+ * a stage's key stays stable across a rename); otherwise a key is derived from
+ * the label. `archived` is reserved for the system status.
+ */
+export function parseStatusStages(body: unknown): StatusStageInput[] {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = (body as { statuses?: unknown }).statuses;
+  if (!Array.isArray(raw)) {
+    throw new InvalidPatchError("statuses must be an array.");
+  }
+  if (raw.length < 2 || raw.length > 30) {
+    throw new InvalidPatchError("A workflow needs between 2 and 30 stages.");
+  }
+  const taken = new Set<string>();
+  return raw.map((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      throw new InvalidPatchError("Each stage must be an object.");
+    }
+    const e = entry as Record<string, unknown>;
+    const label = typeof e.label === "string" ? e.label.trim() : "";
+    if (!label) throw new InvalidPatchError("Each stage needs a label.");
+    const provided =
+      typeof e.key === "string" && /^[a-z0-9_]+$/.test(e.key) ? e.key : null;
+    let key =
+      provided && provided !== "archived" && !taken.has(provided)
+        ? provided
+        : propertyKeyFromLabel(label, taken);
+    if (key === "archived") key = propertyKeyFromLabel(`${label}_stage`, taken);
+    taken.add(key);
+    return { key, label };
+  });
 }
 
 /** Parse and validate an untrusted release-create body. */

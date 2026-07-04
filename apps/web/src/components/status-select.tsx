@@ -54,7 +54,7 @@ export function StatusSelect({
     >
       {statusOptions(status, workflow).map((s) => (
         <option key={s} value={s}>
-          {statusLabel(s)}
+          {statusLabel(s, workflow)}
         </option>
       ))}
     </Select>

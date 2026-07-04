@@ -28,7 +28,9 @@ import type {
   ReleaseRecord,
   SavedView,
   SavedViewInput,
+  StatusStageInput,
   WorkspaceLevel,
+  WorkspaceStatus,
 } from "@/lib/store/types";
 
 /**
@@ -267,6 +269,38 @@ export async function deleteDetailTemplate(id: string): Promise<void> {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `Delete template failed with ${res.status}`);
   }
+}
+
+// ── Workflow stages ─────────────────────────────────────────────────────
+
+/** The workspace's workflow stages ([] = built-in default workflow). */
+export async function listStatuses(): Promise<WorkspaceStatus[]> {
+  const res = await fetch("/api/v1/statuses");
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { statuses?: WorkspaceStatus[]; error?: string }
+    | null;
+  if (!res.ok) throw new Error(body?.error ?? `Failed to load workflow (${res.status}).`);
+  return body?.statuses ?? [];
+}
+
+/** Replace the workspace's workflow stages (admin-only); returns the new set. */
+export async function updateStatuses(
+  stages: StatusStageInput[],
+): Promise<WorkspaceStatus[]> {
+  const res = await fetch("/api/v1/statuses", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ statuses: stages }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { statuses?: WorkspaceStatus[]; error?: string }
+    | null;
+  if (!res.ok || !body?.statuses) {
+    throw new Error(body?.error ?? `Update workflow failed with ${res.status}`);
+  }
+  return body.statuses;
 }
 
 /** Define a custom property (admin-only on the server); returns it. */

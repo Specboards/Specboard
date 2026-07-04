@@ -1,37 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Settings2 } from "lucide-react";
-import { toast } from "sonner";
 
+import { useBoardPrefs } from "@/app/[org]/[product]/backlog/board-prefs";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
-import { AuthRequiredError, saveBoardPreferences } from "@/lib/api-client";
 import type { CardFieldDef } from "@/lib/card-fields";
 
 /**
  * Board toolbar control to customize which fields show on a card and which
- * custom field is "featured". Persists per-user via the board-preferences API.
+ * custom field is "featured". Reads and writes the shared board preferences
+ * (see {@link useBoardPrefs}), so toggling a field updates the cards instantly
+ * while the change persists in the background.
  */
 export function CardFieldsMenu({
   catalog,
   customFields,
-  selected,
-  featured,
 }: {
   catalog: CardFieldDef[];
   /** Custom fields (key + label) that can be featured. */
   customFields: { key: string; label: string }[];
-  selected: string[];
-  featured: string | null;
 }) {
-  const router = useRouter();
+  const { cardFields, featured, toggleField, setFeatured } = useBoardPrefs();
   const [open, setOpen] = useState(false);
-  const [chosen, setChosen] = useState<Set<string>>(new Set(selected));
-  const [feat, setFeat] = useState<string | null>(featured);
-  const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const chosen = new Set(cardFields);
 
   useEffect(() => {
     if (!open) return;
@@ -41,38 +35,6 @@ export function CardFieldsMenu({
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
   }, [open]);
-
-  async function persist(nextChosen: Set<string>, nextFeatured: string | null) {
-    // Keep stored order stable (catalog order); the API de-dupes.
-    const cardFields = catalog.map((f) => f.key).filter((k) => nextChosen.has(k));
-    setSaving(true);
-    try {
-      await saveBoardPreferences({ cardFields, featured: nextFeatured });
-      router.refresh();
-    } catch (err) {
-      if (err instanceof AuthRequiredError) {
-        router.push(`/sign-in?from=${encodeURIComponent(window.location.pathname)}`);
-        return;
-      }
-      toast.error(err instanceof Error ? err.message : "Couldn't save preferences.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function toggle(key: string) {
-    const next = new Set(chosen);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setChosen(next);
-    void persist(next, feat);
-  }
-
-  function changeFeatured(value: string) {
-    const next = value || null;
-    setFeat(next);
-    void persist(chosen, next);
-  }
 
   return (
     <div className="relative" ref={ref}>
@@ -97,8 +59,7 @@ export function CardFieldsMenu({
                 <input
                   type="checkbox"
                   checked={chosen.has(f.key)}
-                  onChange={() => toggle(f.key)}
-                  disabled={saving}
+                  onChange={() => toggleField(f.key)}
                   className="size-3.5"
                 />
                 {f.label}
@@ -111,9 +72,8 @@ export function CardFieldsMenu({
                 Featured field
               </p>
               <Select
-                value={feat ?? ""}
-                onChange={(e) => changeFeatured(e.target.value)}
-                disabled={saving}
+                value={featured ?? ""}
+                onChange={(e) => setFeatured(e.target.value || null)}
                 className="h-8 text-xs"
               >
                 <option value="">None</option>
