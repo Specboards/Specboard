@@ -5,7 +5,7 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
-## [0.6.0] - 2026-07-03
+## [0.6.0] - 2026-07-04
 
 ### Added
 
