@@ -494,6 +494,129 @@ export const releases = pgTable(
   ],
 );
 
+/**
+ * An idea / feature request: lightweight demand capture that teams review and
+ * either promote into a feature (`promotedFeatureId`) or park. Product-scoped
+ * (a request targets one backlog) with the same visibility rules as features.
+ * `status` moves through the idea review workflow (see core `ideas.ts`), which
+ * is separate from the item/board workflow. `authorId` is the internal member
+ * who captured it; the nullable `submitter*` columns hold an external portal
+ * submitter's identity (public portal, a later phase) and stay null for
+ * internally-captured ideas.
+ */
+export const ideas = pgTable(
+  "ideas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /**
+     * Owning product (sibling backlog). Nullable for unassigned rows; the app
+     * resolves the default product on create. `set null` on delete so removing
+     * a product detaches its ideas rather than deleting captured demand.
+     */
+    productId: uuid("product_id").references(() => products.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    /** Free-form detail (Markdown), or null. */
+    description: text("description"),
+    /** Idea review stage key (see core DEFAULT_IDEA_STAGES). */
+    status: text("status").notNull().default("new"),
+    /** Internal member who captured the idea, or null (external submissions). */
+    authorId: uuid("author_id"),
+    /** External (portal) submitter's name; null for internal captures. */
+    submitterName: text("submitter_name"),
+    /** External (portal) submitter's email; null for internal captures. */
+    submitterEmail: text("submitter_email"),
+    /**
+     * The feature this idea was promoted into, or null. `set null` on delete so
+     * removing the feature reverts the idea to un-promoted rather than deleting
+     * it.
+     */
+    promotedFeatureId: uuid("promoted_feature_id").references(
+      () => features.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("ideas_ws_idx").on(t.workspaceId),
+    index("ideas_ws_status_idx").on(t.workspaceId, t.status),
+    index("ideas_product_idx").on(t.productId),
+  ],
+);
+
+/**
+ * A vote on an idea (demand signal). One row per (idea, voter); the vote count
+ * is derived by counting rows, mirroring how a release's item count is derived.
+ * `userId` is an internal member for now; the public portal (a later phase)
+ * will introduce an anonymous/external voter identity.
+ */
+export const ideaVotes = pgTable(
+  "idea_votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    ideaId: uuid("idea_id")
+      .notNull()
+      .references(() => ideas.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("idea_votes_idea_user_uq").on(t.ideaId, t.userId),
+    index("idea_votes_idea_idx").on(t.ideaId),
+    index("idea_votes_ws_idx").on(t.workspaceId),
+  ],
+);
+
+/**
+ * An admin-defined idea review stage (Settings -> Ideas). The ordered set of
+ * stages an idea moves through during triage. `key` is the stable slug stored
+ * in `ideas.status`; `label` is the editable display name. When a workspace has
+ * no rows, the built-in default idea workflow applies (see core `ideas.ts`).
+ * Mirrors `workspace_statuses` for the item/board workflow.
+ */
+export const ideaStatuses = pgTable(
+  "idea_statuses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("idea_statuses_ws_key_uq").on(t.workspaceId, t.key),
+    index("idea_statuses_ws_idx").on(t.workspaceId),
+  ],
+);
+
+/**
+ * Per-workspace Ideas configuration (Settings -> Ideas), one row per workspace.
+ * Holds the public-portal settings; the portal itself (a public, unauthenticated
+ * view of published ideas) is a later phase, but its config lives here so admins
+ * can prepare it. Absent row = portal disabled with defaults.
+ */
+export const ideaSettings = pgTable("idea_settings", {
+  workspaceId: uuid("workspace_id")
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  /** Whether the public voting portal is published. */
+  portalEnabled: boolean("portal_enabled").notNull().default(false),
+  /** Heading shown on the public portal, or null to use the workspace name. */
+  portalTitle: text("portal_title"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Cached spec content + git pointers, kept in sync by the git service. */
 export const specIndex = pgTable("spec_index", {
   featureId: uuid("feature_id")
@@ -777,6 +900,29 @@ export const repositoryRelations = relations(repositories, ({ one, many }) => ({
     references: [workspaces.id],
   }),
   features: many(features),
+}));
+
+export const ideaRelations = relations(ideas, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [ideas.workspaceId],
+    references: [workspaces.id],
+  }),
+  product: one(products, {
+    fields: [ideas.productId],
+    references: [products.id],
+  }),
+  promotedFeature: one(features, {
+    fields: [ideas.promotedFeatureId],
+    references: [features.id],
+  }),
+  votes: many(ideaVotes),
+}));
+
+export const ideaVoteRelations = relations(ideaVotes, ({ one }) => ({
+  idea: one(ideas, {
+    fields: [ideaVotes.ideaId],
+    references: [ideas.id],
+  }),
 }));
 
 export const featureRelations = relations(features, ({ one, many }) => ({

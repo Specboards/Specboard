@@ -4,6 +4,9 @@ import {
   eq,
   features,
   githubInstallations,
+  ideaSettings,
+  ideaStatuses,
+  ideas,
   releases,
   repositories,
   schema,
@@ -57,6 +60,14 @@ export async function resetBoard(workspaceId: string): Promise<void> {
 /** Remove every release in the workspace (items are unscheduled by SET NULL). */
 export async function resetReleases(workspaceId: string): Promise<void> {
   await db().delete(releases).where(eq(releases.workspaceId, workspaceId));
+}
+
+/** Remove every idea, review stage, and portal setting in the workspace. */
+export async function resetIdeas(workspaceId: string): Promise<void> {
+  // Deleting ideas cascades their votes; then drop stages + settings.
+  await db().delete(ideas).where(eq(ideas.workspaceId, workspaceId));
+  await db().delete(ideaStatuses).where(eq(ideaStatuses.workspaceId, workspaceId));
+  await db().delete(ideaSettings).where(eq(ideaSettings.workspaceId, workspaceId));
 }
 
 /** Remove every custom property definition in the workspace. */

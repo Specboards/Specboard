@@ -14,3 +14,17 @@ export function revalidateCardPages(): void {
     revalidatePath(path, "page");
   revalidatePath("/[org]/[product]/backlog/[...slug]", "page");
 }
+
+/**
+ * Revalidate the Ideas pages after an idea change (capture, status, vote,
+ * promote). Promotion also creates a feature, so refresh the boards/roadmap too.
+ */
+export function revalidateIdeaPages(): void {
+  for (const path of [
+    "/[org]/[product]/ideas",
+    "/[org]/[product]/backlog",
+    "/[org]/[product]/roadmap",
+    "/[org]/settings/ideas",
+  ])
+    revalidatePath(path, "page");
+}

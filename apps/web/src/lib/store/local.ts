@@ -11,9 +11,12 @@ import {
   LOCAL_PRODUCT_ACCESS,
   parseSpec,
   productKeyFromName,
+  promotedIdeaStatus,
   propertyKeyFromLabel,
+  resolveIdeaStages,
   resolveLevels,
   resolveLevelUpdate,
+  type IdeaStage,
   type PropertyDef,
   type WorkspaceLevel,
 } from "@specboard/core";
@@ -42,6 +45,12 @@ import {
   type FeatureRelation,
   type FeatureStore,
   type GithubLinkAggregate,
+  IdeaError,
+  type IdeaInput,
+  type IdeaPatch,
+  type IdeaRecord,
+  type IdeaSettings,
+  type IdeaSettingsPatch,
   type ProductAccess,
   type ProductMemberInput,
   type ProductMemberRecord,
@@ -91,6 +100,30 @@ interface LocalRelease {
   startDate: string | null;
   targetDate: string | null;
 }
+
+/** An idea / feature request persisted in local file mode. */
+interface LocalIdea {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  productId: string | null;
+  submitterName: string | null;
+  /** Feature specId this idea was promoted into, or null. */
+  promotedFeatureSpecId: string | null;
+  /** User ids that voted; local mode has a single user (LOCAL_USER). */
+  voters: string[];
+  createdAt: string;
+}
+
+/** Ideas configuration persisted in local file mode. */
+interface LocalIdeaSettings {
+  portalEnabled: boolean;
+  portalTitle: string | null;
+}
+
+/** The single acting user in local (auth-disabled) file mode. */
+const LOCAL_USER = "local";
 
 /** A product (sibling backlog) persisted in local file mode. */
 interface LocalProduct {
@@ -246,6 +279,18 @@ export class LocalFileStore implements FeatureStore {
   /** Per-item gate completions: specId -> completed gate ids. */
   private get gateCompletionsPath() {
     return path.join(this.root, ".specboard", "local-gate-completions.json");
+  }
+
+  private get ideasPath() {
+    return path.join(this.root, ".specboard", "local-ideas.json");
+  }
+
+  private get ideaStatusesPath() {
+    return path.join(this.root, ".specboard", "local-idea-statuses.json");
+  }
+
+  private get ideaSettingsPath() {
+    return path.join(this.root, ".specboard", "local-idea-settings.json");
   }
 
   private get templatesPath() {
@@ -1379,6 +1424,264 @@ export class LocalFileStore implements FeatureStore {
     _scope?: WorkspaceScope,
   ): Promise<void> {
     // Nothing to remove in file mode.
+  }
+
+  // Ideas persist to `.specboard/local-ideas.json` (+ statuses/settings files).
+  private async readIdeas(): Promise<LocalIdea[]> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.ideasPath, "utf8"),
+      ) as LocalIdea[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeIdeas(rows: LocalIdea[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.ideasPath), { recursive: true });
+    await fs.writeFile(
+      this.ideasPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  private toIdeaRecord(row: LocalIdea, promotedTitle: string | null): IdeaRecord {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      status: row.status,
+      productId: row.productId,
+      authorName: null,
+      submitterName: row.submitterName,
+      voteCount: row.voters.length,
+      viewerHasVoted: row.voters.includes(LOCAL_USER),
+      promotedFeatureSpecId: row.promotedFeatureSpecId,
+      promotedFeatureTitle: promotedTitle,
+      createdAt: row.createdAt,
+    };
+  }
+
+  async listIdeas(_scope?: WorkspaceScope): Promise<IdeaRecord[]> {
+    const [rows, all] = await Promise.all([this.readIdeas(), this.loadAll()]);
+    const titleBySpec = new Map(all.map((f) => [f.specId, f.title] as const));
+    return rows
+      .map((r) =>
+        this.toIdeaRecord(
+          r,
+          r.promotedFeatureSpecId
+            ? (titleBySpec.get(r.promotedFeatureSpecId) ?? null)
+            : null,
+        ),
+      )
+      .sort(
+        (a, b) =>
+          b.voteCount - a.voteCount ||
+          (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0),
+      );
+  }
+
+  async createIdea(
+    input: IdeaInput,
+    _scope?: WorkspaceScope,
+  ): Promise<IdeaRecord> {
+    const title = input.title.trim();
+    if (!title) throw new IdeaError("Idea title is required.");
+    const productId = input.productId ?? (await this.defaultProductId());
+    const idea: LocalIdea = {
+      id: randomUUID(),
+      title,
+      description: input.description?.trim() ? input.description.trim() : null,
+      status: "new",
+      productId,
+      submitterName: null,
+      promotedFeatureSpecId: null,
+      voters: [],
+      createdAt: new Date().toISOString(),
+    };
+    const rows = await this.readIdeas();
+    await this.writeIdeas([...rows, idea]);
+    return this.toIdeaRecord(idea, null);
+  }
+
+  async updateIdea(
+    id: string,
+    patch: IdeaPatch,
+    _scope?: WorkspaceScope,
+  ): Promise<IdeaRecord> {
+    const rows = await this.readIdeas();
+    const idea = rows.find((r) => r.id === id);
+    if (!idea) throw new IdeaError(`Unknown idea: ${id}`);
+    if (patch.title !== undefined) {
+      const title = patch.title.trim();
+      if (!title) throw new IdeaError("Idea title is required.");
+      idea.title = title;
+    }
+    if (patch.description !== undefined) {
+      idea.description = patch.description?.trim() ? patch.description.trim() : null;
+    }
+    if (patch.status !== undefined) {
+      const stages = resolveIdeaStages(await this.readIdeaStages());
+      if (!stages.some((s) => s.key === patch.status)) {
+        throw new IdeaError(`Unknown idea status: ${patch.status}`);
+      }
+      idea.status = patch.status;
+    }
+    if (patch.productId !== undefined) {
+      idea.productId = patch.productId ?? (await this.defaultProductId());
+    }
+    await this.writeIdeas(rows);
+    const title = idea.promotedFeatureSpecId
+      ? ((await this.loadAll()).find(
+          (f) => f.specId === idea.promotedFeatureSpecId,
+        )?.title ?? null)
+      : null;
+    return this.toIdeaRecord(idea, title);
+  }
+
+  async deleteIdea(id: string, _scope?: WorkspaceScope): Promise<void> {
+    const rows = await this.readIdeas();
+    if (!rows.some((r) => r.id === id)) throw new IdeaError(`Unknown idea: ${id}`);
+    await this.writeIdeas(rows.filter((r) => r.id !== id));
+  }
+
+  async voteIdea(id: string, _scope?: WorkspaceScope): Promise<IdeaRecord> {
+    const rows = await this.readIdeas();
+    const idea = rows.find((r) => r.id === id);
+    if (!idea) throw new IdeaError(`Unknown idea: ${id}`);
+    if (!idea.voters.includes(LOCAL_USER)) idea.voters.push(LOCAL_USER);
+    await this.writeIdeas(rows);
+    return this.toIdeaRecord(idea, null);
+  }
+
+  async unvoteIdea(id: string, _scope?: WorkspaceScope): Promise<IdeaRecord> {
+    const rows = await this.readIdeas();
+    const idea = rows.find((r) => r.id === id);
+    if (!idea) throw new IdeaError(`Unknown idea: ${id}`);
+    idea.voters = idea.voters.filter((v) => v !== LOCAL_USER);
+    await this.writeIdeas(rows);
+    return this.toIdeaRecord(idea, null);
+  }
+
+  async promoteIdea(
+    id: string,
+    scope?: WorkspaceScope,
+  ): Promise<{ idea: IdeaRecord; feature: FeatureRecord }> {
+    const rows = await this.readIdeas();
+    const idea = rows.find((r) => r.id === id);
+    if (!idea) throw new IdeaError(`Unknown idea: ${id}`);
+    if (idea.promotedFeatureSpecId) {
+      throw new IdeaError("This idea has already been promoted.");
+    }
+    const levels = resolveLevels();
+    const target = [...levels].reverse().find((l) => !l.isLeaf);
+    if (!target) {
+      throw new IdeaError(
+        "This workspace has no non-leaf level to promote an idea into.",
+      );
+    }
+    const feature = await this.createFeature(
+      {
+        title: idea.title,
+        level: target.key,
+        productId: idea.productId,
+        details: idea.description,
+      },
+      scope,
+    );
+    const stages = resolveIdeaStages(await this.readIdeaStages());
+    idea.promotedFeatureSpecId = feature.specId;
+    idea.status = promotedIdeaStatus(idea.status, stages);
+    await this.writeIdeas(rows);
+    return { idea: this.toIdeaRecord(idea, feature.title), feature };
+  }
+
+  private async readIdeaStages(): Promise<IdeaStage[]> {
+    try {
+      const rows = JSON.parse(
+        await fs.readFile(this.ideaStatusesPath, "utf8"),
+      ) as IdeaStage[];
+      return rows
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((r, i) => ({ ...r, position: i }));
+    } catch {
+      return [];
+    }
+  }
+
+  async listIdeaStatuses(_scope?: WorkspaceScope): Promise<IdeaStage[]> {
+    return this.readIdeaStages();
+  }
+
+  async replaceIdeaStatuses(
+    stages: StatusStageInput[],
+    _scope?: WorkspaceScope,
+  ): Promise<IdeaStage[]> {
+    const rows: IdeaStage[] = stages.map((s, i) => ({
+      key: s.key,
+      label: s.label,
+      position: i,
+    }));
+    const validKeys = new Set(rows.map((r) => r.key));
+    const fallback = rows[0]?.key;
+    // Re-home orphaned ideas onto the first stage, mirroring the DB store.
+    if (fallback) {
+      const ideas = await this.readIdeas();
+      let changed = false;
+      for (const idea of ideas) {
+        if (!validKeys.has(idea.status)) {
+          idea.status = fallback;
+          changed = true;
+        }
+      }
+      if (changed) await this.writeIdeas(ideas);
+    }
+    await fs.mkdir(path.dirname(this.ideaStatusesPath), { recursive: true });
+    await fs.writeFile(
+      this.ideaStatusesPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+    return rows;
+  }
+
+  async getIdeaSettings(_scope?: WorkspaceScope): Promise<IdeaSettings> {
+    try {
+      const row = JSON.parse(
+        await fs.readFile(this.ideaSettingsPath, "utf8"),
+      ) as LocalIdeaSettings;
+      return {
+        portalEnabled: row.portalEnabled ?? false,
+        portalTitle: row.portalTitle ?? null,
+      };
+    } catch {
+      return { portalEnabled: false, portalTitle: null };
+    }
+  }
+
+  async updateIdeaSettings(
+    patch: IdeaSettingsPatch,
+    _scope?: WorkspaceScope,
+  ): Promise<IdeaSettings> {
+    const current = await this.getIdeaSettings();
+    const next: IdeaSettings = {
+      portalEnabled: patch.portalEnabled ?? current.portalEnabled,
+      portalTitle:
+        patch.portalTitle !== undefined
+          ? patch.portalTitle?.trim()
+            ? patch.portalTitle.trim()
+            : null
+          : current.portalTitle,
+    };
+    await fs.mkdir(path.dirname(this.ideaSettingsPath), { recursive: true });
+    await fs.writeFile(
+      this.ideaSettingsPath,
+      JSON.stringify(next, null, 2) + "\n",
+      "utf8",
+    );
+    return next;
   }
 }
 

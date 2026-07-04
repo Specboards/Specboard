@@ -57,7 +57,7 @@ const GROUPS: NavGroup[] = [
   {
     label: "Work",
     items: [
-      { label: "Ideas", icon: Lightbulb, soon: true },
+      { href: "/ideas", label: "Ideas", icon: Lightbulb, productScoped: true },
       { href: "/backlog", label: "Backlog", icon: KanbanSquare, productScoped: true },
       { href: "/roadmap", label: "Roadmap", icon: Map, productScoped: true },
     ],

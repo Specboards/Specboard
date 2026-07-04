@@ -183,6 +183,13 @@
       "when": 1783194383612,
       "tag": "0025_bent_jigsaw",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783200905389,
+      "tag": "0026_lowly_revanche",
+      "breakpoints": true
     }
   ]
 }

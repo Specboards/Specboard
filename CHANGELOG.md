@@ -5,6 +5,26 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.8.0] - 2026-07-04
+
+### Added
+
+- **Ideas (internal view)** (new "Ideas" area in the sidebar, per product;
+  migration 0026 adds `ideas`, `idea_votes`, `idea_statuses`, and
+  `idea_settings`). Teams can capture feature requests / feedback, vote on them
+  (a demand signal that sorts the list), move each through a configurable review
+  workflow (New → Under review → Planned → Shipped → Parked → Declined by
+  default), and **promote** a worthwhile idea into a feature: promotion creates a
+  DB-native item at the planning level, links it back to the idea, and advances
+  the idea's status. Ideas are product-scoped with the same visibility rules as
+  features; voting is open to any member, while editing/promoting/deleting follow
+  the product write roles.
+- **Settings → Ideas.** Admins configure the idea **review stages** (rename in
+  place, reorder, add, remove; removing a stage re-homes its ideas to the first)
+  and the **public portal** settings (publish toggle + portal heading). The
+  public, unauthenticated voting portal built on this data is a planned
+  follow-up; its configuration ships now.
+
 ## [0.7.0] - 2026-07-04
 
 ### Added
