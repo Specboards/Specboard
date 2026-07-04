@@ -28,6 +28,8 @@ import type {
   ReleaseRecord,
   SavedView,
   SavedViewInput,
+  StageGate,
+  StageGateInput,
   StatusStageInput,
   WorkspaceLevel,
   WorkspaceStatus,
@@ -301,6 +303,62 @@ export async function updateStatuses(
     throw new Error(body?.error ?? `Update workflow failed with ${res.status}`);
   }
   return body.statuses;
+}
+
+/** The workspace's stage gates (checklist items per stage). */
+export async function listStageGates(): Promise<StageGate[]> {
+  const res = await fetch("/api/v1/stage-gates");
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { gates?: StageGate[]; error?: string }
+    | null;
+  if (!res.ok) {
+    throw new Error(body?.error ?? `Failed to load stage gates (${res.status}).`);
+  }
+  return body?.gates ?? [];
+}
+
+/** Replace the workspace's stage gates (admin-only); returns the new set. */
+export async function updateStageGates(
+  gates: StageGateInput[],
+): Promise<StageGate[]> {
+  const res = await fetch("/api/v1/stage-gates", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ gates }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { gates?: StageGate[]; error?: string }
+    | null;
+  if (!res.ok || !body?.gates) {
+    throw new Error(body?.error ?? `Update stage gates failed with ${res.status}`);
+  }
+  return body.gates;
+}
+
+/** Check/uncheck one stage gate for an item; returns the completed gate ids. */
+export async function setGateCompletion(
+  specId: string,
+  gateId: string,
+  completed: boolean,
+): Promise<string[]> {
+  const res = await fetch(
+    `/api/v1/features/${encodeURIComponent(specId)}/gates`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ gateId, completed }),
+    },
+  );
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { completed?: string[]; error?: string }
+    | null;
+  if (!res.ok || !body?.completed) {
+    throw new Error(body?.error ?? `Update gate failed with ${res.status}`);
+  }
+  return body.completed;
 }
 
 /** Define a custom property (admin-only on the server); returns it. */

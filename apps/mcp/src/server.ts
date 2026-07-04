@@ -8,6 +8,7 @@ import {
   canReadProduct,
   canWriteProduct,
   canTransition,
+  isForwardTransition,
   resolveWorkflow,
   safeParseRepoConfig,
   workflowFromStages,
@@ -16,6 +17,7 @@ import {
 } from "@specboard/core";
 import {
   createDb,
+  featureGateCompletions,
   featureLinks,
   features,
   members,
@@ -23,6 +25,7 @@ import {
   products,
   repositories,
   workspaces,
+  workspaceStageGates,
   workspaceStatuses,
   type Database,
 } from "@specboard/db";
@@ -526,6 +529,23 @@ server.tool(
           new Error(`Illegal transition: ${row.status} -> ${status}`),
         );
       }
+      // Exit-criteria stage gates block forward moves (mirrors the web app).
+      if (isForwardTransition(row.status, status, workflow)) {
+        // Every stage advanced past (source up to, not including, the target).
+        const fromIndex = workflow.statuses.indexOf(row.status);
+        const toIndex = workflow.statuses.indexOf(status);
+        const passed = workflow.statuses.slice(fromIndex, toIndex);
+        const open = await openGates(scope.workspaceId, row.id, passed);
+        if (open.length > 0) {
+          return errorResult(
+            new Error(
+              `Blocked by stage gates. Complete first: ${open
+                .map((g) => `"${g}"`)
+                .join(", ")}.`,
+            ),
+          );
+        }
+      }
       await db()
         .update(features)
         .set({ status, updatedAt: new Date() })
@@ -557,6 +577,36 @@ async function resolveWorkspaceWorkflow(
     .from(repositories)
     .where(eq(repositories.workspaceId, workspaceId));
   return resolveWorkflow(safeParseRepoConfig(repo?.config));
+}
+
+/**
+ * Labels of the gates on `stageKeys` not yet completed for feature `featureId`.
+ * Empty when those stages have no gates or they're all checked off. Mirrors the
+ * web app's exit-criteria enforcement so agents can't advance an item past a
+ * checklist, including by jumping over an intermediate stage.
+ */
+async function openGates(
+  workspaceId: string,
+  featureId: string,
+  stageKeys: string[],
+): Promise<string[]> {
+  if (stageKeys.length === 0) return [];
+  const gates = await db()
+    .select({ id: workspaceStageGates.id, label: workspaceStageGates.label })
+    .from(workspaceStageGates)
+    .where(
+      and(
+        eq(workspaceStageGates.workspaceId, workspaceId),
+        inArray(workspaceStageGates.stageKey, stageKeys),
+      ),
+    );
+  if (gates.length === 0) return [];
+  const completed = await db()
+    .select({ gateId: featureGateCompletions.gateId })
+    .from(featureGateCompletions)
+    .where(eq(featureGateCompletions.featureId, featureId));
+  const done = new Set(completed.map((c) => c.gateId));
+  return gates.filter((g) => !done.has(g.id)).map((g) => g.label);
 }
 
 async function main() {

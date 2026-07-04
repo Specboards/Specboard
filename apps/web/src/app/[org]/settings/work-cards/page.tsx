@@ -4,6 +4,7 @@ import { CardsFieldsEditor } from "@/components/cards-fields-editor";
 import { DetailTemplatesManager } from "@/components/detail-templates-manager";
 import { PropertiesManager } from "@/components/properties-manager";
 import { WorkflowEditor } from "@/components/workflow-editor";
+import { WorkflowGatesEditor } from "@/components/workflow-gates-editor";
 import { BUILTIN_METADATA_FIELDS } from "@/lib/card-fields";
 import { statusLabel } from "@/lib/feature-helpers";
 import { resolveWorkflowFor } from "@/lib/repo-config";
@@ -22,12 +23,14 @@ export const dynamic = "force-dynamic";
 export default async function CardsSettingsPage() {
   const access = await requireWorkspaceAccess();
   const store = await getStore();
-  const [levels, properties, detailTemplates, workflow] = await Promise.all([
-    store.listLevels(access ?? undefined),
-    store.listProperties(access ?? undefined),
-    store.listDetailTemplates(access ?? undefined),
-    resolveWorkflowFor(access),
-  ]);
+  const [levels, properties, detailTemplates, workflow, stageGates] =
+    await Promise.all([
+      store.listLevels(access ?? undefined),
+      store.listProperties(access ?? undefined),
+      store.listDetailTemplates(access ?? undefined),
+      resolveWorkflowFor(access),
+      store.listStageGates(access ?? undefined),
+    ]);
   const canEdit = !access || access.role === "admin";
 
   // The effective stages the editor starts from (DB-defined, or the built-in
@@ -42,7 +45,22 @@ export default async function CardsSettingsPage() {
         title="Workflow"
         description="The stages an item moves through — these are your board columns. Rename a stage in place, reorder, add, or remove stages."
       >
-        <WorkflowEditor initial={stages} canEdit={canEdit} />
+        <Subsection
+          title="Stages"
+          description="The board columns items move through. Rename a stage in place, reorder, add, or remove stages."
+        >
+          <WorkflowEditor initial={stages} canEdit={canEdit} />
+        </Subsection>
+        <Subsection
+          title="Stage gates"
+          description="Per-stage checklists that must be completed before an item can advance forward. Members tick them off on the item; an incomplete checklist blocks the move."
+        >
+          <WorkflowGatesEditor
+            stages={stages}
+            initial={stageGates}
+            canEdit={canEdit}
+          />
+        </Subsection>
       </SettingsGroup>
 
       <SettingsGroup

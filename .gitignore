@@ -41,3 +41,4 @@ infra/supabase/.temp/
 .specboard/local-board-prefs.json
 .specboard/local-items.json
 .specboard/local-levels.json
+.claude/worktrees/

@@ -1,5 +1,6 @@
 import {
   canTransition,
+  isForwardTransition,
   isPropertyType,
   isValidParentLevel,
   propertyKeyFromLabel,
@@ -33,6 +34,8 @@ import {
   type ReleasePatch,
   type ReleaseRecord,
   type ReleaseStatus,
+  type StageGate,
+  type StageGateInput,
   type StatusStageInput,
   type WorkspaceStatus,
 } from "@/lib/store/types";
@@ -174,6 +177,16 @@ export async function patchFeature(
         `Illegal transition: ${feature.status} -> ${patch.status}`,
       );
     }
+    // Stage gates block only forward moves; pulling back or archiving is free.
+    if (isForwardTransition(feature.status, patch.status, workflow)) {
+      await assertGatesSatisfied(
+        specId,
+        feature.status,
+        patch.status,
+        workflow,
+        scope,
+      );
+    }
   }
 
   if (patch.parentSpecId) {
@@ -194,6 +207,45 @@ export async function patchFeature(
   await store.updateFeature(specId, patch, scope);
   const updated = await store.getFeature(specId, scope);
   return updated ?? feature;
+}
+
+/**
+ * Enforce the exit-criteria stage gates for a forward move `from -> to`. Every
+ * gate on every stage the item advances *past* (the source stage and any stages
+ * skipped over, i.e. the half-open range [from, to)) must be checked off, or the
+ * move is rejected. Checking the whole range, not just the source, stops a
+ * multi-stage jump from bypassing an intermediate stage's checklist under open
+ * (any-to-any) workflows.
+ *
+ * This is the single point where gate policy is applied for the web API, so
+ * future rules (per-item-type bypass, admin "skip with reason") slot in here.
+ * The MCP server enforces the same rule over its own DB path in `openGates`
+ * (apps/mcp/src/server.ts); keep the two in sync until they share a store-backed
+ * helper. No-op when no passed-over stage has gates.
+ */
+async function assertGatesSatisfied(
+  specId: string,
+  from: string,
+  to: string,
+  workflow: { statuses: readonly string[] },
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const fromIndex = workflow.statuses.indexOf(from);
+  const toIndex = workflow.statuses.indexOf(to);
+  // Stages advanced past: source up to (not including) the destination.
+  const passed = new Set(workflow.statuses.slice(fromIndex, toIndex));
+  const store = await getStore();
+  const gates = (await store.listStageGates(scope)).filter((g) =>
+    passed.has(g.stageKey),
+  );
+  if (gates.length === 0) return;
+  const done = new Set(await store.listGateCompletions(specId, scope));
+  const open = gates.filter((g) => !done.has(g.id));
+  if (open.length === 0) return;
+  const labels = open.map((g) => `"${g.label}"`).join(", ");
+  throw new InvalidPatchError(
+    `This item can't advance until its stage checklist is complete. Remaining: ${labels}.`,
+  );
 }
 
 /**
@@ -682,6 +734,81 @@ export function parseStatusStages(body: unknown): StatusStageInput[] {
     taken.add(key);
     return { key, label };
   });
+}
+
+/** The workspace's stage gates (checklist items per stage). */
+export async function listStageGates(
+  scope?: WorkspaceScope,
+): Promise<StageGate[]> {
+  const store = await getStore();
+  return store.listStageGates(scope);
+}
+
+/** Replace the workspace's stage gates wholesale (admin action). */
+export async function replaceStageGates(
+  gates: StageGateInput[],
+  scope?: WorkspaceScope,
+): Promise<StageGate[]> {
+  const store = await getStore();
+  return store.replaceStageGates(gates, scope);
+}
+
+/**
+ * Parse and validate an untrusted stage-gates replacement body: `{ gates:
+ * [{ stageKey, label }] }`. Each entry needs a non-empty `stageKey` and a
+ * non-empty `label`. Order within a stage is preserved (it becomes the
+ * checklist position). An empty array clears all gates.
+ */
+export function parseStageGates(body: unknown): StageGateInput[] {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = (body as { gates?: unknown }).gates;
+  if (!Array.isArray(raw)) {
+    throw new InvalidPatchError("gates must be an array.");
+  }
+  if (raw.length > 200) {
+    throw new InvalidPatchError("Too many stage gates (max 200).");
+  }
+  return raw.map((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      throw new InvalidPatchError("Each gate must be an object.");
+    }
+    const e = entry as Record<string, unknown>;
+    const stageKey = typeof e.stageKey === "string" ? e.stageKey.trim() : "";
+    if (!stageKey) throw new InvalidPatchError("Each gate needs a stageKey.");
+    const label = typeof e.label === "string" ? e.label.trim() : "";
+    if (!label) throw new InvalidPatchError("Each gate needs a label.");
+    if (label.length > 200) {
+      throw new InvalidPatchError("A gate label is too long (max 200 chars).");
+    }
+    const gate: StageGateInput = { stageKey, label };
+    if (typeof e.id === "string" && e.id) gate.id = e.id;
+    return gate;
+  });
+}
+
+/** The gate ids checked off for one feature. */
+export async function listGateCompletions(
+  specId: string,
+  scope?: WorkspaceScope,
+): Promise<string[]> {
+  const store = await getStore();
+  return store.listGateCompletions(specId, scope);
+}
+
+/** Mark a gate complete/incomplete for a feature. Returns the new set. */
+export async function setGateCompletion(
+  specId: string,
+  gateId: string,
+  completed: boolean,
+  scope?: WorkspaceScope,
+): Promise<string[]> {
+  const store = await getStore();
+  const feature = await store.getFeature(specId, scope);
+  if (!feature) throw new FeatureNotFoundError(specId);
+  await store.setGateCompletion(specId, gateId, completed, scope);
+  return store.listGateCompletions(specId, scope);
 }
 
 /** Parse and validate an untrusted release-create body. */

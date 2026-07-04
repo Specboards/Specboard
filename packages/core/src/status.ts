@@ -64,6 +64,26 @@ export function workflowFromStages(
   return { statuses: withArchived, transitions, labels };
 }
 
+/**
+ * Whether `from -> to` advances the item *forward* through the workflow: `to`
+ * sits at a later position than `from` in the stage order. Moving to `archived`
+ * is never "forward" (it drops the item off the board, not down the pipeline),
+ * so it's excluded. Stage gates guard only forward moves; pulling an item back
+ * to an earlier stage or archiving it is always allowed. Returns false when
+ * either status is unknown to the workflow.
+ */
+export function isForwardTransition(
+  from: string,
+  to: string,
+  workflow: StatusWorkflow = defaultWorkflow,
+): boolean {
+  if (from === to || to === "archived") return false;
+  const fromIndex = workflow.statuses.indexOf(from);
+  const toIndex = workflow.statuses.indexOf(to);
+  if (fromIndex < 0 || toIndex < 0) return false;
+  return toIndex > fromIndex;
+}
+
 /** Whether `from -> to` is a legal move in the given workflow. */
 export function canTransition(
   from: string,
