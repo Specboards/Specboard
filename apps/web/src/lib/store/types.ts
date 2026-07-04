@@ -2,6 +2,7 @@ import type {
   DetailTemplate,
   DetailTemplateInput,
   DetailTemplatePatch,
+  IdeaStage,
   ProductAccess,
   ProductRole,
   ProductVisibility,
@@ -15,6 +16,7 @@ export type {
   DetailTemplate,
   DetailTemplateInput,
   DetailTemplatePatch,
+  IdeaStage,
   ProductAccess,
   ProductRole,
   ProductVisibility,
@@ -382,6 +384,60 @@ export function compareReleases(
   return a.name.localeCompare(b.name);
 }
 
+/** An idea / feature request as the UI consumes it. */
+export interface IdeaRecord {
+  id: string;
+  title: string;
+  /** Free-form detail (Markdown), or null. */
+  description: string | null;
+  /** Idea review stage key (see core DEFAULT_IDEA_STAGES). */
+  status: string;
+  /** Owning product id, or null when unassigned. */
+  productId: string | null;
+  /** Display name of the internal author, or null (external/portal submitter). */
+  authorName: string | null;
+  /** External submitter's name, or null for internal captures. */
+  submitterName: string | null;
+  /** Total votes (demand signal). */
+  voteCount: number;
+  /** Whether the acting user has voted for this idea. */
+  viewerHasVoted: boolean;
+  /** specId of the feature this idea was promoted into, or null. */
+  promotedFeatureSpecId: string | null;
+  /** Title of the promoted feature, or null when not promoted. */
+  promotedFeatureTitle: string | null;
+  createdAt: string;
+}
+
+export interface IdeaInput {
+  title: string;
+  description?: string | null;
+  /** Owning product; defaults to the workspace's default product when omitted. */
+  productId?: string | null;
+}
+
+export type IdeaPatch = Partial<{
+  title: string;
+  description: string | null;
+  status: string;
+  productId: string | null;
+}>;
+
+/** Per-workspace Ideas configuration (public portal settings). */
+export interface IdeaSettings {
+  portalEnabled: boolean;
+  /** Portal heading, or null to fall back to the workspace name. */
+  portalTitle: string | null;
+}
+
+export type IdeaSettingsPatch = Partial<{
+  portalEnabled: boolean;
+  portalTitle: string | null;
+}>;
+
+/** Raised when an idea can't be created/updated/deleted/promoted. */
+export class IdeaError extends Error {}
+
 /** Raised when a work item can't be created/deleted (bad level, has a spec, …). */
 export class FeatureError extends Error {}
 
@@ -644,6 +700,51 @@ export interface FeatureStore {
     prefs: BoardPreferences,
     scope?: WorkspaceScope,
   ): Promise<void>;
+  // ── Ideas ───────────────────────────────────────────────────────────────
+  /** The workspace's ideas the acting user can see, most-voted first. */
+  listIdeas(scope?: WorkspaceScope): Promise<IdeaRecord[]>;
+  /** Capture a new idea; returns the new record. */
+  createIdea(input: IdeaInput, scope?: WorkspaceScope): Promise<IdeaRecord>;
+  /** Update an idea's title/description/status/product. Returns the record. */
+  updateIdea(
+    id: string,
+    patch: IdeaPatch,
+    scope?: WorkspaceScope,
+  ): Promise<IdeaRecord>;
+  /** Delete an idea (its votes cascade). */
+  deleteIdea(id: string, scope?: WorkspaceScope): Promise<void>;
+  /** Add the acting user's vote for an idea (idempotent). Returns the record. */
+  voteIdea(id: string, scope?: WorkspaceScope): Promise<IdeaRecord>;
+  /** Remove the acting user's vote for an idea (idempotent). Returns the record. */
+  unvoteIdea(id: string, scope?: WorkspaceScope): Promise<IdeaRecord>;
+  /**
+   * Promote an idea into a DB-native feature (at the planning altitude), link
+   * the two, and advance the idea's status. Returns both records.
+   */
+  promoteIdea(
+    id: string,
+    scope?: WorkspaceScope,
+  ): Promise<{ idea: IdeaRecord; feature: FeatureRecord }>;
+  /**
+   * The workspace's admin-defined idea review stages, ordered by position, or
+   * `[]` when it uses the built-in default idea workflow.
+   */
+  listIdeaStatuses(scope?: WorkspaceScope): Promise<IdeaStage[]>;
+  /**
+   * Replace the workspace's idea review stages. Ideas whose status is no longer
+   * a stage are moved to the first stage. Returns the resolved stages.
+   */
+  replaceIdeaStatuses(
+    stages: StatusStageInput[],
+    scope?: WorkspaceScope,
+  ): Promise<IdeaStage[]>;
+  /** The workspace's Ideas configuration (portal settings). */
+  getIdeaSettings(scope?: WorkspaceScope): Promise<IdeaSettings>;
+  /** Update the workspace's Ideas configuration. Returns the updated settings. */
+  updateIdeaSettings(
+    patch: IdeaSettingsPatch,
+    scope?: WorkspaceScope,
+  ): Promise<IdeaSettings>;
 }
 
 /** Raised when a relation can't be created (self-link, cycle, unknown target). */

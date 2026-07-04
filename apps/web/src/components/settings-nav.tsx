@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/settings/company", label: "Company & Team" },
   { href: "/settings/products", label: "Products" },
   { href: "/settings/work-cards", label: "Cards" },
+  { href: "/settings/ideas", label: "Ideas" },
   { href: "/settings/hierarchy", label: "Hierarchy" },
   { href: "/settings/branding", label: "Branding" },
   { href: "/settings/api-keys", label: "API keys" },
