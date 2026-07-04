@@ -25,6 +25,7 @@ const TYPE_LABELS: Record<PropertyType, string> = {
   multiselect: "Multi-select",
   date: "Date",
   user: "Person",
+  url: "URL",
 };
 
 /**

@@ -12,6 +12,7 @@ export const PROPERTY_TYPES = [
   "multiselect",
   "date",
   "user",
+  "url",
 ] as const;
 
 export type PropertyType = (typeof PROPERTY_TYPES)[number];

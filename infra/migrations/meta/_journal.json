@@ -169,6 +169,13 @@
       "when": 1783174202083,
       "tag": "0023_happy_cable",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783177162879,
+      "tag": "0024_charming_talisman",
+      "breakpoints": true
     }
   ]
 }

@@ -30,12 +30,39 @@ const DEFAULT_TRANSITIONS: Record<Status, Status[]> = {
 export interface StatusWorkflow {
   statuses: readonly string[];
   transitions: Record<string, string[]>;
+  /**
+   * Display label per status key. Optional: when a key is absent (or `labels`
+   * is omitted entirely) callers title-case the key. Admin-defined workflows
+   * carry explicit labels so a stage can be renamed without changing its key.
+   */
+  labels?: Record<string, string>;
 }
 
 export const defaultWorkflow: StatusWorkflow = {
   statuses: DEFAULT_STATUSES,
   transitions: DEFAULT_TRANSITIONS,
 };
+
+/**
+ * Build a {@link StatusWorkflow} from admin-defined stages (ordered). Transitions
+ * are open (any stage to any other), matching the config's "omit transitions"
+ * rule, and the system `archived` status is appended so items can still be
+ * archived and dropped from the board (which hides `archived`). Returns null when
+ * there are fewer than two stages, so callers fall back to config/default.
+ */
+export function workflowFromStages(
+  stages: readonly { key: string; label: string }[],
+): StatusWorkflow | null {
+  if (stages.length < 2) return null;
+  const keys = stages.map((s) => s.key);
+  const withArchived = [...keys, "archived"];
+  const transitions = Object.fromEntries(
+    withArchived.map((k) => [k, withArchived.filter((other) => other !== k)]),
+  );
+  const labels: Record<string, string> = { archived: "Archived" };
+  for (const s of stages) labels[s.key] = s.label;
+  return { statuses: withArchived, transitions, labels };
+}
 
 /** Whether `from -> to` is a legal move in the given workflow. */
 export function canTransition(

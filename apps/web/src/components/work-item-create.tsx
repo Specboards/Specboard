@@ -141,7 +141,7 @@ export function WorkItemCreate({
               <Select name="status" defaultValue={defaultStatus} className="h-8">
                 {statuses.map((s) => (
                   <option key={s} value={s}>
-                    {statusLabel(s)}
+                    {statusLabel(s, workflow)}
                   </option>
                 ))}
               </Select>

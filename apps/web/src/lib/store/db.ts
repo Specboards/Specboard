@@ -40,6 +40,7 @@ import {
   users,
   workspaceLevels,
   workspaceProperties,
+  workspaceStatuses,
   type Database,
 } from "@specboard/db";
 
@@ -82,6 +83,8 @@ import {
   type ReleasePatch,
   type ReleaseRecord,
   type ReleaseStatus,
+  type StatusStageInput,
+  type WorkspaceStatus,
   type ResolvedGithubLink,
   type SavedView,
   type SavedViewFilters,
@@ -1390,6 +1393,71 @@ export class DbStore implements FeatureStore {
 
   async listProperties(scope?: WorkspaceScope): Promise<PropertyDef[]> {
     return this.scoped(scope, (tx) => this.propertiesIn(tx, scope!.workspaceId));
+  }
+
+  async listStatuses(scope?: WorkspaceScope): Promise<WorkspaceStatus[]> {
+    return this.scoped(scope, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(workspaceStatuses)
+        .where(eq(workspaceStatuses.workspaceId, scope!.workspaceId))
+        .orderBy(asc(workspaceStatuses.position));
+      return rows.map((r) => ({
+        key: r.key,
+        label: r.label,
+        position: r.position,
+      }));
+    });
+  }
+
+  async replaceStatuses(
+    stages: StatusStageInput[],
+    scope?: WorkspaceScope,
+  ): Promise<WorkspaceStatus[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const keys = stages.map((s) => s.key);
+      const fallback = keys[0]!;
+      // `archived` is a system status and always remains valid so archived
+      // items aren't swept back onto the board.
+      const validKeys = new Set([...keys, "archived"]);
+
+      // Re-home any items whose current status is no longer a stage.
+      const used = await tx
+        .selectDistinct({ status: features.status })
+        .from(features)
+        .where(eq(features.workspaceId, ws));
+      const orphaned = used
+        .map((u) => u.status)
+        .filter((s) => !validKeys.has(s));
+      if (orphaned.length > 0) {
+        await tx
+          .update(features)
+          .set({ status: fallback, updatedAt: new Date() })
+          .where(
+            and(
+              eq(features.workspaceId, ws),
+              inArray(features.status, orphaned),
+            ),
+          );
+      }
+
+      // Replace the stage set wholesale (positions follow the given order).
+      await tx
+        .delete(workspaceStatuses)
+        .where(eq(workspaceStatuses.workspaceId, ws));
+      if (stages.length > 0) {
+        await tx.insert(workspaceStatuses).values(
+          stages.map((s, i) => ({
+            workspaceId: ws,
+            key: s.key,
+            label: s.label,
+            position: i,
+          })),
+        );
+      }
+      return stages.map((s, i) => ({ key: s.key, label: s.label, position: i }));
+    });
   }
 
   async createProperty(

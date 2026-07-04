@@ -4,14 +4,13 @@ import {
   childLevelKey,
   parentLevelKey,
   propertyAppliesToLevel,
-  resolveWorkflow,
   type PropertyDef,
   type StatusWorkflow,
 } from "@specboard/core";
 
 import { ALL_PRODUCTS } from "@/lib/active-product";
 import { getDb } from "@/lib/db";
-import { resolveRepoConfig } from "@/lib/repo-config";
+import { resolveWorkflowFor } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
 import type { FeatureDetail, ReleaseRecord, WorkspaceScope } from "@/lib/store/types";
 import {
@@ -78,8 +77,7 @@ export async function getItemDetailData(
   const db = getDb();
   const members: WorkspaceMember[] =
     access && db ? await listWorkspaceMembers(db, access.workspaceId) : [];
-  const repoConfig = await resolveRepoConfig(access);
-  const workflow = resolveWorkflow(repoConfig);
+  const workflow = await resolveWorkflowFor(access);
 
   const [allProperties, releases, allFeatures, levels, products] =
     await Promise.all([

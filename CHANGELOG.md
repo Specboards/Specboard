@@ -9,6 +9,15 @@ for how and when the version is bumped.
 
 ### Added
 
+- **Custom workflow stages** (Settings → Cards → Workflow; migration 0024 adds
+  `workspace_statuses`). Admins can rename a stage in place (its key, and so its
+  items, stay put), reorder, add, or remove stages; the board columns, status
+  pickers, and transition validation all follow. Removing a stage re-homes its
+  items to the first stage. The MCP server's status validation reads the same
+  workflow. (Stage gates are a planned follow-up.)
+- **URL field type** for custom properties, so items can link out to Figma,
+  Miro, docs, etc. Rendered as a clickable link on the item, with an open-link
+  affordance while editing.
 - **Notion-style item detail.** Initiatives, epics, features, and work items now
   share one detail layout: the level, an inline-editable title, then a block of
   property rows (each with a type icon) for Status, Assignee, Release, Tags, and
@@ -30,12 +39,20 @@ for how and when the version is bumped.
 
 ### Changed
 
+- **Board cards no longer carry a status dropdown** — the column already shows
+  the stage, and dragging between columns is how the stage changes.
+- **Card fields update live.** Toggling a field in the board's "Card fields" menu
+  now updates the cards instantly (shared client state) instead of needing a
+  page refresh.
+- **Cards settings are grouped** into bordered panels — Workflow, Fields
+  (built-in fields + custom properties), and Templates — so related controls
+  read together.
 - The item detail is retitled: the body sits under a **Description** heading with
   a roomier (~10-row) editor, and the **Relationships** and **Integrations**
   sections start collapsed until you expand them.
 - The product attribution badge is now hidden when the workspace has only one
-  product (it carried no information there), in addition to the single-product
-  board view.
+  product (it carried no information there), on both the board and the roadmap,
+  in addition to the single-product view.
 - Item bodies (and titles, for DB-native items) **auto-save** as you type; the
   manual "Save details" button is gone. Undo/redo use the editor's native
   history. Spec-backed bodies stay read-only (their source of truth is git).

@@ -21,7 +21,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 
-import type { PropertyDef, StatusWorkflow } from "@specboard/core";
+import type { StatusWorkflow } from "@specboard/core";
 
 import { FeatureCard, type ProductTag } from "@/components/feature-card";
 import { FeatureEditSheet } from "@/components/feature-edit-sheet";
@@ -34,7 +34,8 @@ import {
   statusOptions,
 } from "@/lib/feature-helpers";
 import type { FeatureRecord, ReleaseRecord } from "@/lib/store/types";
-import type { WorkspaceMember } from "@/lib/workspace";
+
+import { useBoardPrefs } from "./board-prefs";
 
 const COL_PREFIX = "col:";
 
@@ -48,34 +49,24 @@ export function BoardClient({
   features,
   columns,
   workflow,
-  canEdit,
-  cardFields,
-  featured,
   customFieldLabels,
   memberNames,
-  members,
-  properties,
   releases,
   productsById,
 }: {
   features: FeatureRecord[];
   columns: string[];
   workflow: StatusWorkflow;
-  canEdit: boolean;
-  cardFields: string[];
-  featured: string | null;
   customFieldLabels: Record<string, string>;
   memberNames: Record<string, string>;
-  members: WorkspaceMember[];
-  /** The workspace's custom properties (for the edit drawer). */
-  properties: PropertyDef[];
-  /** The workspace's releases (release badge + edit drawer picker). */
+  /** The workspace's releases (for the release badge). */
   releases: ReleaseRecord[];
   /** Product identity by id, for the per-card attribution badge in the
    * cross-product view. Omitted when the board is scoped to one product. */
   productsById?: Record<string, ProductTag>;
 }) {
   const router = useRouter();
+  const { cardFields, featured } = useBoardPrefs();
   const [records, setRecords] = useState<Record<string, FeatureRecord>>(() =>
     Object.fromEntries(features.map((f) => [f.specId, f])),
   );
@@ -125,7 +116,7 @@ export function BoardClient({
     const statusChanged = from !== to;
     if (statusChanged && !statusOptions(from, workflow).includes(to)) {
       toast.error(
-        `Can't move ${statusLabel(from)} → ${statusLabel(to)} (not an allowed transition).`,
+        `Can't move ${statusLabel(from, workflow)} → ${statusLabel(to, workflow)} (not an allowed transition).`,
       );
       return;
     }
@@ -186,6 +177,7 @@ export function BoardClient({
             <Column
               key={status}
               status={status}
+              workflow={workflow}
               cardIds={lists[status] ?? []}
               records={records}
               cardFields={cardFields}
@@ -193,8 +185,6 @@ export function BoardClient({
               customFieldLabels={customFieldLabels}
               memberNames={memberNames}
               releaseNames={releaseNames}
-              workflow={workflow}
-              canEdit={canEdit}
               onOpen={setEditingSpecId}
               productsById={productsById}
             />
@@ -209,8 +199,6 @@ export function BoardClient({
               customFieldLabels={customFieldLabels}
               memberNames={memberNames}
               releaseNames={releaseNames}
-              workflow={workflow}
-              canEdit={false}
               onOpen={() => {}}
               product={
                 activeRecord.productId
@@ -231,6 +219,7 @@ export function BoardClient({
 
 function Column({
   status,
+  workflow,
   cardIds,
   records,
   cardFields,
@@ -238,12 +227,11 @@ function Column({
   customFieldLabels,
   memberNames,
   releaseNames,
-  workflow,
-  canEdit,
   onOpen,
   productsById,
 }: {
   status: string;
+  workflow: StatusWorkflow;
   cardIds: string[];
   records: Record<string, FeatureRecord>;
   cardFields: string[];
@@ -251,8 +239,6 @@ function Column({
   customFieldLabels: Record<string, string>;
   memberNames: Record<string, string>;
   releaseNames: Record<string, string>;
-  workflow: StatusWorkflow;
-  canEdit: boolean;
   onOpen: (specId: string) => void;
   productsById?: Record<string, ProductTag>;
 }) {
@@ -261,7 +247,7 @@ function Column({
     <div className="w-64 shrink-0 rounded-lg bg-muted/50 p-2">
       <div className="flex items-center gap-2 px-2 py-1.5">
         <StatusDot status={status} />
-        <span className="text-sm font-medium">{statusLabel(status)}</span>
+        <span className="text-sm font-medium">{statusLabel(status, workflow)}</span>
         <span className="ml-auto text-xs text-muted-foreground">
           {cardIds.length}
         </span>
@@ -283,8 +269,6 @@ function Column({
                   customFieldLabels={customFieldLabels}
                   memberNames={memberNames}
                   releaseNames={releaseNames}
-                  workflow={workflow}
-                  canEdit={canEdit}
                   onOpen={() => onOpen(id)}
                   product={
                     record.productId ? productsById?.[record.productId] : undefined

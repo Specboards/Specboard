@@ -4,7 +4,14 @@ import { defaultWorkflow, type StatusWorkflow } from "@specboard/core";
 
 import type { FeatureRecord } from "./store/types";
 
-export function statusLabel(status: string): string {
+/**
+ * Human label for a status key. Prefers the workflow's explicit label (set by
+ * an admin-defined workflow), falling back to a title-cased key so built-in and
+ * config-driven statuses read well without any label map.
+ */
+export function statusLabel(status: string, workflow?: StatusWorkflow): string {
+  const custom = workflow?.labels?.[status];
+  if (custom) return custom;
   return status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 

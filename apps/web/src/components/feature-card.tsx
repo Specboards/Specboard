@@ -2,11 +2,8 @@
 
 import Link from "next/link";
 
-import type { StatusWorkflow } from "@specboard/core";
-
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusSelect } from "@/components/status-select";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { CUSTOM_FIELD_PREFIX } from "@/lib/card-fields";
 import { productColorClasses } from "@/lib/product-color";
 import type { CustomFieldValue, FeatureRecord } from "@/lib/store/types";
@@ -30,7 +27,9 @@ function customFieldText(value: CustomFieldValue): string {
 /**
  * Presentational board card. Renders only the fields the user has chosen
  * (`fields`), emphasizing `featured`. Drag wiring lives in the board client;
- * this component just handles its own interactive bits (title link, status).
+ * this component just handles the title link. The card carries no status
+ * control: the column it sits in already shows the stage, and dragging between
+ * columns is how the stage changes.
  */
 export function FeatureCard({
   feature,
@@ -39,8 +38,6 @@ export function FeatureCard({
   customFieldLabels,
   memberNames,
   releaseNames,
-  workflow,
-  canEdit,
   onOpen,
   product,
 }: {
@@ -52,8 +49,6 @@ export function FeatureCard({
   memberNames: Record<string, string>;
   /** Release name by id, for the release badge. */
   releaseNames: Record<string, string>;
-  workflow?: StatusWorkflow;
-  canEdit: boolean;
   onOpen: () => void;
   /** The owning product, shown as a badge in the cross-product ("All
    * products") view; omitted when the board is scoped to one product. */
@@ -114,15 +109,6 @@ export function FeatureCard({
           <div className="flex flex-wrap items-center gap-1">{badges}</div>
         ) : null}
       </CardHeader>
-      <CardContent className="p-3 pt-0" onPointerDown={stop} onClick={stop}>
-        <StatusSelect
-          specId={feature.specId}
-          status={feature.status}
-          className="h-7 text-xs"
-          canEdit={canEdit}
-          workflow={workflow}
-        />
-      </CardContent>
     </Card>
   );
 }

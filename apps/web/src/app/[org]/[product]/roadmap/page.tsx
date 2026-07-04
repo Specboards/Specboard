@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { parentLevelKey, resolveWorkflow } from "@specboard/core";
+import { parentLevelKey } from "@specboard/core";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -27,7 +27,7 @@ import { itemPath, LOCAL_ORG_SLUG, orgProductPath } from "@/lib/org-path";
 import { sortFeatures, statusLabel } from "@/lib/feature-helpers";
 import { productColorClasses } from "@/lib/product-color";
 import { getDb } from "@/lib/db";
-import { resolveRepoConfig } from "@/lib/repo-config";
+import { resolveWorkflowFor } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import {
@@ -68,8 +68,7 @@ export default async function RoadmapPage({
 
   // Card creation needs the workspace status workflow (first status is the
   // default) and the assignable members.
-  const repoConfig = await resolveRepoConfig(access);
-  const workflow = resolveWorkflow(repoConfig);
+  const workflow = await resolveWorkflowFor(access);
   const db = getDb();
   const members: WorkspaceMember[] =
     access && db ? await listWorkspaceMembers(db, access.workspaceId) : [];
@@ -277,7 +276,7 @@ export default async function RoadmapPage({
                     </CardTitle>
                     <CardDescription className="flex items-center gap-2 text-xs">
                       <StatusDot status={f.status} />
-                      {statusLabel(f.status)}
+                      {statusLabel(f.status, workflow)}
                     </CardDescription>
                   </CardHeader>
                 </Card>
