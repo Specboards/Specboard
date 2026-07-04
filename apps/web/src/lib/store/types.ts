@@ -309,6 +309,28 @@ export interface StatusStageInput {
   label: string;
 }
 
+/** A stage gate (one checklist item on a workflow stage) as the UI consumes it. */
+export interface StageGate {
+  /** Opaque id used to toggle completions and to reorder/remove the gate. */
+  id: string;
+  /** The stage key this gate guards (a WorkspaceStatus.key or built-in key). */
+  stageKey: string;
+  label: string;
+  /** Ordering within the stage's checklist; ascending. */
+  position: number;
+}
+
+/** One gate in a stage-gates replacement request (id omitted = newly added). */
+export interface StageGateInput {
+  /** Existing gate id to keep (preserves its completions); omit for a new gate. */
+  id?: string;
+  stageKey: string;
+  label: string;
+}
+
+/** Raised when stage gates can't be replaced (bad stage key, empty label, …). */
+export class StageGateError extends Error {}
+
 export type ReleaseStatus = "planned" | "in_progress" | "shipped";
 
 export const RELEASE_STATUSES: readonly ReleaseStatus[] = [
@@ -451,6 +473,35 @@ export interface FeatureStore {
     stages: StatusStageInput[],
     scope?: WorkspaceScope,
   ): Promise<WorkspaceStatus[]>;
+  /**
+   * The workspace's stage gates (checklist items per stage), ordered by stage
+   * then position. `[]` when no gates are defined.
+   */
+  listStageGates(scope?: WorkspaceScope): Promise<StageGate[]>;
+  /**
+   * Replace the workspace's stage gates wholesale. Positions follow the given
+   * order within each stage. Completions for removed gates are dropped (FK
+   * cascade). Returns the resolved, ordered gates after the update.
+   */
+  replaceStageGates(
+    gates: StageGateInput[],
+    scope?: WorkspaceScope,
+  ): Promise<StageGate[]>;
+  /**
+   * The gate ids completed (checked off) for one feature. Absence of an id
+   * means that gate is still open for the item.
+   */
+  listGateCompletions(specId: string, scope?: WorkspaceScope): Promise<string[]>;
+  /**
+   * Mark a gate complete/incomplete for a feature (idempotent upsert/delete).
+   * `completedBy` records who checked it, for a future audit trail.
+   */
+  setGateCompletion(
+    specId: string,
+    gateId: string,
+    completed: boolean,
+    scope?: WorkspaceScope,
+  ): Promise<void>;
   /** The workspace's custom properties, ordered by position. */
   listProperties(scope?: WorkspaceScope): Promise<PropertyDef[]>;
   /** Create a custom property definition; returns it with its key/id. */

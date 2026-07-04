@@ -402,6 +402,70 @@ export const workspaceStatuses = pgTable(
 );
 
 /**
+ * A stage gate: one checklist item an admin attaches to a workflow stage
+ * (`stage_key` references a `workspace_statuses.key`, or a built-in status key
+ * when the workspace uses the default workflow). Exit-criteria semantics: an
+ * item sitting in that stage must complete every gate before it can advance
+ * forward. Workspace-scoped; ordered by `position` within a stage.
+ */
+export const workspaceStageGates = pgTable(
+  "workspace_stage_gates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** The stage this gate guards (a `workspace_statuses.key` or built-in key). */
+    stageKey: text("stage_key").notNull(),
+    label: text("label").notNull(),
+    /** Manual ordering within a stage's checklist; ascending. */
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("workspace_stage_gates_ws_idx").on(t.workspaceId),
+    index("workspace_stage_gates_ws_stage_idx").on(t.workspaceId, t.stageKey),
+  ],
+);
+
+/**
+ * A per-item record that one stage gate has been satisfied for one feature.
+ * Presence of a row = that gate is checked off for that item. Absence = still
+ * open. Feature-scoped completion state that gate enforcement reads.
+ *
+ * Extension path (not built yet): to support an admin-enabled "skip with
+ * reason" flow, add nullable `skipped boolean` + `reason text` columns here and
+ * treat a row as a resolution (completed OR skipped) rather than only a
+ * completion. Future per-item-type gate bypass is enforced in the service
+ * layer, not stored here.
+ */
+export const featureGateCompletions = pgTable(
+  "feature_gate_completions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    featureId: uuid("feature_id")
+      .notNull()
+      .references(() => features.id, { onDelete: "cascade" }),
+    gateId: uuid("gate_id")
+      .notNull()
+      .references(() => workspaceStageGates.id, { onDelete: "cascade" }),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** The user who checked it off, for a future audit trail; null if unknown. */
+    completedBy: uuid("completed_by"),
+  },
+  (t) => [
+    unique("feature_gate_completions_uq").on(t.featureId, t.gateId),
+    index("feature_gate_completions_feature_idx").on(t.featureId),
+    index("feature_gate_completions_gate_idx").on(t.gateId),
+  ],
+);
+
+/**
  * A release: a named ship vehicle items are scheduled into
  * (`features.release_id`). Drives the Roadmap grouping and the Backlog
  * release filter. Workspace-scoped (not per product) so a release can span

@@ -52,6 +52,9 @@ import {
   type ReleaseInput,
   type ReleasePatch,
   type ReleaseRecord,
+  type StageGate,
+  type StageGateInput,
+  StageGateError,
   type StatusStageInput,
   type WorkspaceStatus,
   type ResolvedGithubLink,
@@ -234,6 +237,15 @@ export class LocalFileStore implements FeatureStore {
 
   private get statusesPath() {
     return path.join(this.root, ".specboard", "local-statuses.json");
+  }
+
+  private get stageGatesPath() {
+    return path.join(this.root, ".specboard", "local-stage-gates.json");
+  }
+
+  /** Per-item gate completions: specId -> completed gate ids. */
+  private get gateCompletionsPath() {
+    return path.join(this.root, ".specboard", "local-gate-completions.json");
   }
 
   private get templatesPath() {
@@ -1003,7 +1015,125 @@ export class LocalFileStore implements FeatureStore {
       JSON.stringify(rows, null, 2) + "\n",
       "utf8",
     );
+
+    // Drop gates (and their completions) whose stage was removed, mirroring the
+    // db store. `archived` stays valid so archived items keep working.
+    const validKeys = new Set([...stages.map((s) => s.key), "archived"]);
+    const gates = await this.listStageGates();
+    const kept = gates.filter((g) => validKeys.has(g.stageKey));
+    if (kept.length !== gates.length) {
+      await this.replaceStageGates(
+        kept.map((g) => ({ id: g.id, stageKey: g.stageKey, label: g.label })),
+      );
+    }
     return rows;
+  }
+
+  // Stage gates persist to `.specboard/local-stage-gates.json`; per-item
+  // completions to `.specboard/local-gate-completions.json`.
+  async listStageGates(_scope?: WorkspaceScope): Promise<StageGate[]> {
+    try {
+      const rows = JSON.parse(
+        await fs.readFile(this.stageGatesPath, "utf8"),
+      ) as StageGate[];
+      return rows
+        .slice()
+        .sort(
+          (a, b) =>
+            a.stageKey.localeCompare(b.stageKey) || a.position - b.position,
+        );
+    } catch {
+      return [];
+    }
+  }
+
+  async replaceStageGates(
+    gates: StageGateInput[],
+    _scope?: WorkspaceScope,
+  ): Promise<StageGate[]> {
+    // Reconcile by id so kept gates retain their ids (and completions); only
+    // gates dropped from the new set lose theirs.
+    const existingIds = new Set((await this.listStageGates()).map((g) => g.id));
+    const perStage = new Map<string, number>();
+    const rows: StageGate[] = gates.map((g) => {
+      const pos = perStage.get(g.stageKey) ?? 0;
+      perStage.set(g.stageKey, pos + 1);
+      const id = g.id && existingIds.has(g.id) ? g.id : randomUUID();
+      return { id, stageKey: g.stageKey, label: g.label, position: pos };
+    });
+    const sorted = rows
+      .slice()
+      .sort(
+        (a, b) => a.stageKey.localeCompare(b.stageKey) || a.position - b.position,
+      );
+    await fs.mkdir(path.dirname(this.stageGatesPath), { recursive: true });
+    await fs.writeFile(
+      this.stageGatesPath,
+      JSON.stringify(sorted, null, 2) + "\n",
+      "utf8",
+    );
+    // Drop completions whose gate no longer exists.
+    const valid = new Set(sorted.map((r) => r.id));
+    const completions = await this.readGateCompletions();
+    let changed = false;
+    for (const [specId, ids] of Object.entries(completions)) {
+      const kept = ids.filter((id) => valid.has(id));
+      if (kept.length !== ids.length) {
+        changed = true;
+        if (kept.length === 0) delete completions[specId];
+        else completions[specId] = kept;
+      }
+    }
+    if (changed) await this.writeGateCompletions(completions);
+    return sorted;
+  }
+
+  private async readGateCompletions(): Promise<Record<string, string[]>> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.gateCompletionsPath, "utf8"),
+      ) as Record<string, string[]>;
+    } catch {
+      return {};
+    }
+  }
+
+  private async writeGateCompletions(
+    map: Record<string, string[]>,
+  ): Promise<void> {
+    await fs.mkdir(path.dirname(this.gateCompletionsPath), { recursive: true });
+    await fs.writeFile(
+      this.gateCompletionsPath,
+      JSON.stringify(map, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  async listGateCompletions(
+    specId: string,
+    _scope?: WorkspaceScope,
+  ): Promise<string[]> {
+    const map = await this.readGateCompletions();
+    return map[specId] ?? [];
+  }
+
+  async setGateCompletion(
+    specId: string,
+    gateId: string,
+    completed: boolean,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {
+    const gates = await this.listStageGates();
+    if (!gates.some((g) => g.id === gateId)) {
+      throw new StageGateError("Unknown stage gate.");
+    }
+    const map = await this.readGateCompletions();
+    const current = new Set(map[specId] ?? []);
+    if (completed) current.add(gateId);
+    else current.delete(gateId);
+    if (current.size === 0) delete map[specId];
+    else map[specId] = [...current];
+    await this.writeGateCompletions(map);
   }
 
   private async readReleases(): Promise<LocalRelease[]> {

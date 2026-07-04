@@ -12,7 +12,12 @@ import { ALL_PRODUCTS } from "@/lib/active-product";
 import { getDb } from "@/lib/db";
 import { resolveWorkflowFor } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
-import type { FeatureDetail, ReleaseRecord, WorkspaceScope } from "@/lib/store/types";
+import type {
+  FeatureDetail,
+  ReleaseRecord,
+  StageGate,
+  WorkspaceScope,
+} from "@/lib/store/types";
 import {
   canWrite,
   listWorkspaceMembers,
@@ -45,6 +50,10 @@ export interface ItemDetailData {
   properties: PropertyDef[];
   releases: ReleaseRecord[];
   workflow: StatusWorkflow;
+  /** Exit-criteria gates for the item's *current* stage, in checklist order. */
+  stageGates: StageGate[];
+  /** Which of `stageGates` are checked off for this item. */
+  completedGateIds: string[];
   canEdit: boolean;
   /** Built-in field keys available at this level; null = all. */
   availableFields: string[] | null;
@@ -79,14 +88,24 @@ export async function getItemDetailData(
     access && db ? await listWorkspaceMembers(db, access.workspaceId) : [];
   const workflow = await resolveWorkflowFor(access);
 
-  const [allProperties, releases, allFeatures, levels, products] =
+  const [allProperties, releases, allFeatures, levels, products, allGates, allCompletedGateIds] =
     await Promise.all([
       store.listProperties(access ?? undefined),
       store.listReleases(access ?? undefined),
       store.listFeatures(access ?? undefined),
       store.listLevels(access ?? undefined),
       store.listProducts(access ?? undefined),
+      store.listStageGates(access ?? undefined),
+      store.listGateCompletions(feature.specId, access ?? undefined),
     ]);
+
+  // Only the current stage's gates are actionable on the item (exit criteria),
+  // and completedGateIds is scoped to those so it matches stageGates 1:1.
+  const stageGates = allGates.filter((g) => g.stageKey === feature.status);
+  const stageGateIds = new Set(stageGates.map((g) => g.id));
+  const completedGateIds = allCompletedGateIds.filter((id) =>
+    stageGateIds.has(id),
+  );
 
   const properties = allProperties.filter((p) =>
     propertyAppliesToLevel(p, feature.level),
@@ -123,6 +142,8 @@ export async function getItemDetailData(
     properties,
     releases,
     workflow,
+    stageGates,
+    completedGateIds,
     canEdit,
     availableFields,
     levelLabel,

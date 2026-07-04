@@ -40,7 +40,9 @@ import {
   users,
   workspaceLevels,
   workspaceProperties,
+  workspaceStageGates,
   workspaceStatuses,
+  featureGateCompletions,
   type Database,
 } from "@specboard/db";
 
@@ -83,6 +85,9 @@ import {
   type ReleasePatch,
   type ReleaseRecord,
   type ReleaseStatus,
+  type StageGate,
+  type StageGateInput,
+  StageGateError,
   type StatusStageInput,
   type WorkspaceStatus,
   type ResolvedGithubLink,
@@ -1442,6 +1447,27 @@ export class DbStore implements FeatureStore {
           );
       }
 
+      // Drop stage gates whose stage was removed (renames keep the key, so only
+      // deletions strand gates). Their completions cascade with the gate rows,
+      // so a removed-then-recreated stage doesn't resurrect stale checklists.
+      const usedStages = await tx
+        .selectDistinct({ stageKey: workspaceStageGates.stageKey })
+        .from(workspaceStageGates)
+        .where(eq(workspaceStageGates.workspaceId, ws));
+      const orphanedGateStages = usedStages
+        .map((r) => r.stageKey)
+        .filter((s) => !validKeys.has(s));
+      if (orphanedGateStages.length > 0) {
+        await tx
+          .delete(workspaceStageGates)
+          .where(
+            and(
+              eq(workspaceStageGates.workspaceId, ws),
+              inArray(workspaceStageGates.stageKey, orphanedGateStages),
+            ),
+          );
+      }
+
       // Replace the stage set wholesale (positions follow the given order).
       await tx
         .delete(workspaceStatuses)
@@ -1457,6 +1483,186 @@ export class DbStore implements FeatureStore {
         );
       }
       return stages.map((s, i) => ({ key: s.key, label: s.label, position: i }));
+    });
+  }
+
+  async listStageGates(scope?: WorkspaceScope): Promise<StageGate[]> {
+    return this.scoped(scope, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(workspaceStageGates)
+        .where(eq(workspaceStageGates.workspaceId, scope!.workspaceId))
+        .orderBy(
+          asc(workspaceStageGates.stageKey),
+          asc(workspaceStageGates.position),
+        );
+      return rows.map((r) => ({
+        id: r.id,
+        stageKey: r.stageKey,
+        label: r.label,
+        position: r.position,
+      }));
+    });
+  }
+
+  async replaceStageGates(
+    gates: StageGateInput[],
+    scope?: WorkspaceScope,
+  ): Promise<StageGate[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      // Position is per-stage: the nth gate listed for a given stage.
+      const perStage = new Map<string, number>();
+      const resolved = gates.map((g) => {
+        const pos = perStage.get(g.stageKey) ?? 0;
+        perStage.set(g.stageKey, pos + 1);
+        return { id: g.id, stageKey: g.stageKey, label: g.label, position: pos };
+      });
+
+      // Reconcile against the existing set so kept gates (matched by id) retain
+      // their per-item completions; only removed gates cascade-delete theirs.
+      const existing = await tx
+        .select({ id: workspaceStageGates.id })
+        .from(workspaceStageGates)
+        .where(eq(workspaceStageGates.workspaceId, ws));
+      const existingIds = new Set(existing.map((r) => r.id));
+      const keepIds = new Set(
+        resolved.map((g) => g.id).filter((id): id is string => !!id && existingIds.has(id)),
+      );
+
+      // Delete gates that are gone from the new set.
+      const toDelete = [...existingIds].filter((id) => !keepIds.has(id));
+      if (toDelete.length > 0) {
+        await tx
+          .delete(workspaceStageGates)
+          .where(
+            and(
+              eq(workspaceStageGates.workspaceId, ws),
+              inArray(workspaceStageGates.id, toDelete),
+            ),
+          );
+      }
+
+      // Update kept gates in place; insert new ones.
+      for (const g of resolved) {
+        if (g.id && keepIds.has(g.id)) {
+          await tx
+            .update(workspaceStageGates)
+            .set({ stageKey: g.stageKey, label: g.label, position: g.position })
+            .where(
+              and(
+                eq(workspaceStageGates.id, g.id),
+                eq(workspaceStageGates.workspaceId, ws),
+              ),
+            );
+        } else {
+          await tx.insert(workspaceStageGates).values({
+            workspaceId: ws,
+            stageKey: g.stageKey,
+            label: g.label,
+            position: g.position,
+          });
+        }
+      }
+
+      const rows = await tx
+        .select()
+        .from(workspaceStageGates)
+        .where(eq(workspaceStageGates.workspaceId, ws))
+        .orderBy(
+          asc(workspaceStageGates.stageKey),
+          asc(workspaceStageGates.position),
+        );
+      return rows.map((r) => ({
+        id: r.id,
+        stageKey: r.stageKey,
+        label: r.label,
+        position: r.position,
+      }));
+    });
+  }
+
+  async listGateCompletions(
+    specId: string,
+    scope?: WorkspaceScope,
+  ): Promise<string[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const feat = await tx
+        .select({ id: features.id })
+        .from(features)
+        .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)));
+      if (!feat[0]) return [];
+      const rows = await tx
+        .select({ gateId: featureGateCompletions.gateId })
+        .from(featureGateCompletions)
+        .where(
+          and(
+            eq(featureGateCompletions.featureId, feat[0].id),
+            eq(featureGateCompletions.workspaceId, ws),
+          ),
+        );
+      return rows.map((r) => r.gateId);
+    });
+  }
+
+  async setGateCompletion(
+    specId: string,
+    gateId: string,
+    completed: boolean,
+    scope?: WorkspaceScope,
+  ): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const feat = await tx
+        .select({ id: features.id, productId: features.productId })
+        .from(features)
+        .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)));
+      if (!feat[0]) throw new StageGateError(`Unknown feature: ${specId}`);
+      const access = await this.accessIn(tx, scope!);
+      if (!canWriteProductId(access, feat[0].productId)) {
+        throw new StageGateError(
+          "Your role does not permit editing this product.",
+        );
+      }
+      // The gate must exist in this workspace (RLS also enforces the tenant).
+      const gate = await tx
+        .select({ id: workspaceStageGates.id })
+        .from(workspaceStageGates)
+        .where(
+          and(
+            eq(workspaceStageGates.id, gateId),
+            eq(workspaceStageGates.workspaceId, ws),
+          ),
+        );
+      if (!gate[0]) throw new StageGateError("Unknown stage gate.");
+
+      if (completed) {
+        await tx
+          .insert(featureGateCompletions)
+          .values({
+            workspaceId: ws,
+            featureId: feat[0].id,
+            gateId,
+            completedBy: scope!.userId,
+          })
+          .onConflictDoNothing({
+            target: [
+              featureGateCompletions.featureId,
+              featureGateCompletions.gateId,
+            ],
+          });
+      } else {
+        await tx
+          .delete(featureGateCompletions)
+          .where(
+            and(
+              eq(featureGateCompletions.featureId, feat[0].id),
+              eq(featureGateCompletions.gateId, gateId),
+              eq(featureGateCompletions.workspaceId, ws),
+            ),
+          );
+      }
     });
   }
 

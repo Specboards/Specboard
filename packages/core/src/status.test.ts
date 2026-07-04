@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { canTransition, defaultWorkflow, resolveWorkflow } from "./status.js";
+import {
+  canTransition,
+  defaultWorkflow,
+  isForwardTransition,
+  resolveWorkflow,
+  workflowFromStages,
+} from "./status.js";
 
 describe("resolveWorkflow", () => {
   it("falls back to the default workflow when statuses are absent or too few", () => {
@@ -25,5 +31,34 @@ describe("resolveWorkflow", () => {
     expect(canTransition("c", "a", wf)).toBe(true);
     // a status can always stay put
     expect(canTransition("a", "a", wf)).toBe(true);
+  });
+});
+
+describe("isForwardTransition", () => {
+  it("is true only when the target sits later in the stage order", () => {
+    expect(isForwardTransition("backlog", "in_progress")).toBe(true);
+    expect(isForwardTransition("in_review", "done")).toBe(true);
+  });
+
+  it("is false for backward moves and no-ops", () => {
+    expect(isForwardTransition("in_progress", "backlog")).toBe(false);
+    expect(isForwardTransition("done", "done")).toBe(false);
+  });
+
+  it("never treats archiving as forward, even though archived is last", () => {
+    // `archived` is appended to custom workflows, so a naive index check would
+    // call every move to it "forward"; gates must not fire on archiving.
+    const wf = workflowFromStages([
+      { key: "todo", label: "To do" },
+      { key: "shipping", label: "Shipping" },
+    ])!;
+    expect(wf.statuses).toContain("archived");
+    expect(isForwardTransition("todo", "archived", wf)).toBe(false);
+    expect(isForwardTransition("todo", "shipping", wf)).toBe(true);
+  });
+
+  it("is false when either status is unknown to the workflow", () => {
+    expect(isForwardTransition("mystery", "done")).toBe(false);
+    expect(isForwardTransition("backlog", "mystery")).toBe(false);
   });
 });

@@ -5,6 +5,22 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.7.0] - 2026-07-04
+
+### Added
+
+- **Workflow stage gates** (Settings → Cards → Workflow → Stage gates; migration
+  0025 adds `workspace_stage_gates` and `feature_gate_completions`). Admins can
+  attach a checklist to any stage. An item sitting in that stage shows the
+  checklist on its detail view, and members tick items off as they go. A stage's
+  checklist must be fully complete before the item can advance forward: the move
+  is hard-blocked on the board and through the API until every gate is checked.
+  Pulling an item back to an earlier stage or archiving it is always allowed. A
+  multi-stage jump enforces the checklists of every stage it passes over, so
+  gates can't be skipped by jumping. The MCP server's `update_status` enforces
+  the same rule, so coding agents can't advance an item past its checklist.
+  Renaming a stage keeps its gates; removing a stage clears them.
+
 ## [0.6.0] - 2026-07-04
 
 ### Added

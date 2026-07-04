@@ -8,12 +8,14 @@ import { FeatureDetailsEditor } from "@/components/feature-details-editor";
 import { FeatureGithubLinks } from "@/components/feature-github-links";
 import { FeatureParentSelect } from "@/components/feature-parent-select";
 import { FeatureRelations } from "@/components/feature-relations";
+import { GateChecklist } from "@/components/gate-checklist";
 import { GenerateChildButton } from "@/components/generate-child-button";
 import { ItemProperties } from "@/components/item-properties";
 import { ItemTitle } from "@/components/item-title";
 import { StatusDot } from "@/components/status-dot";
 import { WorkItemDelete } from "@/components/work-item-controls";
 import { Badge } from "@/components/ui/badge";
+import { statusLabel } from "@/lib/feature-helpers";
 import type { ItemDetailData } from "@/lib/item-detail";
 import { useOrgProductPath } from "@/lib/use-org";
 
@@ -37,6 +39,8 @@ export function ItemDetailView({
     properties,
     releases,
     workflow,
+    stageGates,
+    completedGateIds,
     canEdit,
     availableFields,
     levelLabel,
@@ -84,6 +88,18 @@ export function ItemDetailView({
         workflow={workflow}
         canEdit={canEdit}
         availableFields={availableFields}
+      />
+
+      {/* Exit-criteria checklist for the stage this item currently sits in.
+          Keyed by specId + status so its local checked-state re-seeds when the
+          view is reused for another item or after the stage changes. */}
+      <GateChecklist
+        key={`${feature.specId}:${feature.status}`}
+        specId={feature.specId}
+        stageLabel={statusLabel(feature.status, workflow)}
+        gates={stageGates}
+        completedGateIds={completedGateIds}
+        canEdit={canEdit}
       />
 
       <hr className="border-border/60" />
