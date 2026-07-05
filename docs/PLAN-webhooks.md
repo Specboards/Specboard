@@ -10,6 +10,38 @@ This doc is the design to react to before any code. It records what the codebase
 already gives us, the data + event model, the delivery options (the one real
 decision), the signing/security scheme, and a phased build.
 
+## Status (V1 as built, 2026-07-05)
+
+Phase 1 shipped, and the open questions were resolved toward the robust end of
+each option (see below), so a few things landed in V1 that the original plan had
+deferred:
+
+- **Delivery = durable outbox from day one** (not best-effort). `dispatchEvent`
+  writes a `webhook_deliveries` row per matched endpoint; an in-process drainer
+  (`lib/webhooks/drainer.ts`, started in `instrumentation.ts`) claims due rows
+  with `FOR UPDATE SKIP LOCKED`, POSTs with a 5s timeout, and records
+  `delivered|failed` with backoff (`1m, 5m, 30m, 2h, 6h`, then failed). One
+  honest softness: the outbox insert is *immediately after* the domain write,
+  not in the same transaction (the store abstraction doesn't expose its tx), so
+  a crash in the sub-millisecond gap can drop an event. Same-tx is a later
+  change.
+- **Events (4):** `item.status_changed`, `item.created`, `item.deleted`,
+  `release.shipped`.
+- **Per-product routing:** `webhook_endpoints.product_id` (nullable; null = all
+  products). A workspace-level event (`release.shipped`) reaches only
+  null-product endpoints.
+- **Actor included** in `data.actor` (`{id, name}`), resolved from the acting
+  user; null for unattributable actions.
+- **SSRF:** on by default (blocks loopback/private/link-local/metadata; https
+  only). `SPECBOARD_WEBHOOK_ALLOW_PRIVATE=1` relaxes it for self-host / e2e.
+- **Migration 0028** (`webhook_endpoints` + `webhook_deliveries`, both with the
+  `specboard_is_member` RLS policy) applied to **test**; **not yet prod**.
+- Both tables and the whole path are covered by `e2e/webhooks.spec.ts` (register
+  → ship a release → assert a signed delivery arrives at a local receiver).
+
+Still to do (Phase 2+): delivery-log UI + manual redeliver, endpoint
+auto-disable after a failure streak, and the same-transaction outbox write.
+
 ## Why this is cheap to hook in (current-state findings)
 
 - **One choke point for status changes.** Every status change (board drag,
