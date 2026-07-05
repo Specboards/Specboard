@@ -1,37 +1,66 @@
 "use client";
 
 import { ExternalLink, FileText, GitBranch } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthRequiredError, setDocSpace } from "@/lib/api-client";
+import {
+  AuthRequiredError,
+  createGithubDocSpace,
+  setDocSpace,
+} from "@/lib/api-client";
 import type { DocArea } from "@/lib/store/types";
+
+/** What the GitHub option can do for this workspace (computed server-side). */
+export interface GithubSetupState {
+  /** GitHub is configured and the workspace has an org installation. */
+  available: boolean;
+  /** Only workspace admins may create org repositories. */
+  isAdmin: boolean;
+  /** Prefill for the new repo name, e.g. "webapp-research". */
+  suggestedName: string;
+  /** Where to send the user to install/connect the GitHub App. */
+  installHref: string;
+}
 
 /**
  * First-run chooser for where an area's docs live: link out to an external
- * repository (SharePoint, Box, ...), keep pages in Specboard, or back them
- * with a GitHub repo (a later slice; shown but not yet enabled). Rendered
+ * repository (SharePoint, Box, ...), keep pages in Specboard, or create a
+ * GitHub repo of Markdown that Specboard edits and commits back. Rendered
  * until the team picks, and again when they choose "Change source".
  */
 export function DocSpaceSetup({
   productId,
   area,
   areaLabel,
+  github,
   onSaved,
   onCancel,
 }: {
   productId: string;
   area: DocArea;
   areaLabel: string;
+  github: GithubSetupState;
   /** Called with no args after the choice persists (parent refreshes). */
   onSaved: () => void;
   /** Present when a source already exists and this is a change, not setup. */
   onCancel?: () => void;
 }) {
   const [externalUrl, setExternalUrl] = useState("");
-  const [busy, setBusy] = useState<"external" | "local" | null>(null);
+  const [repoName, setRepoName] = useState(github.suggestedName);
+  const [busy, setBusy] = useState<"external" | "local" | "github" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function fail(err: unknown) {
+    if (err instanceof AuthRequiredError) {
+      window.location.href = `/sign-in?from=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
+    setError(err instanceof Error ? err.message : "Save failed.");
+    setBusy(null);
+  }
 
   async function choose(mode: "external" | "local") {
     setBusy(mode);
@@ -45,14 +74,22 @@ export function DocSpaceSetup({
       });
       onSaved();
     } catch (err) {
-      if (err instanceof AuthRequiredError) {
-        window.location.href = `/sign-in?from=${encodeURIComponent(window.location.pathname)}`;
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Save failed.");
-      setBusy(null);
+      fail(err);
     }
   }
+
+  async function createRepo() {
+    setBusy("github");
+    setError(null);
+    try {
+      await createGithubDocSpace({ productId, area, name: repoName.trim() });
+      onSaved();
+    } catch (err) {
+      fail(err);
+    }
+  }
+
+  const canCreateRepo = github.available && github.isAdmin;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 py-8">
@@ -115,20 +152,46 @@ export function DocSpaceSetup({
           </div>
         </div>
 
-        <div className="rounded-lg border border-dashed p-4 opacity-70">
+        <div className="rounded-lg border p-4">
           <div className="flex items-start gap-3">
             <GitBranch className="mt-0.5 h-5 w-5 text-muted-foreground" aria-hidden />
-            <div className="flex-1 space-y-1">
-              <p className="text-sm font-medium">
-                Create a GitHub repository
-                <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Soon
-                </span>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Store docs as Markdown files in a repo your team owns. Edit them here;
-                saves commit back to the repo.
-              </p>
+            <div className="flex-1 space-y-2">
+              <div>
+                <p className="text-sm font-medium">Create a GitHub repository</p>
+                <p className="text-sm text-muted-foreground">
+                  Docs live as Markdown files in a private repo your org owns. Edit
+                  them here; every save commits back to the repo.
+                </p>
+              </div>
+              {canCreateRepo ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={repoName}
+                    onChange={(e) => setRepoName(e.target.value)}
+                    aria-label="New repository name"
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={() => void createRepo()}
+                    disabled={busy !== null || !repoName.trim()}
+                  >
+                    {busy === "github" ? "Creating…" : "Create repository"}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {github.available ? (
+                    "Only a workspace admin can create the repository."
+                  ) : (
+                    <>
+                      <Link href={github.installHref} className="underline hover:text-foreground">
+                        Connect the GitHub App
+                      </Link>{" "}
+                      to an organization first.
+                    </>
+                  )}
+                </p>
+              )}
             </div>
           </div>
         </div>

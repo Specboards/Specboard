@@ -34,9 +34,13 @@ export type RepoRecord = typeof repositories.$inferSelect;
  * Resolve the git client for a connected repo. Normally this mints an
  * installation-scoped GitHub client via the App. Under `SPECBOARD_E2E` it
  * returns the in-memory fake (see github-e2e.ts) so tests run with no network.
- * The single choke point for every GitHub read/write in this module.
+ * The single choke point for every GitHub read/write in this module (and for
+ * the GitHub-backed doc spaces in github-docs.ts).
  */
-async function resolveRepoClient(db: Database, repo: RepoRecord): Promise<GitRepoClient> {
+export async function resolveRepoClient(
+  db: Database,
+  repo: RepoRecord,
+): Promise<GitRepoClient> {
   if (isE2E()) return fakeRepoClient(repo);
   const app = await getGithubApp(db);
   if (!app) {

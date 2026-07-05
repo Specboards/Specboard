@@ -1180,3 +1180,50 @@ export async function deleteDocPage(id: string): Promise<void> {
     throw new Error(body?.error ?? `Delete failed with ${res.status}`);
   }
 }
+
+/**
+ * Create a private GitHub docs repository and bind it as the area's doc
+ * source. Returns the updated space plus the created repo's coordinates.
+ */
+export async function createGithubDocSpace(input: {
+  productId: string;
+  area: DocArea;
+  name: string;
+}): Promise<{ space: DocSpace; repository: { owner: string; name: string } }> {
+  const res = await fetch("/api/v1/doc-spaces/github", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | {
+        space?: DocSpace;
+        repository?: { owner: string; name: string };
+        error?: string;
+      }
+    | null;
+  if (!res.ok || !body?.space || !body.repository) {
+    throw new Error(body?.error ?? `Create failed with ${res.status}`);
+  }
+  return { space: body.space, repository: body.repository };
+}
+
+/** Save (commit) one Markdown file in a GitHub-backed doc area. */
+export async function saveGithubDocFile(input: {
+  productId: string;
+  area: DocArea;
+  path: string;
+  content: string;
+}): Promise<void> {
+  const res = await fetch("/api/v1/doc-spaces/github/file", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(body?.error ?? `Save failed with ${res.status}`);
+  }
+}

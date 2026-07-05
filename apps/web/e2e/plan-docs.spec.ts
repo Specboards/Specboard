@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-import { getWorkspace, resetDocs } from "./helpers/db";
+import { getWorkspace, resetBoard, resetDocs, seedInstallation } from "./helpers/db";
+import { getRepoFiles, resetFixture } from "./helpers/github";
 
 /**
  * The Plan section: the restructured Plan / Build / Ship sidebar plus the new
@@ -97,6 +98,46 @@ test.describe("plan section: nav, strategy pages, research source", () => {
     await expect(
       page.getByRole("button", { name: "User interviews" }),
     ).toBeVisible();
+  });
+
+  test("research: a GitHub docs repo; pages commit back to the repo", async ({
+    page,
+  }) => {
+    const ws = await getWorkspace();
+    // Clean repo/installation state, then bind the org installation the
+    // create-repo flow needs (mirrors the onboarding create-repo test).
+    await resetBoard(ws.id);
+    resetFixture();
+    await seedInstallation({ workspaceId: ws.id, accountLogin: "acme" });
+
+    await page.goto(`/${ws.slug}/all/research`);
+
+    // Create the docs repo from the chooser's GitHub option.
+    await page.getByLabel("New repository name").fill("research-docs");
+    await page.getByRole("button", { name: "Create repository" }).click();
+
+    // The area becomes a file workspace on the (empty) new repo.
+    await expect(page.getByRole("link", { name: "acme/research-docs" })).toBeVisible();
+    await expect(page.getByText("No Markdown files yet.")).toBeVisible();
+
+    // Creating a page commits the initial file to the repo.
+    await page.getByRole("button", { name: "New page" }).click();
+    await page.getByLabel("New page title").fill("Interview notes");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "interview-notes" })).toBeVisible();
+    expect(getRepoFiles("acme", "research-docs")["interview-notes.md"]).toBe(
+      "# Interview notes\n",
+    );
+
+    // Editing and saving commits the update.
+    await page.getByRole("button", { name: "Raw" }).click();
+    await page.locator("textarea").fill("# Interview notes\n\nJane said hello.");
+    await expect(page.getByText("Unsaved changes")).toBeVisible();
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("status")).toHaveText("Saved");
+    expect(getRepoFiles("acme", "research-docs")["interview-notes.md"]).toContain(
+      "Jane said hello.",
+    );
   });
 
   test("architecture: offers the same source chooser", async ({ page }) => {
