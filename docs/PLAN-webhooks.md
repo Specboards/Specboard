@@ -42,11 +42,13 @@ deferred:
 - Both tables and the whole path are covered by `e2e/webhooks.spec.ts` (register
   → ship a release → assert a signed delivery arrives at a local receiver).
 
-Still to do (Phase 2+): delivery-log UI + manual redeliver, endpoint
-auto-disable after a failure streak, and retention/pruning of old processed
-`outbox_events` (rows are written for every item/release change regardless of
-whether any endpoint is subscribed, so the table grows and should be pruned
-periodically).
+**Outbox retention (DONE):** the drainer prunes processed `outbox_events` older
+than `SPECBOARD_OUTBOX_RETENTION_DAYS` (default 7; 0 disables) hourly, in bounded
+batches. Only processed rows are removed; an old *unprocessed* row (never
+relayed) is kept for inspection.
+
+Still to do (Phase 2+): delivery-log UI + manual redeliver, and endpoint
+auto-disable after a failure streak.
 
 ## Why this is cheap to hook in (current-state findings)
 

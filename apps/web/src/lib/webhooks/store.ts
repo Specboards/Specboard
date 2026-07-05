@@ -270,3 +270,31 @@ export async function markFailed(
     })
     .where(eq(webhookDeliveries.id, id));
 }
+
+/**
+ * Delete up to `limit` outbox events that were processed more than
+ * `retentionDays` ago, returning how many were removed. Only *processed* rows
+ * are pruned: an old row that's still unprocessed means the relay never handled
+ * it (a bug), and is kept for retry/inspection. Filtering on `created_at` reuses
+ * the existing index (processed rows are stamped moments after creation, so
+ * age-by-created is effectively age-by-processed). Batched so one sweep never
+ * takes a long lock.
+ */
+export async function pruneProcessedOutbox(
+  db: Database,
+  retentionDays: number,
+  limit: number,
+): Promise<number> {
+  const result = await db.execute(sql`
+    DELETE FROM outbox_events
+    WHERE id IN (
+      SELECT id FROM outbox_events
+      WHERE processed_at IS NOT NULL
+        AND created_at < now() - (${retentionDays} * interval '1 day')
+      ORDER BY created_at
+      LIMIT ${limit}
+    )
+    RETURNING id
+  `);
+  return (result as unknown as unknown[]).length;
+}
