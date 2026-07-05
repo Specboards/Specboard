@@ -10,6 +10,7 @@ import {
   markDelivered,
   markFailed,
   markRetry,
+  pruneProcessedOutbox,
   type ClaimedDelivery,
 } from "@/lib/webhooks/store";
 
@@ -30,18 +31,57 @@ const LEASE_SECONDS = 120; // visibility timeout: a crashed POST re-becomes due 
 /** Backoff after the Nth failed attempt (1-indexed); past the end = give up. */
 const BACKOFF_SECONDS = [60, 300, 1_800, 7_200, 21_600]; // 1m, 5m, 30m, 2h, 6h
 
+// Outbox retention: processed events older than this are pruned hourly so the
+// table doesn't grow without bound (a row is written per item/release change,
+// regardless of whether any endpoint is subscribed). Configurable; 0 disables.
+const RETENTION_DAYS = readRetentionDays();
+const PRUNE_INTERVAL_MS = 60 * 60 * 1_000; // hourly
+const PRUNE_BATCH = 500;
+const PRUNE_MAX_PER_SWEEP = 50_000; // bound a single sweep's work
+
+function readRetentionDays(): number {
+  const raw = process.env.SPECBOARD_OUTBOX_RETENTION_DAYS;
+  if (raw === undefined || raw === "") return 7;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 7;
+}
+
 let interval: ReturnType<typeof setInterval> | null = null;
 let draining = false;
 let rerun = false;
 let soonScheduled = false;
 
-/** Start the periodic sweep once per process. No-op in local file mode. */
+/** Start the periodic sweeps once per process. No-op in local file mode. */
 export function startDrainer(): void {
   if (interval) return;
   if (!getDb()) return;
   interval = setInterval(() => void drainOnce(), INTERVAL_MS);
   // Kick shortly after boot to flush anything left pending across a restart.
   setTimeout(() => void drainOnce(), 2_000);
+  if (RETENTION_DAYS > 0) {
+    setInterval(() => void pruneOnce(), PRUNE_INTERVAL_MS);
+    setTimeout(() => void pruneOnce(), 60_000); // first prune a minute after boot
+  }
+}
+
+/** Delete processed outbox events past the retention window, in bounded batches. */
+export async function pruneOnce(): Promise<void> {
+  if (RETENTION_DAYS <= 0) return;
+  const db = getDb();
+  if (!db) return;
+  try {
+    let total = 0;
+    let deleted = 0;
+    do {
+      deleted = await pruneProcessedOutbox(db, RETENTION_DAYS, PRUNE_BATCH);
+      total += deleted;
+    } while (deleted === PRUNE_BATCH && total < PRUNE_MAX_PER_SWEEP);
+    if (total > 0) {
+      console.log(`[webhooks] pruned ${total} processed outbox events`);
+    }
+  } catch (err) {
+    console.error("[webhooks] outbox prune failed:", err);
+  }
 }
 
 /** Coalesced nudge used by `dispatchEvent` so a burst of events drains once. */
