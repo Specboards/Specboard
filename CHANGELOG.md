@@ -5,6 +5,20 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.10.1] - 2026-07-05
+
+### Changed
+
+- **Webhooks: durable transactional outbox** (migration 0029 adds
+  `outbox_events`). Domain changes now record their event in the *same database
+  transaction* as the change, closing the small window where a crash between the
+  commit and the webhook enqueue could drop an event. A relay fans events out to
+  the per-endpoint delivery queue and the drainer sends them as before, so
+  delivery behavior is unchanged. The `outbox_events` stream is generic, so
+  future consumers (notifications, an activity feed) can build on it. Processed
+  events are pruned on a retention window (`SPECBOARD_OUTBOX_RETENTION_DAYS`,
+  default 7) so the table doesn't grow without bound. No user-facing change.
+
 ## [0.10.0] - 2026-07-05
 
 ### Added
