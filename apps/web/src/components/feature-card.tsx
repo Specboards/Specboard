@@ -78,7 +78,7 @@ export function FeatureCard({
 
   return (
     <Card
-      className="cursor-pointer rounded-lg shadow-none transition-colors hover:border-foreground/20"
+      className="cursor-pointer rounded-lg shadow-sm transition-colors hover:border-foreground/25"
       onClick={onOpen}
     >
       <CardHeader className="space-y-1 p-3">
@@ -95,7 +95,7 @@ export function FeatureCard({
             {customFieldLabels[featured!] ?? featured}: {featuredValue}
           </Badge>
         ) : null}
-        <CardTitle className="text-sm">
+        <CardTitle className="text-[0.9375rem]">
           <Link
             href={orgHref(`/backlog/${feature.level}/${feature.specId}`)}
             className="hover:underline"
