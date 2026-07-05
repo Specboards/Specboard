@@ -830,6 +830,7 @@ export function parseReleaseInput(body: unknown): ReleaseInput {
   if ("status" in raw) input.status = parseReleaseStatus(raw.status);
   if ("startDate" in raw) input.startDate = parseDate(raw.startDate, "startDate");
   if ("targetDate" in raw) input.targetDate = parseDate(raw.targetDate, "targetDate");
+  if ("notes" in raw) input.notes = parseReleaseNotes(raw.notes);
   return input;
 }
 
@@ -849,12 +850,26 @@ export function parseReleasePatch(body: unknown): ReleasePatch {
   if ("status" in raw) patch.status = parseReleaseStatus(raw.status);
   if ("startDate" in raw) patch.startDate = parseDate(raw.startDate, "startDate");
   if ("targetDate" in raw) patch.targetDate = parseDate(raw.targetDate, "targetDate");
+  if ("notes" in raw) patch.notes = parseReleaseNotes(raw.notes);
   if (Object.keys(patch).length === 0) {
     throw new InvalidPatchError(
-      "Patch must set at least one of: name, status, startDate, targetDate.",
+      "Patch must set at least one of: name, status, startDate, targetDate, notes.",
     );
   }
   return patch;
+}
+
+/** Validate release notes: a string (trimmed; empty becomes null) or null. */
+function parseReleaseNotes(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new InvalidPatchError("notes must be a string or null.");
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > 10_000) {
+    throw new InvalidPatchError("notes must be 10,000 characters or fewer.");
+  }
+  return trimmed || null;
 }
 
 function parseReleaseStatus(value: unknown): ReleaseStatus {

@@ -350,6 +350,8 @@ export interface ReleaseRecord {
   startDate: string | null;
   /** Target ship date as YYYY-MM-DD, or null when undated. */
   targetDate: string | null;
+  /** Free-form release notes (Markdown), or null. */
+  notes: string | null;
   /** Count of items scheduled into this release. */
   itemCount: number;
 }
@@ -359,6 +361,7 @@ export interface ReleaseInput {
   status?: ReleaseStatus;
   startDate?: string | null;
   targetDate?: string | null;
+  notes?: string | null;
 }
 
 export type ReleasePatch = Partial<{
@@ -366,6 +369,7 @@ export type ReleasePatch = Partial<{
   status: ReleaseStatus;
   startDate: string | null;
   targetDate: string | null;
+  notes: string | null;
 }>;
 
 /** Raised when a release can't be created/updated/deleted. */

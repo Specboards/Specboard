@@ -3,47 +3,26 @@ import { notFound } from "next/navigation";
 
 import { parentLevelKey } from "@specboard/core";
 
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
-import {
-  ReleaseCreate,
-  ReleaseDelete,
-  ReleaseEdit,
-  ReleaseReopen,
-  ReleaseShip,
-} from "@/components/release-controls";
-import { StatusDot } from "@/components/status-dot";
+import { ReleaseCreate } from "@/components/release-controls";
 import { WorkItemCreate } from "@/components/work-item-create";
 import { resolveActiveLevel } from "@/lib/active-level";
 import { ALL_PRODUCTS, resolveActiveProduct } from "@/lib/active-product";
-import { itemPath, LOCAL_ORG_SLUG, orgProductPath } from "@/lib/org-path";
-import { sortFeatures, statusLabel } from "@/lib/feature-helpers";
-import { productColorClasses } from "@/lib/product-color";
+import { LOCAL_ORG_SLUG, orgProductPath } from "@/lib/org-path";
+import { sortFeatures } from "@/lib/feature-helpers";
 import { getDb } from "@/lib/db";
 import { resolveWorkflowFor } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
 import {
   canWrite,
   listWorkspaceMembers,
   type WorkspaceMember,
 } from "@/lib/workspace";
 import { canConnectRepos, requireWorkspaceAccess } from "@/lib/workspace-access";
+import { RoadmapBoard, type RoadmapColumn } from "./roadmap-board";
 
 export const dynamic = "force-dynamic";
-
-const RELEASE_STATUS_LABELS: Record<string, string> = {
-  planned: "Planned",
-  in_progress: "In progress",
-  shipped: "Shipped",
-};
 
 /** Roadmap: items grouped by release (dated first), unscheduled work last. */
 export default async function RoadmapPage({
@@ -118,20 +97,13 @@ export default async function RoadmapPage({
   const shippedReleases = releases.filter((r) => r.status === "shipped");
   const visibleReleases = showShipped ? shippedReleases : activeReleases;
 
-  // One column per release (already ordered: dated first), unscheduled last.
-  // `release` carries the full record so admins can edit it inline; it is null
-  // for the trailing "Unscheduled" bucket. The Unscheduled column is only shown
-  // (active view) when something is actually unscheduled, so a fully-planned
-  // board stays tidy.
-  const hasUnscheduled = !showShipped && features.some((f) => f.releaseId === null);
-  const groups: Array<{
-    releaseId: string | null;
-    name: string;
-    startDate: string | null;
-    targetDate: string | null;
-    status: string | null;
-    release: (typeof releases)[number] | null;
-  }> = [
+  // One column per release (already ordered: dated first), Unscheduled last.
+  // Editors always get the Unscheduled column (active view) as a drop target for
+  // clearing an item's release; read-only viewers see it only when something is
+  // actually unscheduled, so a fully-planned board stays tidy.
+  const includeUnscheduled =
+    !showShipped && (canEdit || features.some((f) => f.releaseId === null));
+  const columns: RoadmapColumn[] = [
     ...visibleReleases.map((r) => ({
       releaseId: r.id as string | null,
       name: r.name,
@@ -140,7 +112,7 @@ export default async function RoadmapPage({
       status: r.status as string | null,
       release: r,
     })),
-    ...(hasUnscheduled
+    ...(includeUnscheduled
       ? [
           {
             releaseId: null,
@@ -206,89 +178,19 @@ export default async function RoadmapPage({
           </p>
         )
       ) : (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {groups.map((group) => {
-          const items = features.filter((f) => f.releaseId === group.releaseId);
-          return (
-            <div key={group.releaseId ?? "unscheduled"} className="space-y-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <h2 className="text-sm font-medium text-muted-foreground">
-                  {group.name}
-                  {formatReleaseDates(group.startDate, group.targetDate) ? (
-                    <span className="ml-2 font-normal">
-                      {formatReleaseDates(group.startDate, group.targetDate)}
-                    </span>
-                  ) : null}
-                  {group.status && group.status !== "planned" ? (
-                    <span className="ml-2 font-normal">
-                      · {RELEASE_STATUS_LABELS[group.status] ?? group.status}
-                    </span>
-                  ) : null}
-                </h2>
-                {isAdmin && group.release ? (
-                  <span className="flex shrink-0 items-center gap-2">
-                    {showShipped ? (
-                      <ReleaseReopen
-                        id={group.release.id}
-                        name={group.release.name}
-                      />
-                    ) : (
-                      <ReleaseShip
-                        id={group.release.id}
-                        name={group.release.name}
-                      />
-                    )}
-                    <ReleaseEdit
-                      id={group.release.id}
-                      name={group.release.name}
-                      status={group.release.status}
-                      startDate={group.release.startDate}
-                      targetDate={group.release.targetDate}
-                    />
-                    <ReleaseDelete
-                      id={group.release.id}
-                      name={group.release.name}
-                    />
-                  </span>
-                ) : null}
-              </div>
-              {items.map((f) => {
-                const product =
-                  productsById && f.productId ? productsById[f.productId] : undefined;
-                return (
-                <Card key={f.specId} className="rounded-lg shadow-none">
-                  <CardHeader className="space-y-1 p-3">
-                    {product ? (
-                      <Badge
-                        variant="secondary"
-                        className={cn("w-fit border-transparent text-[10px]", productColorClasses(product).badge)}
-                      >
-                        {product.name}
-                      </Badge>
-                    ) : null}
-                    <CardTitle className="text-sm">
-                      <Link
-                        href={itemPath(org, productSlug, f)}
-                        className="hover:underline"
-                      >
-                        {f.title}
-                      </Link>
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-2 text-xs">
-                      <StatusDot status={f.status} />
-                      {statusLabel(f.status, workflow)}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-                );
-              })}
-              {items.length === 0 && (
-                <p className="text-xs text-muted-foreground">Empty</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+        <RoadmapBoard
+          // Remount when the data set changes (level or product scope) so the
+          // board re-seeds its optimistic placement from the new features.
+          key={`${activeProduct?.id ?? ALL_PRODUCTS}:${activeLevel.key}:${showShipped ? "shipped" : "active"}`}
+          columns={columns}
+          features={features}
+          workflow={workflow}
+          productsById={productsById}
+          org={org}
+          productSlug={productSlug}
+          allowDrag={canEdit && !showShipped}
+          isAdmin={isAdmin}
+        />
       )}
     </section>
   );
@@ -307,15 +209,4 @@ function roadmapViewHref(
   if (shipped) params.set("view", "shipped");
   const qs = params.toString();
   return orgProductPath(org, product, `/roadmap${qs ? `?${qs}` : ""}`);
-}
-
-/** Render a release's date range as "start → ship", omitting missing ends. */
-function formatReleaseDates(
-  startDate: string | null,
-  targetDate: string | null,
-): string | null {
-  if (startDate && targetDate) return `${startDate} → ${targetDate}`;
-  if (targetDate) return `→ ${targetDate}`;
-  if (startDate) return `${startDate} →`;
-  return null;
 }
