@@ -5,6 +5,35 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.11.0] - 2026-07-05
+
+### Added
+
+- **Plan / Build / Ship navigation with Strategy, Research, and Architecture
+  areas** (migration 0030 adds `doc_spaces` and `doc_pages`). The sidebar groups
+  work into Plan / Build / Ship sections and adds document areas that can hold
+  Specboard-native rich-text pages or link out to an external source, with a
+  source chooser per area.
+- **Webhooks delivery log + manual redeliver** (Settings → Webhooks). Each
+  endpoint expands to its recent deliveries (event, status, attempts, HTTP
+  result, last error, time). A per-row **Redeliver** re-queues the stored
+  envelope for an immediate resend, re-sending the original delivery id and
+  signature so consumers can dedupe.
+
+### Changed
+
+- **Webhooks: auto-disable an endpoint after repeated failures** (migration 0031
+  adds `webhook_endpoints.consecutive_failures`). A run of deliveries that give
+  up (retry budget exhausted, or a blocked URL) disables the endpoint after the
+  fifth consecutive failure, shown as **Auto-disabled** in the UI; any success or
+  a manual Resume clears the streak. Stops a dead endpoint from generating doomed
+  retry traffic.
+- **Roadmap polish.** Selecting a card opens the same in-context preview panel as
+  the Backlog board (instead of a full-page navigation); the release detail panel
+  shows a proper title clear of the close button; columns without dates keep their
+  cards aligned with dated columns; and the release **Release** action is now a
+  primary button so it stands out from **Edit**.
+
 ## [0.10.1] - 2026-07-05
 
 ### Changed
