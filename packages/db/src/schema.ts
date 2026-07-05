@@ -485,6 +485,9 @@ export const releases = pgTable(
     startDate: text("start_date"),
     /** Target ship date (date-only), or null when undated. */
     targetDate: text("target_date"),
+    /** Free-form release notes (Markdown), or null. Shown in the release detail
+     * panel on the Roadmap. */
+    notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -99,6 +99,7 @@ interface LocalRelease {
   status: "planned" | "in_progress" | "shipped";
   startDate: string | null;
   targetDate: string | null;
+  notes?: string | null;
 }
 
 /** An idea / feature request persisted in local file mode. */
@@ -1207,7 +1208,11 @@ export class LocalFileStore implements FeatureStore {
       if (f.releaseId) counts.set(f.releaseId, (counts.get(f.releaseId) ?? 0) + 1);
     }
     return rows
-      .map((r) => ({ ...r, itemCount: counts.get(r.id) ?? 0 }))
+      .map((r) => ({
+        ...r,
+        notes: r.notes ?? null,
+        itemCount: counts.get(r.id) ?? 0,
+      }))
       .sort(compareReleases);
   }
 
@@ -1231,9 +1236,10 @@ export class LocalFileStore implements FeatureStore {
       status,
       startDate: input.startDate ?? null,
       targetDate: input.targetDate ?? null,
+      notes: input.notes ?? null,
     };
     await this.writeReleases([...rows, release]);
-    return { ...release, itemCount: 0 };
+    return { ...release, notes: release.notes ?? null, itemCount: 0 };
   }
 
   async updateRelease(
@@ -1257,10 +1263,12 @@ export class LocalFileStore implements FeatureStore {
     }
     if (patch.startDate !== undefined) release.startDate = patch.startDate;
     if (patch.targetDate !== undefined) release.targetDate = patch.targetDate;
+    if (patch.notes !== undefined) release.notes = patch.notes;
     await this.writeReleases(rows);
     const all = await this.loadAll();
     return {
       ...release,
+      notes: release.notes ?? null,
       itemCount: all.filter((f) => f.releaseId === id).length,
     };
   }
