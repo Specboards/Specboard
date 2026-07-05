@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { DocAreaBody } from "@/components/doc-area-body";
+import { eq, githubInstallations } from "@specboard/db";
+
+import { DocAreaBody, type GithubDocsData } from "@/components/doc-area-body";
+import type { GithubSetupState } from "@/components/doc-space-setup";
 import { DocsWorkspace } from "@/components/docs-workspace";
 import { ALL_PRODUCTS, resolveActiveProduct } from "@/lib/active-product";
-import { LOCAL_ORG_SLUG, orgProductPath } from "@/lib/org-path";
+import { getDb } from "@/lib/db";
+import { loadGithubDocs } from "@/lib/github-docs";
+import { LOCAL_ORG_SLUG, orgPath, orgProductPath } from "@/lib/org-path";
 import { getStore } from "@/lib/store";
 import type { DocArea } from "@/lib/store/types";
 import { canWrite } from "@/lib/workspace";
@@ -101,6 +106,48 @@ export async function PlanAreaView({
     store.listDocPages(product.id, area, access ?? undefined),
   ]);
 
+  // What the chooser's GitHub option can offer here: repo creation needs a
+  // DB-backed deployment, an org installation, and a workspace admin.
+  const db = getDb();
+  let githubAvailable = false;
+  if (db && access) {
+    const [installation] = await db
+      .select({ id: githubInstallations.id })
+      .from(githubInstallations)
+      .where(eq(githubInstallations.workspaceId, access.workspaceId))
+      .limit(1);
+    githubAvailable = Boolean(installation);
+  }
+  const githubSetup: GithubSetupState = {
+    available: githubAvailable,
+    isAdmin: !access || access.role === "admin",
+    suggestedName: `${product.key}-${area}`,
+    installHref: orgPath(org, "/repositories"),
+  };
+
+  // GitHub-backed spaces resolve their repo + files server-side; failures
+  // (repo deleted, GitHub down, local file mode) render as a friendly card.
+  let github: GithubDocsData | undefined;
+  if (space.mode === "github") {
+    if (!db || !access) {
+      github = { error: "GitHub-backed docs need a database-backed deployment." };
+    } else {
+      try {
+        const loaded = await loadGithubDocs(db, access.workspaceId, space);
+        github = {
+          repoFullName: `${loaded.repo.owner}/${loaded.repo.name}`,
+          repoUrl: loaded.repo.htmlUrl,
+          files: loaded.files,
+        };
+      } catch (err) {
+        github = {
+          error:
+            err instanceof Error ? err.message : "The repository is unavailable.",
+        };
+      }
+    }
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col space-y-4">
       <AreaHeader copy={copy} />
@@ -108,6 +155,8 @@ export async function PlanAreaView({
         <DocAreaBody
           space={space}
           pages={pages}
+          github={github}
+          githubSetup={githubSetup}
           areaLabel={copy.label}
           canEdit={canEdit}
           starterTitles={copy.starterTitles}

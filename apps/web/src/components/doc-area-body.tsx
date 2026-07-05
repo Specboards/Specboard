@@ -4,20 +4,32 @@ import { ExternalLink, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { DocSpaceSetup } from "@/components/doc-space-setup";
+import { DocSpaceSetup, type GithubSetupState } from "@/components/doc-space-setup";
 import { DocsWorkspace } from "@/components/docs-workspace";
+import {
+  GithubDocsWorkspace,
+  type GithubDocFileView,
+} from "@/components/github-docs-workspace";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { DocPageRecord, DocSpace } from "@/lib/store/types";
 
+/** GitHub-backed area data resolved server-side, or why it couldn't be. */
+export type GithubDocsData =
+  | { repoFullName: string; repoUrl: string; files: GithubDocFileView[] }
+  | { error: string };
+
 /**
  * Body of a choose-your-source doc area (Research / Architecture): shows the
- * source chooser until the team picks, then the external link-out card or the
- * in-Specboard page workspace. "Change source" re-opens the chooser; changing
- * away from Specboard keeps the pages (nothing is deleted).
+ * source chooser until the team picks, then the external link-out card, the
+ * in-Specboard page workspace, or the GitHub-backed file workspace. "Change
+ * source" re-opens the chooser; changing away from a source keeps its content
+ * (Specboard pages stay in the database, repo files stay in the repo).
  */
 export function DocAreaBody({
   space,
   pages,
+  github,
+  githubSetup,
   areaLabel,
   canEdit,
   starterTitles,
@@ -25,6 +37,9 @@ export function DocAreaBody({
 }: {
   space: DocSpace;
   pages: DocPageRecord[];
+  /** Present only when the space is GitHub-backed. */
+  github?: GithubDocsData;
+  githubSetup: GithubSetupState;
   areaLabel: string;
   canEdit: boolean;
   starterTitles?: string[];
@@ -46,6 +61,7 @@ export function DocAreaBody({
         productId={space.productId}
         area={space.area}
         areaLabel={areaLabel}
+        github={githubSetup}
         onSaved={() => {
           setChoosing(false);
           router.refresh();
@@ -54,6 +70,18 @@ export function DocAreaBody({
       />
     );
   }
+
+  const changeSource = canEdit ? (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="text-muted-foreground"
+      onClick={() => setChoosing(true)}
+    >
+      <Settings2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+      Change source
+    </Button>
+  ) : null;
 
   if (space.mode === "external") {
     return (
@@ -82,22 +110,43 @@ export function DocAreaBody({
     );
   }
 
-  // `local` (and `github` until that slice lands, so nothing is stranded).
+  if (space.mode === "github") {
+    if (!github || "error" in github) {
+      return (
+        <div className="mx-auto max-w-md space-y-3 py-16 text-center">
+          <p className="text-sm font-medium">
+            Couldn&apos;t load the {areaLabel.toLowerCase()} repository.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {github && "error" in github ? github.error : "The repository is unavailable."}
+          </p>
+          {canEdit ? (
+            <Button variant="ghost" onClick={() => setChoosing(true)}>
+              Change source
+            </Button>
+          ) : null}
+        </div>
+      );
+    }
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        {changeSource ? <div className="flex justify-end">{changeSource}</div> : null}
+        <GithubDocsWorkspace
+          key={`${space.repoId}`}
+          productId={space.productId}
+          area={space.area}
+          repoFullName={github.repoFullName}
+          repoUrl={github.repoUrl}
+          initialFiles={github.files}
+          canEdit={canEdit}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {canEdit ? (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            onClick={() => setChoosing(true)}
-          >
-            <Settings2 className="mr-1 h-3.5 w-3.5" aria-hidden />
-            Change source
-          </Button>
-        </div>
-      ) : null}
+      {changeSource ? <div className="flex justify-end">{changeSource}</div> : null}
       <DocsWorkspace
         key={space.mode}
         productId={space.productId}
