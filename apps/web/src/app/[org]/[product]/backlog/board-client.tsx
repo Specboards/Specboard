@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -75,6 +75,18 @@ export function BoardClient({
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
+
+  // Re-seed from the server whenever the data set changes. Every mutation (a
+  // field edit in the drawer, a newly created item, a drag we just persisted)
+  // ends in a router.refresh(), which re-renders this component with a fresh
+  // `features` prop. The useState initializers above only run once, so without
+  // this the board would keep showing stale cards until a full page reload.
+  // router.refresh() only fires after the write has resolved, so re-seeding to
+  // server truth never clobbers an in-flight optimistic drag.
+  useEffect(() => {
+    setRecords(Object.fromEntries(features.map((f) => [f.specId, f])));
+    setLists(groupIntoColumns(features, columns));
+  }, [features, columns]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -172,7 +184,7 @@ export function BoardClient({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((status) => (
             <Column
               key={status}
@@ -244,7 +256,7 @@ function Column({
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${COL_PREFIX}${status}` });
   return (
-    <div className="w-64 shrink-0 rounded-lg bg-muted/50 p-2">
+    <div className="w-72 shrink-0 rounded-lg bg-muted/35 p-2.5">
       <div className="flex items-center gap-2 px-2 py-1.5">
         <StatusDot status={status} />
         <span className="text-sm font-medium">{statusLabel(status, workflow)}</span>

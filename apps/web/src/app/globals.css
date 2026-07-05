@@ -31,7 +31,7 @@
 .dark {
   --background: oklch(0.145 0.03 262);
   --foreground: oklch(0.985 0.005 262);
-  --card: oklch(0.205 0.032 262);
+  --card: oklch(0.225 0.033 262);
   --card-foreground: oklch(0.985 0.005 262);
   --popover: oklch(0.205 0.032 262);
   --popover-foreground: oklch(0.985 0.005 262);
@@ -45,8 +45,8 @@
   --accent-foreground: oklch(0.985 0.005 262);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0.005 262);
-  --border: oklch(0.92 0.04 262 / 14%);
-  --input: oklch(0.92 0.04 262 / 18%);
+  --border: oklch(0.92 0.04 262 / 22%);
+  --input: oklch(0.92 0.04 262 / 22%);
   --ring: oklch(0.556 0.06 262);
 }
 
@@ -79,6 +79,12 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  /* Lift the root font a notch (16px -> 17px). Tailwind's rem-based utilities
+   * all scale from this, so the whole UI grows ~6% proportionally: the app was
+   * reading as slightly "zoomed out" next to peers like Notion and Todoist. */
+  html {
+    font-size: 106.25%;
   }
   body {
     @apply bg-background text-foreground;
