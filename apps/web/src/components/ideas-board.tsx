@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
-import { ideaStatusLabel, type IdeaStage } from "@specboard/core";
+import { type IdeaStage } from "@specboard/core";
 
+import { IdeaDetailSheet } from "@/components/idea-detail-sheet";
+import { IdeaStatusSelect } from "@/components/idea-status-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,19 +23,20 @@ import {
 import {
   AuthRequiredError,
   createIdea,
-  deleteIdea,
-  promoteIdea,
   setIdeaVote,
   updateIdea,
 } from "@/lib/api-client";
-import { orgProductPath } from "@/lib/org-path";
 import type { IdeaRecord } from "@/lib/store/types";
 import { cn } from "@/lib/utils";
+
+/** How the list is ordered. */
+type SortKey = "votes" | "newest" | "oldest";
 
 /**
  * The internal Ideas view: capture, vote, triage, and promote. Interactive
  * (vote/status/promote hit /api/v1 and refresh), so the whole board is a client
- * component seeded from the server-rendered list.
+ * component seeded from the server-rendered list. Clicking a row opens a detail
+ * drawer; a filter/sort bar narrows and orders the list.
  */
 export function IdeasBoard({
   ideas,
@@ -57,6 +59,29 @@ export function IdeasBoard({
   /** product id → name, for cross-product tags (undefined in single-product view). */
   productsById?: Record<string, string>;
 }) {
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortKey>("votes");
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  const visible = useMemo(() => {
+    const filtered =
+      statusFilter === "all"
+        ? ideas
+        : ideas.filter((i) => i.status === statusFilter);
+    return [...filtered].sort((a, b) => {
+      if (sort === "votes") {
+        return b.voteCount - a.voteCount || cmpDateDesc(a.createdAt, b.createdAt);
+      }
+      if (sort === "newest") return cmpDateDesc(a.createdAt, b.createdAt);
+      return -cmpDateDesc(a.createdAt, b.createdAt); // oldest first
+    });
+  }, [ideas, statusFilter, sort]);
+
+  // The drawer reads from the live list so it reflects edits after a refresh.
+  const detailIdea = detailId
+    ? (ideas.find((i) => i.id === detailId) ?? null)
+    : null;
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -82,26 +107,87 @@ export function IdeasBoard({
           {canEdit ? " Capture the first one to start collecting demand." : ""}
         </p>
       ) : (
-        <ul className="space-y-2">
-          {ideas.map((idea) => (
-            <IdeaRow
-              key={idea.id}
-              idea={idea}
-              stages={stages}
-              canEdit={canEdit}
-              org={org}
-              productSlug={productSlug}
-              productName={
-                productsById && idea.productId
-                  ? productsById[idea.productId]
-                  : undefined
-              }
-            />
-          ))}
-        </ul>
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Status
+              <Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-8 w-40"
+                aria-label="Filter by status"
+              >
+                <option value="all">All statuses</option>
+                {stages.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              Sort
+              <Select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className="h-8 w-36"
+                aria-label="Sort ideas"
+              >
+                <option value="votes">Most votes</option>
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+              </Select>
+            </label>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {visible.length} of {ideas.length}
+            </span>
+          </div>
+
+          {visible.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              No ideas match this filter.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {visible.map((idea) => (
+                <IdeaRow
+                  key={idea.id}
+                  idea={idea}
+                  stages={stages}
+                  canEdit={canEdit}
+                  onOpen={() => setDetailId(idea.id)}
+                  productName={
+                    productsById && idea.productId
+                      ? productsById[idea.productId]
+                      : undefined
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
+
+      <IdeaDetailSheet
+        idea={detailIdea}
+        stages={stages}
+        canEdit={canEdit}
+        org={org}
+        productSlug={productSlug}
+        productName={
+          productsById && detailIdea?.productId
+            ? productsById[detailIdea.productId]
+            : undefined
+        }
+        onClose={() => setDetailId(null)}
+      />
     </section>
   );
+}
+
+/** Compare ISO timestamps, most-recent first. */
+function cmpDateDesc(a: string, b: string): number {
+  return a < b ? 1 : a > b ? -1 : 0;
 }
 
 /** "New idea" button + capture drawer. */
@@ -207,20 +293,23 @@ function IdeaCreate({
   );
 }
 
-/** One idea: vote control, title, status, and (for editors) triage actions. */
+/**
+ * One idea in the list: vote control, a clickable title/description that opens
+ * the detail drawer, and an inline status field. Promote/Delete live in the
+ * drawer so the row stays a scannable status field rather than a wall of
+ * look-alike buttons.
+ */
 function IdeaRow({
   idea,
   stages,
   canEdit,
-  org,
-  productSlug,
+  onOpen,
   productName,
 }: {
   idea: IdeaRecord;
   stages: readonly IdeaStage[];
   canEdit: boolean;
-  org: string;
-  productSlug: string;
+  onOpen: () => void;
   productName?: string;
 }) {
   const router = useRouter();
@@ -229,6 +318,14 @@ function IdeaRow({
   // re-seeds on the next refresh.
   const [voted, setVoted] = useState(idea.viewerHasVoted);
   const [votes, setVotes] = useState(idea.voteCount);
+
+  // Reconcile with the server after a refresh (e.g. the same idea was voted on
+  // from the detail drawer). Keyed on the primitive fields so it never clobbers
+  // an in-flight optimistic toggle.
+  useEffect(() => {
+    setVoted(idea.viewerHasVoted);
+    setVotes(idea.voteCount);
+  }, [idea.viewerHasVoted, idea.voteCount]);
 
   function handleAuthError(err: unknown): boolean {
     if (err instanceof AuthRequiredError) {
@@ -247,7 +344,6 @@ function IdeaRow({
         await setIdeaVote(idea.id, next);
         router.refresh();
       } catch (err) {
-        // Roll back the optimistic change on failure.
         setVoted(!next);
         setVotes((n) => n + (next ? -1 : 1));
         if (handleAuthError(err)) return;
@@ -269,53 +365,10 @@ function IdeaRow({
     });
   }
 
-  function promote() {
-    if (
-      !window.confirm(
-        `Promote "${idea.title}" into a feature? It's added to the backlog and linked back here.`,
-      )
-    ) {
-      return;
-    }
-    startTransition(async () => {
-      try {
-        await promoteIdea(idea.id);
-        toast.success("Promoted to a feature");
-        router.refresh();
-      } catch (err) {
-        if (handleAuthError(err)) return;
-        toast.error(err instanceof Error ? err.message : "Promote failed.");
-      }
-    });
-  }
-
-  function remove() {
-    if (!window.confirm(`Delete the idea "${idea.title}"? This can't be undone.`)) {
-      return;
-    }
-    startTransition(async () => {
-      try {
-        await deleteIdea(idea.id);
-        toast.success("Idea deleted");
-        router.refresh();
-      } catch (err) {
-        if (handleAuthError(err)) return;
-        toast.error(err instanceof Error ? err.message : "Delete failed.");
-      }
-    });
-  }
-
-  // The bare /backlog/{specId} permalink redirects to the canonical typed URL,
-  // so we can link the promoted feature without knowing its level.
-  const promotedHref = idea.promotedFeatureSpecId
-    ? orgProductPath(org, productSlug, `/backlog/${idea.promotedFeatureSpecId}`)
-    : null;
-
-  const by =
-    idea.submitterName ?? idea.authorName ?? null;
+  const by = idea.submitterName ?? idea.authorName ?? null;
 
   return (
-    <li className="flex items-start gap-3 rounded-lg border bg-background p-3">
+    <li className="flex items-start gap-3 rounded-lg border bg-card p-3 shadow-sm transition-colors hover:border-foreground/20">
       <button
         type="button"
         onClick={toggleVote}
@@ -333,12 +386,21 @@ function IdeaRow({
         <span className="text-sm font-semibold tabular-nums">{votes}</span>
       </button>
 
-      <div className="min-w-0 flex-1 space-y-1">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 space-y-1 text-left"
+      >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{idea.title}</span>
+          <span className="text-sm font-medium hover:underline">{idea.title}</span>
           {productName ? (
             <Badge variant="secondary" className="text-[10px]">
               {productName}
+            </Badge>
+          ) : null}
+          {idea.promotedFeatureSpecId ? (
+            <Badge variant="outline" className="text-[10px]">
+              Promoted
             </Badge>
           ) : null}
         </div>
@@ -347,56 +409,18 @@ function IdeaRow({
             {idea.description}
           </p>
         ) : null}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {by ? <span>by {by}</span> : null}
-          {promotedHref ? (
-            <Link href={promotedHref} className="text-primary hover:underline">
-              Promoted → {idea.promotedFeatureTitle ?? "feature"}
-            </Link>
-          ) : null}
-        </div>
-      </div>
+        {by ? <p className="text-xs text-muted-foreground">by {by}</p> : null}
+      </button>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {canEdit ? (
-          <Select
-            value={idea.status}
-            onChange={(e) => changeStatus(e.target.value)}
-            disabled={pending}
-            className="h-8 w-36"
-            aria-label={`Status of ${idea.title}`}
-          >
-            {stages.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
-        ) : (
-          <Badge variant="outline">{ideaStatusLabel(idea.status, stages)}</Badge>
-        )}
-        {canEdit && !idea.promotedFeatureSpecId ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={promote}
-            disabled={pending}
-          >
-            Promote
-          </Button>
-        ) : null}
-        {canEdit ? (
-          <button
-            type="button"
-            onClick={remove}
-            disabled={pending}
-            className="text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
-            aria-label={`Delete ${idea.title}`}
-          >
-            Delete
-          </button>
-        ) : null}
-      </div>
+      <IdeaStatusSelect
+        status={idea.status}
+        stages={stages}
+        canEdit={canEdit}
+        disabled={pending}
+        onChange={changeStatus}
+        className="shrink-0"
+        ariaLabel={`Status of ${idea.title}`}
+      />
     </li>
   );
 }
