@@ -15,6 +15,14 @@ export const WEBHOOK_EVENT_TYPES = [
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
 
+/**
+ * After this many *consecutive* deliveries give up (each having exhausted its
+ * own retry budget), the endpoint is auto-disabled (`active = false`) so a
+ * permanently-broken endpoint stops generating doomed traffic. A successful
+ * delivery, or a manual Resume, resets the streak.
+ */
+export const WEBHOOK_FAILURE_DISABLE_THRESHOLD = 5;
+
 /** Human labels for the settings UI checkboxes. */
 export const WEBHOOK_EVENT_LABELS: Record<WebhookEventType, string> = {
   "item.status_changed": "Item status changed",

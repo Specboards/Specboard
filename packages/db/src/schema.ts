@@ -903,6 +903,10 @@ export const webhookEndpoints = pgTable(
     eventTypes: text("event_types").array().notNull().default([]),
     description: text("description"),
     active: boolean("active").notNull().default(true),
+    /** Count of consecutive failed deliveries; reset on any success or manual
+     * resume. When it crosses the disable threshold the endpoint is set
+     * `active = false` (auto-disabled) so a dead endpoint stops eating retries. */
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -3,14 +3,18 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { and, eq, type Database, products, workspaces } from "@specboard/db";
 
 import { decryptSecret } from "@/lib/crypto";
+import { drainSoon } from "@/lib/webhooks/drainer";
 import { postSignedEnvelope, type SendResult } from "@/lib/webhooks/sender";
 import { assertPublicUrl } from "@/lib/webhooks/ssrf";
 import {
   createEndpoint,
   deleteEndpoint,
   getEndpoint,
+  listDeliveries,
   listEndpoints,
+  requeueDelivery,
   updateEndpoint,
+  type WebhookDeliverySummary,
   type WebhookEndpointSummary,
 } from "@/lib/webhooks/store";
 import {
@@ -144,6 +148,39 @@ export function deleteWebhookEndpoint(
   id: string,
 ): Promise<boolean> {
   return deleteEndpoint(db, workspaceId, id);
+}
+
+/** Max delivery-log rows returned per endpoint in the settings UI. */
+const DELIVERY_LOG_LIMIT = 50;
+
+/**
+ * Recent deliveries for an endpoint (newest first), for the settings delivery
+ * log. Returns null if the endpoint isn't in this workspace.
+ */
+export async function listWebhookDeliveries(
+  db: Database,
+  workspaceId: string,
+  endpointId: string,
+): Promise<WebhookDeliverySummary[] | null> {
+  const ep = await getEndpoint(db, workspaceId, endpointId);
+  if (!ep) return null;
+  return listDeliveries(db, workspaceId, endpointId, DELIVERY_LOG_LIMIT);
+}
+
+/**
+ * Re-queue one past delivery for an immediate resend. Returns false if the
+ * (endpoint, delivery) pair isn't in this workspace. Kicks the drainer so the
+ * resend leaves on the next tick rather than the next sweep.
+ */
+export async function redeliverWebhookDelivery(
+  db: Database,
+  workspaceId: string,
+  endpointId: string,
+  deliveryId: string,
+): Promise<boolean> {
+  const requeued = await requeueDelivery(db, workspaceId, endpointId, deliveryId);
+  if (requeued) drainSoon();
+  return requeued;
 }
 
 /**

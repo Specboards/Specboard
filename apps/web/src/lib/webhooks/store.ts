@@ -9,7 +9,10 @@ import {
 } from "@specboard/db";
 
 import { encryptSecret } from "@/lib/crypto";
-import type { WebhookEnvelope } from "@/lib/webhooks/types";
+import {
+  WEBHOOK_FAILURE_DISABLE_THRESHOLD,
+  type WebhookEnvelope,
+} from "@/lib/webhooks/types";
 
 /**
  * Data access for outbound webhooks. Standalone (like `api-keys.ts`), taking a
@@ -27,6 +30,8 @@ export type WebhookEndpointSummary = {
   eventTypes: string[];
   description: string | null;
   active: boolean;
+  /** Consecutive failed deliveries; drives the "auto-disabled" UI state. */
+  consecutiveFailures: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -39,6 +44,7 @@ function toSummary(row: typeof webhookEndpoints.$inferSelect): WebhookEndpointSu
     eventTypes: row.eventTypes,
     description: row.description,
     active: row.active,
+    consecutiveFailures: row.consecutiveFailures,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -95,7 +101,11 @@ export async function updateEndpoint(
   },
 ): Promise<WebhookEndpointSummary | null> {
   const set: Partial<typeof webhookEndpoints.$inferInsert> = { updatedAt: new Date() };
-  if (patch.active !== undefined) set.active = patch.active;
+  if (patch.active !== undefined) {
+    set.active = patch.active;
+    // Manually resuming an endpoint clears any auto-disable streak.
+    if (patch.active === true) set.consecutiveFailures = 0;
+  }
   if (patch.eventTypes !== undefined) set.eventTypes = patch.eventTypes;
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.url !== undefined) set.url = patch.url;
@@ -168,6 +178,96 @@ export async function endpointDeliveryTarget(
     .from(webhookEndpoints)
     .where(eq(webhookEndpoints.id, endpointId));
   return row ?? null;
+}
+
+/** A delivery row for the settings delivery-log UI (no payload/secret material). */
+export type WebhookDeliverySummary = {
+  id: string;
+  eventId: string;
+  eventType: string;
+  status: string;
+  attempts: number;
+  nextAttemptAt: string | null;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  createdAt: string;
+};
+
+/**
+ * Recent deliveries for one endpoint, newest first. Workspace-scoped (runs on
+ * the request connection under RLS, and filtered explicitly) so a member can
+ * only read their own workspace's log.
+ */
+export async function listDeliveries(
+  db: Database,
+  workspaceId: string,
+  endpointId: string,
+  limit: number,
+): Promise<WebhookDeliverySummary[]> {
+  const rows = await db
+    .select({
+      id: webhookDeliveries.id,
+      eventId: webhookDeliveries.eventId,
+      eventType: webhookDeliveries.eventType,
+      status: webhookDeliveries.status,
+      attempts: webhookDeliveries.attempts,
+      nextAttemptAt: webhookDeliveries.nextAttemptAt,
+      lastStatusCode: webhookDeliveries.lastStatusCode,
+      lastError: webhookDeliveries.lastError,
+      createdAt: webhookDeliveries.createdAt,
+    })
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.endpointId, endpointId),
+        eq(webhookDeliveries.workspaceId, workspaceId),
+      ),
+    )
+    .orderBy(desc(webhookDeliveries.createdAt))
+    .limit(limit);
+  return rows.map((r) => ({
+    id: r.id,
+    eventId: r.eventId,
+    eventType: r.eventType,
+    status: r.status,
+    attempts: r.attempts,
+    nextAttemptAt: r.nextAttemptAt ? r.nextAttemptAt.toISOString() : null,
+    lastStatusCode: r.lastStatusCode,
+    lastError: r.lastError,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Re-queue a delivery for an immediate send: reset it to `pending`, clear the
+ * attempt count so it gets the full retry budget again, and make it due now.
+ * Scoped to the workspace (and endpoint) so an admin can only redeliver their
+ * own rows. Returns false if no matching row was found. The caller kicks the
+ * drainer so the resend goes out on the next tick.
+ */
+export async function requeueDelivery(
+  db: Database,
+  workspaceId: string,
+  endpointId: string,
+  deliveryId: string,
+): Promise<boolean> {
+  const rows = await db
+    .update(webhookDeliveries)
+    .set({
+      status: "pending",
+      attempts: 0,
+      nextAttemptAt: new Date(),
+      lastError: null,
+    })
+    .where(
+      and(
+        eq(webhookDeliveries.id, deliveryId),
+        eq(webhookDeliveries.endpointId, endpointId),
+        eq(webhookDeliveries.workspaceId, workspaceId),
+      ),
+    )
+    .returning({ id: webhookDeliveries.id });
+  return rows.length > 0;
 }
 
 export type ClaimedDelivery = {
@@ -251,6 +351,48 @@ export async function markRetry(
       lastError: error.slice(0, 500),
     })
     .where(eq(webhookDeliveries.id, id));
+}
+
+/**
+ * Record one terminal delivery failure against an endpoint's streak, and
+ * auto-disable it (`active = false`) once the streak crosses the threshold.
+ * Done in a single statement so the increment and the disable decision see the
+ * same value. Returns true if this failure tripped the auto-disable.
+ */
+export async function recordEndpointFailure(
+  db: Database,
+  endpointId: string,
+): Promise<boolean> {
+  const threshold = WEBHOOK_FAILURE_DISABLE_THRESHOLD;
+  const [row] = await db
+    .update(webhookEndpoints)
+    .set({
+      consecutiveFailures: sql`${webhookEndpoints.consecutiveFailures} + 1`,
+      active: sql`case when ${webhookEndpoints.consecutiveFailures} + 1 >= ${threshold} then false else ${webhookEndpoints.active} end`,
+      updatedAt: new Date(),
+    })
+    .where(eq(webhookEndpoints.id, endpointId))
+    .returning({
+      active: webhookEndpoints.active,
+      consecutiveFailures: webhookEndpoints.consecutiveFailures,
+    });
+  return !!row && !row.active && row.consecutiveFailures >= threshold;
+}
+
+/** Clear an endpoint's failure streak after a successful delivery (no-op if already 0). */
+export async function resetEndpointFailures(
+  db: Database,
+  endpointId: string,
+): Promise<void> {
+  await db
+    .update(webhookEndpoints)
+    .set({ consecutiveFailures: 0 })
+    .where(
+      and(
+        eq(webhookEndpoints.id, endpointId),
+        sql`${webhookEndpoints.consecutiveFailures} > 0`,
+      ),
+    );
 }
 
 /** Give up: mark `failed` after the retry budget is exhausted. */

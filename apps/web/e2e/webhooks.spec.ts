@@ -67,7 +67,11 @@ test.describe("webhooks: outbound delivery", () => {
         data: { url: receiver.url, eventTypes: ["release.shipped"], productId: null },
       });
       expect(createRes.status()).toBe(201);
-      const { secret } = (await createRes.json()) as { secret: string };
+      const { endpoint, secret } = (await createRes.json()) as {
+        endpoint: { id: string };
+        secret: string;
+      };
+      const endpointId = endpoint.id;
       expect(secret).toMatch(/^whsec_/);
 
       // Create a release, then ship it -> emits release.shipped through the outbox.
@@ -117,6 +121,35 @@ test.describe("webhooks: outbound delivery", () => {
         .toBeGreaterThan(0);
       const counts = await outboxCounts(ws.id);
       expect(counts.unprocessed).toBe(0);
+
+      // Delivery log: the send is recorded as delivered against the endpoint.
+      const logRes = await page.request.get(
+        `/api/v1/webhooks/${endpointId}/deliveries`,
+      );
+      expect(logRes.ok()).toBeTruthy();
+      const { deliveries } = (await logRes.json()) as {
+        deliveries: { id: string; status: string; lastStatusCode: number | null }[];
+      };
+      expect(deliveries.length).toBe(1);
+      const delivered = deliveries[0]!;
+      expect(delivered.status).toBe("delivered");
+      expect(delivered.lastStatusCode).toBe(200);
+
+      // Manual redeliver re-queues the same row and the drainer sends it again.
+      const before = receiver.received.length;
+      const redeliverRes = await page.request.post(
+        `/api/v1/webhooks/${endpointId}/deliveries/${delivered.id}/redeliver`,
+      );
+      expect(redeliverRes.ok()).toBeTruthy();
+      await expect
+        .poll(() => receiver.received.length, { timeout: 10_000 })
+        .toBeGreaterThan(before);
+
+      // Same delivery id / signature on the resend so consumers can dedupe.
+      const resent = receiver.received[receiver.received.length - 1]!;
+      expect(header(resent.headers, "x-specboard-delivery")).toBe(
+        header(delivery.headers, "x-specboard-delivery"),
+      );
     } finally {
       await receiver.close();
     }
