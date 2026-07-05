@@ -873,6 +873,81 @@ export const apiKeys = pgTable(
   (table) => [index("api_keys_user_idx").on(table.userId)],
 );
 
+/**
+ * A registered outbound-webhook endpoint. Workspace-scoped and admin-managed
+ * (mirrors releases/ideas). `secret` is the HMAC signing key, stored
+ * `encryptSecret`'d (reused to sign every delivery, so encrypted not hashed) and
+ * shown to the admin exactly once at creation. `productId` is the per-product
+ * routing filter: null means every product's events in the workspace, a value
+ * means only that product's (plus workspace-level events). `eventTypes` is the
+ * subscription set; an event whose `type` isn't listed is never delivered.
+ */
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** Per-product routing filter; null = all products. `set null` on delete so
+     * removing a product widens the endpoint to workspace-wide rather than
+     * silently dropping it. */
+    productId: uuid("product_id").references(() => products.id, {
+      onDelete: "set null",
+    }),
+    /** Delivery target; https only, SSRF-validated on write. */
+    url: text("url").notNull(),
+    /** `encryptSecret`'d HMAC signing key. */
+    secret: text("secret").notNull(),
+    /** Subscribed event type keys, e.g. {item.status_changed, release.shipped}. */
+    eventTypes: text("event_types").array().notNull().default([]),
+    description: text("description"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("webhook_endpoints_ws_idx").on(t.workspaceId),
+    index("webhook_endpoints_product_idx").on(t.productId),
+  ],
+);
+
+/**
+ * The transactional-outbox row for one (event, endpoint) delivery. Written
+ * `pending` right after the domain change; an in-process drainer claims due rows
+ * (`FOR UPDATE SKIP LOCKED`), POSTs the signed payload, and records
+ * `delivered|failed` with exponential backoff via `attempts`/`nextAttemptAt`.
+ * `payload` is the frozen envelope so a redeliver re-sends the exact bytes.
+ */
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    endpointId: uuid("endpoint_id")
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** The envelope id (also the `X-Specboard-Delivery` header), for consumer dedupe. */
+    eventId: text("event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    payload: jsonb("payload").notNull(),
+    /** pending | delivered | failed. */
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    /** When this row is next eligible to send; null once delivered/failed. */
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow(),
+    lastStatusCode: integer("last_status_code"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("webhook_deliveries_due_idx").on(t.nextAttemptAt),
+    index("webhook_deliveries_endpoint_idx").on(t.endpointId),
+  ],
+);
+
 export const workspaceRelations = relations(workspaces, ({ many }) => ({
   members: many(members),
   repositories: many(repositories),

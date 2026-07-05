@@ -8,6 +8,7 @@ import {
 } from "@specboard/core";
 
 import { resolveWorkflowFor } from "@/lib/repo-config";
+import { dispatchEvent } from "@/lib/webhooks/events";
 import {
   getStore,
   type CustomFieldValue,
@@ -212,7 +213,26 @@ export async function patchFeature(
 
   await store.updateFeature(specId, patch, scope);
   const updated = await store.getFeature(specId, scope);
-  return updated ?? feature;
+  const result = updated ?? feature;
+
+  // Emit a webhook when the status actually moved (not on same-status or
+  // non-status patches). `dispatchEvent` never throws, so this can't fail the
+  // write.
+  if (patch.status !== undefined && patch.status !== feature.status) {
+    await dispatchEvent(scope, {
+      type: "item.status_changed",
+      productId: result.productId,
+      data: {
+        specId: result.specId,
+        title: result.title,
+        level: result.level,
+        from: feature.status,
+        to: patch.status,
+      },
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -667,7 +687,25 @@ export async function updateRelease(
   scope?: WorkspaceScope,
 ): Promise<ReleaseRecord> {
   const store = await getStore();
-  return store.updateRelease(id, patch, scope);
+  // Capture the prior status so we can detect the ship edge for the webhook.
+  const before = (await store.listReleases(scope)).find((r) => r.id === id) ?? null;
+  const updated = await store.updateRelease(id, patch, scope);
+
+  if (before && before.status !== "shipped" && updated.status === "shipped") {
+    await dispatchEvent(scope, {
+      type: "release.shipped",
+      productId: null, // releases are workspace-level
+      data: {
+        releaseId: updated.id,
+        name: updated.name,
+        startDate: updated.startDate,
+        targetDate: updated.targetDate,
+        itemCount: updated.itemCount,
+      },
+    });
+  }
+
+  return updated;
 }
 
 /** Delete a release; its items are unscheduled, not deleted. */
@@ -1091,7 +1129,18 @@ export async function createWorkItem(
   scope?: WorkspaceScope,
 ): Promise<FeatureRecord> {
   const store = await getStore();
-  return store.createFeature(input, scope);
+  const created = await store.createFeature(input, scope);
+  await dispatchEvent(scope, {
+    type: "item.created",
+    productId: created.productId,
+    data: {
+      specId: created.specId,
+      title: created.title,
+      level: created.level,
+      status: created.status,
+    },
+  });
+  return created;
 }
 
 /** Delete a DB-native work item by id. */
@@ -1100,7 +1149,20 @@ export async function deleteWorkItem(
   scope?: WorkspaceScope,
 ): Promise<void> {
   const store = await getStore();
+  // Read the item before deleting so the webhook can describe what was removed.
+  const existing = await store.getFeature(specId, scope);
   await store.deleteFeature(specId, scope);
+  if (existing) {
+    await dispatchEvent(scope, {
+      type: "item.deleted",
+      productId: existing.productId,
+      data: {
+        specId: existing.specId,
+        title: existing.title,
+        level: existing.level,
+      },
+    });
+  }
 }
 
 /** Parse and validate an untrusted relation-create body. */

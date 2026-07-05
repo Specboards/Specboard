@@ -11,6 +11,7 @@ import {
   repositories,
   schema,
   sql,
+  webhookEndpoints,
   workspaceProperties,
   workspaces,
 } from "@specboard/db";
@@ -68,6 +69,13 @@ export async function resetIdeas(workspaceId: string): Promise<void> {
   await db().delete(ideas).where(eq(ideas.workspaceId, workspaceId));
   await db().delete(ideaStatuses).where(eq(ideaStatuses.workspaceId, workspaceId));
   await db().delete(ideaSettings).where(eq(ideaSettings.workspaceId, workspaceId));
+}
+
+/** Remove every webhook endpoint (and its deliveries, via cascade). */
+export async function resetWebhooks(workspaceId: string): Promise<void> {
+  await db()
+    .delete(webhookEndpoints)
+    .where(eq(webhookEndpoints.workspaceId, workspaceId));
 }
 
 /** Remove every custom property definition in the workspace. */

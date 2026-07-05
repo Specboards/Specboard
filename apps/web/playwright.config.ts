@@ -35,6 +35,9 @@ export default defineConfig({
       BETTER_AUTH_URL: BASE_URL,
       APP_URL: BASE_URL,
       SPECBOARD_E2E_GITHUB_FIXTURE: process.env.SPECBOARD_E2E_GITHUB_FIXTURE!,
+      // Let the webhook e2e deliver to a loopback receiver (SSRF guard blocks
+      // private targets by default).
+      SPECBOARD_WEBHOOK_ALLOW_PRIVATE: "1",
     },
   },
 });
