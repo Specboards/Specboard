@@ -1,6 +1,6 @@
 {
-  "id": "1ee16dae-cbec-4378-bee1-3e8a5be8bca1",
-  "prevId": "6bff26cb-1d14-4f58-a861-136fc52c807b",
+  "id": "78df4429-88b4-4ed2-9196-5872ff382207",
+  "prevId": "1ee16dae-cbec-4378-bee1-3e8a5be8bca1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3416,6 +3416,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "consecutive_failures": {
+          "name": "consecutive_failures",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
