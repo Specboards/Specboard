@@ -1,7 +1,13 @@
 import { App, type Octokit } from "octokit";
 
 import { compileGlobs } from "./webhook.js";
-import type { GitRepoClient, SpecFile, WriteFileInput } from "./index.js";
+import {
+  GitWriteConflictError,
+  type DeleteFileInput,
+  type GitRepoClient,
+  type SpecFile,
+  type WriteFileInput,
+} from "./index.js";
 
 /** Cached-display metadata for a linked GitHub artifact (PR/issue/branch). */
 export interface GithubArtifactMeta {
@@ -300,25 +306,66 @@ export class GitHubRepoClient implements GitRepoClient {
     return Buffer.from(data.content, "base64").toString("utf8");
   }
 
+  /**
+   * Delete a file from `ref` with one commit. With `expectedBlobSha` the
+   * delete is guarded (conflict when the file moved); without it the current
+   * sha is looked up, and a file that's already gone is a conflict too.
+   */
+  async deleteFile(input: DeleteFileInput): Promise<{ commitSha: string }> {
+    const sha =
+      input.expectedBlobSha ?? (await this.currentBlobSha(input.path, this.ref));
+    if (!sha) throw new GitWriteConflictError(input.path);
+    try {
+      const { data } = await this.octokit.rest.repos.deleteFile({
+        owner: this.owner,
+        repo: this.repo,
+        path: input.path,
+        message: input.message,
+        sha,
+        branch: this.ref,
+      });
+      return { commitSha: data.commit.sha ?? "" };
+    } catch (err) {
+      if (isWriteConflict(err) || isNotFound(err)) {
+        throw new GitWriteConflictError(input.path);
+      }
+      throw err;
+    }
+  }
+
   /** Commit a single file to `branch`, creating or updating it. */
   private async commitFile(
     input: WriteFileInput,
     branch: string,
   ): Promise<{ commitSha: string; blobSha: string }> {
-    const sha = await this.currentBlobSha(input.path, branch);
-    const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
-      owner: this.owner,
-      repo: this.repo,
-      path: input.path,
-      message: input.message,
-      content: Buffer.from(input.content, "utf8").toString("base64"),
-      branch,
-      ...(sha ? { sha } : {}),
-    });
-    return {
-      commitSha: data.commit.sha ?? "",
-      blobSha: data.content?.sha ?? "",
-    };
+    // A guarded write trusts the caller's sha (null = "must not exist") and
+    // lets GitHub reject a stale one; an unguarded write looks the sha up.
+    const sha =
+      input.expectedBlobSha !== undefined
+        ? (input.expectedBlobSha ?? undefined)
+        : await this.currentBlobSha(input.path, branch);
+    try {
+      const { data } = await this.octokit.rest.repos.createOrUpdateFileContents({
+        owner: this.owner,
+        repo: this.repo,
+        path: input.path,
+        message: input.message,
+        content: Buffer.from(input.content, "utf8").toString("base64"),
+        branch,
+        ...(sha ? { sha } : {}),
+      });
+      return {
+        commitSha: data.commit.sha ?? "",
+        blobSha: data.content?.sha ?? "",
+      };
+    } catch (err) {
+      // 409: the provided sha is stale. 422: the file exists but no sha was
+      // sent (a guarded create losing to a concurrent create).
+      if (input.expectedBlobSha !== undefined && isWriteConflict(err)) {
+        throw new GitWriteConflictError(input.path);
+      }
+      throw err;
+    }
   }
 
   /** Existing blob sha for `path` on `branch`, or undefined if it's new. */
@@ -361,4 +408,14 @@ export class GitHubRepoClient implements GitRepoClient {
 /** True for a GitHub 404 (Octokit RequestError shape). */
 function isNotFound(err: unknown): boolean {
   return typeof err === "object" && err !== null && "status" in err && err.status === 404;
+}
+
+/** True for the statuses GitHub uses for contents-API sha conflicts. */
+function isWriteConflict(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "status" in err &&
+    (err.status === 409 || err.status === 422)
+  );
 }

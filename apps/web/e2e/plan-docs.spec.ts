@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { getWorkspace, resetBoard, resetDocs, seedInstallation } from "./helpers/db";
-import { getRepoFiles, resetFixture } from "./helpers/github";
+import { getRepoFiles, resetFixture, setRepoFiles } from "./helpers/github";
 
 /**
  * The Plan section: the restructured Plan / Build / Ship sidebar plus the new
@@ -137,6 +137,62 @@ test.describe("plan section: nav, strategy pages, research source", () => {
     await expect(page.getByRole("status")).toHaveText("Saved");
     expect(getRepoFiles("acme", "research-docs")["interview-notes.md"]).toContain(
       "Jane said hello.",
+    );
+  });
+
+  test("research: connect an existing repo; rename, delete, conflict guard", async ({
+    page,
+  }) => {
+    const ws = await getWorkspace();
+    await resetBoard(ws.id);
+    resetFixture();
+    await seedInstallation({ workspaceId: ws.id, accountLogin: "acme" });
+    // The repo already exists with Markdown in it; we connect, not create.
+    setRepoFiles("acme", "handbook", {
+      "guides/onboarding.md": "# Onboarding\n",
+      "readme.md": "# Readme\n",
+    });
+
+    await page.goto(`/${ws.slug}/all/research`);
+
+    // Pick the existing repo from the chooser's lazy-loaded picker.
+    await page.getByRole("button", { name: "Or connect an existing repository" }).click();
+    await expect(page.getByLabel("Existing repository")).toHaveValue(/handbook/);
+    await page.getByRole("button", { name: "Connect repository" }).click();
+
+    // The area lists the repo's files; the first (alphabetical) is selected.
+    await expect(page.getByRole("link", { name: "acme/handbook" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "onboarding" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "readme" })).toBeVisible();
+
+    // Rename the selected page; the repo gets the new path, loses the old.
+    await page.getByRole("button", { name: "Rename page" }).click();
+    await page.getByLabel("New file path").fill("guides/getting-started.md");
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
+    await expect(page.getByRole("button", { name: "getting-started" })).toBeVisible();
+    const afterRename = getRepoFiles("acme", "handbook");
+    expect(afterRename["guides/getting-started.md"]).toBe("# Onboarding\n");
+    expect(afterRename["guides/onboarding.md"]).toBeUndefined();
+
+    // Delete a page (with a commit); it leaves the list and the repo.
+    await page.getByRole("button", { name: "readme" }).click();
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByRole("button", { name: "Delete page" }).click();
+    await expect(page.getByRole("button", { name: "readme" })).toHaveCount(0);
+    expect(getRepoFiles("acme", "handbook")["readme.md"]).toBeUndefined();
+
+    // Concurrent-edit guard: the file changes on GitHub behind the editor,
+    // so saving the now-stale page is rejected instead of overwriting.
+    setRepoFiles("acme", "handbook", {
+      ...getRepoFiles("acme", "handbook"),
+      "guides/getting-started.md": "# Changed on GitHub\n",
+    });
+    await page.getByRole("button", { name: "Raw" }).click();
+    await page.locator("textarea").fill("# Onboarding\n\nMy stale edit.");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(/changed on GitHub since you loaded it/)).toBeVisible();
+    expect(getRepoFiles("acme", "handbook")["guides/getting-started.md"]).toBe(
+      "# Changed on GitHub\n",
     );
   });
 

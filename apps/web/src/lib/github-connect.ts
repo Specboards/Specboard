@@ -56,9 +56,21 @@ export async function loadWorkspaceInstallations(
     .orderBy(githubInstallations.createdAt);
   if (rows.length === 0) return NO_INSTALLATIONS;
 
-  // E2E runs with a faked GitHub and no App credentials; report the seeded
-  // installations with no listable repos rather than an error.
-  if (isE2E()) return { installations: rows, repositories: [], error: null };
+  // E2E runs with a faked GitHub and no App credentials; the repos each
+  // installation can "access" are whatever the fixture holds for its account.
+  if (isE2E()) {
+    const { e2eInstallationRepos } = await import("@/lib/github-e2e");
+    return {
+      installations: rows,
+      repositories: rows.flatMap((row) =>
+        e2eInstallationRepos(row.accountLogin).map((repo) => ({
+          ...repo,
+          installationId: row.installationId,
+        })),
+      ),
+      error: null,
+    };
+  }
 
   const app = await getGithubApp(db);
   if (!app) {

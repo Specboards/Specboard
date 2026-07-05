@@ -7,20 +7,29 @@ import {
   FilePlus,
   FileText,
   Folder,
+  Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthRequiredError, saveGithubDocFile } from "@/lib/api-client";
+import {
+  AuthRequiredError,
+  deleteGithubDocFile,
+  renameGithubDocFile,
+  saveGithubDocFile,
+} from "@/lib/api-client";
 import type { DocArea } from "@/lib/store/types";
 import { cn } from "@/lib/utils";
 
 export interface GithubDocFileView {
   path: string;
   content: string;
+  /** Sha at load/last save; sent with writes as the concurrent-edit guard. */
+  blobSha: string;
 }
 
 /**
@@ -28,7 +37,9 @@ export interface GithubDocFileView {
  * the left (folders derived from paths), the rich-text editor on the right.
  * Saving is explicit (a Save button) because each save is one commit to the
  * repo's default branch; autosave would spam the git history. New pages
- * commit an initial file the same way. Rename/delete are a later slice.
+ * commit an initial file the same way; rename and delete are commits too.
+ * Every write carries the file's loaded sha, so two people editing the same
+ * page get a conflict error instead of silently losing the earlier save.
  */
 export function GithubDocsWorkspace({
   productId,
@@ -52,8 +63,9 @@ export function GithubDocsWorkspace({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<{ folder: string; title: string } | null>(null);
   const [dirty, setDirty] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<"save" | "create" | null>(null);
+  const [busy, setBusy] = useState<"save" | "create" | "rename" | "delete" | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
+  const [renameTo, setRenameTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selected = files.find((f) => f.path === selectedPath) ?? null;
@@ -85,6 +97,7 @@ export function GithubDocsWorkspace({
     }
     setSelectedPath(path);
     setSavedPath(null);
+    setRenameTo(null);
     setError(null);
   }
 
@@ -95,9 +108,15 @@ export function GithubDocsWorkspace({
     setBusy("save");
     setError(null);
     try {
-      await saveGithubDocFile({ productId, area, path: selected.path, content });
+      const { blobSha } = await saveGithubDocFile({
+        productId,
+        area,
+        path: selected.path,
+        content,
+        blobSha: selected.blobSha,
+      });
       setFiles((prev) =>
-        prev.map((f) => (f.path === selected.path ? { ...f, content } : f)),
+        prev.map((f) => (f.path === selected.path ? { ...f, content, blobSha } : f)),
       );
       setDirty((prev) => {
         const next = { ...prev };
@@ -107,6 +126,66 @@ export function GithubDocsWorkspace({
       setSavedPath(selected.path);
     } catch (err) {
       fail(err, "Save failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function rename() {
+    if (!selected || renameTo === null || busy) return;
+    const toPath = renameTo.trim();
+    if (!toPath || toPath === selected.path) {
+      setRenameTo(null);
+      return;
+    }
+    setBusy("rename");
+    setError(null);
+    try {
+      const renamed = await renameGithubDocFile({
+        productId,
+        area,
+        path: selected.path,
+        toPath,
+      });
+      setFiles((prev) =>
+        prev
+          .filter((f) => f.path !== selected.path && f.path !== renamed.path)
+          .concat({ path: renamed.path, content: renamed.content, blobSha: renamed.blobSha })
+          .sort((a, b) => a.path.localeCompare(b.path)),
+      );
+      setSelectedPath(renamed.path);
+      setSavedPath(null);
+      setRenameTo(null);
+    } catch (err) {
+      fail(err, "Rename failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deletePage() {
+    if (!selected || busy) return;
+    if (!window.confirm(`Delete "${selected.path}" from the repository?`)) return;
+    setBusy("delete");
+    setError(null);
+    try {
+      await deleteGithubDocFile({
+        productId,
+        area,
+        path: selected.path,
+        blobSha: selected.blobSha,
+      });
+      const remaining = files.filter((f) => f.path !== selected.path);
+      setFiles(remaining);
+      setDirty((prev) => {
+        const next = { ...prev };
+        delete next[selected.path];
+        return next;
+      });
+      setSelectedPath(remaining[0]?.path ?? null);
+      setSavedPath(null);
+    } catch (err) {
+      fail(err, "Delete failed.");
     } finally {
       setBusy(null);
     }
@@ -132,9 +211,17 @@ export function GithubDocsWorkspace({
     setBusy("create");
     setError(null);
     try {
-      await saveGithubDocFile({ productId, area, path, content });
+      // blobSha null = "must not exist yet": creating a page never overwrites
+      // a file someone pushed to the repo since this view loaded.
+      const { blobSha } = await saveGithubDocFile({
+        productId,
+        area,
+        path,
+        content,
+        blobSha: null,
+      });
       setFiles((prev) =>
-        [...prev, { path, content }].sort((a, b) => a.path.localeCompare(b.path)),
+        [...prev, { path, content, blobSha }].sort((a, b) => a.path.localeCompare(b.path)),
       );
       setSelectedPath(path);
       setSavedPath(null);
@@ -286,9 +373,41 @@ export function GithubDocsWorkspace({
           {selected ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="truncate text-lg font-semibold">
-                  {selected.path.split("/").pop()?.replace(/\.md$/i, "")}
-                </h2>
+                {renameTo !== null ? (
+                  <form
+                    className="flex flex-1 items-center gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void rename();
+                    }}
+                  >
+                    <Input
+                      autoFocus
+                      value={renameTo}
+                      onChange={(e) => setRenameTo(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setRenameTo(null);
+                      }}
+                      className="h-8 max-w-md text-sm"
+                      aria-label="New file path"
+                    />
+                    <Button type="submit" size="sm" variant="secondary" disabled={busy !== null}>
+                      {busy === "rename" ? "Renaming…" : "Rename"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setRenameTo(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </form>
+                ) : (
+                  <h2 className="truncate text-lg font-semibold">
+                    {selected.path.split("/").pop()?.replace(/\.md$/i, "")}
+                  </h2>
+                )}
                 {canEdit ? (
                   <div className="flex items-center gap-2">
                     <span
@@ -304,6 +423,32 @@ export function GithubDocsWorkspace({
                             ? "Unsaved changes"
                             : ""}
                     </span>
+                    {renameTo === null ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setRenameTo(selected.path)}
+                          // Renames commit the saved content, so unsaved edits
+                          // would be left behind; save first.
+                          disabled={busy !== null || selectedDirty}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                          title={selectedDirty ? "Save changes before renaming" : "Rename page"}
+                          aria-label="Rename page"
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deletePage()}
+                          disabled={busy !== null}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive disabled:opacity-40"
+                          title="Delete page"
+                          aria-label="Delete page"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                      </>
+                    ) : null}
                     <Button
                       size="sm"
                       onClick={() => void save()}

@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   AuthRequiredError,
+  connectGithubDocSpace,
   createGithubDocSpace,
+  listInstallationRepositories,
   setDocSpace,
+  type InstallationRepo,
 } from "@/lib/api-client";
 import type { DocArea } from "@/lib/store/types";
 
@@ -50,7 +53,10 @@ export function DocSpaceSetup({
 }) {
   const [externalUrl, setExternalUrl] = useState("");
   const [repoName, setRepoName] = useState(github.suggestedName);
-  const [busy, setBusy] = useState<"external" | "local" | "github" | null>(null);
+  const [busy, setBusy] = useState<"external" | "local" | "github" | "connect" | null>(null);
+  // The existing-repo picker loads lazily on request; null = not opened yet.
+  const [picker, setPicker] = useState<"loading" | InstallationRepo[] | null>(null);
+  const [pickedRepo, setPickedRepo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function fail(err: unknown) {
@@ -83,6 +89,41 @@ export function DocSpaceSetup({
     setError(null);
     try {
       await createGithubDocSpace({ productId, area, name: repoName.trim() });
+      onSaved();
+    } catch (err) {
+      fail(err);
+    }
+  }
+
+  async function openPicker() {
+    setPicker("loading");
+    setError(null);
+    try {
+      const state = await listInstallationRepositories();
+      setPicker(state.repositories);
+      setPickedRepo(state.repositories[0] ? repoKey(state.repositories[0]) : "");
+      if (state.error) setError(state.error);
+    } catch (err) {
+      setPicker(null);
+      fail(err);
+    }
+  }
+
+  async function connectExisting() {
+    const repo = Array.isArray(picker)
+      ? picker.find((r) => repoKey(r) === pickedRepo)
+      : undefined;
+    if (!repo) return;
+    setBusy("connect");
+    setError(null);
+    try {
+      await connectGithubDocSpace({
+        productId,
+        area,
+        owner: repo.owner,
+        name: repo.name,
+        installationId: repo.installationId,
+      });
       onSaved();
     } catch (err) {
       fail(err);
@@ -157,31 +198,71 @@ export function DocSpaceSetup({
             <GitBranch className="mt-0.5 h-5 w-5 text-muted-foreground" aria-hidden />
             <div className="flex-1 space-y-2">
               <div>
-                <p className="text-sm font-medium">Create a GitHub repository</p>
+                <p className="text-sm font-medium">Use a GitHub repository</p>
                 <p className="text-sm text-muted-foreground">
-                  Docs live as Markdown files in a private repo your org owns. Edit
-                  them here; every save commits back to the repo.
+                  Docs live as Markdown files in a repo your org owns. Edit them
+                  here; every save commits back to the repo.
                 </p>
               </div>
               {canCreateRepo ? (
-                <div className="flex gap-2">
-                  <Input
-                    value={repoName}
-                    onChange={(e) => setRepoName(e.target.value)}
-                    aria-label="New repository name"
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() => void createRepo()}
-                    disabled={busy !== null || !repoName.trim()}
-                  >
-                    {busy === "github" ? "Creating…" : "Create repository"}
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={repoName}
+                      onChange={(e) => setRepoName(e.target.value)}
+                      aria-label="New repository name"
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={() => void createRepo()}
+                      disabled={busy !== null || !repoName.trim()}
+                    >
+                      {busy === "github" ? "Creating…" : "Create repository"}
+                    </Button>
+                  </div>
+                  {picker === null ? (
+                    <button
+                      type="button"
+                      onClick={() => void openPicker()}
+                      className="text-sm text-muted-foreground underline hover:text-foreground"
+                    >
+                      Or connect an existing repository
+                    </button>
+                  ) : picker === "loading" ? (
+                    <p className="text-sm text-muted-foreground">Loading repositories…</p>
+                  ) : picker.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      The GitHub App can&apos;t access any repositories yet. Grant it
+                      access on GitHub, then try again.
+                    </p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select
+                        value={pickedRepo}
+                        onChange={(e) => setPickedRepo(e.target.value)}
+                        aria-label="Existing repository"
+                        className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                      >
+                        {picker.map((repo) => (
+                          <option key={repoKey(repo)} value={repoKey(repo)}>
+                            {repo.owner}/{repo.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="secondary"
+                        onClick={() => void connectExisting()}
+                        disabled={busy !== null || !pickedRepo}
+                      >
+                        {busy === "connect" ? "Connecting…" : "Connect repository"}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   {github.available ? (
-                    "Only a workspace admin can create the repository."
+                    "Only a workspace admin can connect a repository."
                   ) : (
                     <>
                       <Link href={github.installHref} className="underline hover:text-foreground">
@@ -205,4 +286,8 @@ export function DocSpaceSetup({
       ) : null}
     </div>
   );
+}
+
+function repoKey(repo: InstallationRepo): string {
+  return `${repo.installationId}:${repo.owner}/${repo.name}`;
 }
