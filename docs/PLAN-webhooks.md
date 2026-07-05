@@ -47,8 +47,23 @@ than `SPECBOARD_OUTBOX_RETENTION_DAYS` (default 7; 0 disables) hourly, in bounde
 batches. Only processed rows are removed; an old *unprocessed* row (never
 relayed) is kept for inspection.
 
-Still to do (Phase 2+): delivery-log UI + manual redeliver, and endpoint
-auto-disable after a failure streak.
+**Phase 2 shipped (2026-07-05, migration 0030):**
+
+- **Delivery-log UI + manual redeliver.** Each endpoint in `Settings → Webhooks`
+  expands to its recent deliveries (event, status, attempts, HTTP result, time)
+  via `GET /api/v1/webhooks/:id/deliveries`. A per-row "Redeliver" re-queues the
+  stored envelope for an immediate resend (`POST
+  /api/v1/webhooks/:id/deliveries/:deliveryId/redeliver`); the same envelope id
+  and signature are re-sent so consumers dedupe.
+- **Endpoint auto-disable after a failure streak.** `webhook_endpoints` gains a
+  `consecutive_failures` counter (migration 0030). Each delivery that gives up
+  (retry budget exhausted, or a terminal SSRF block) increments it; any success,
+  or a manual Resume, resets it. At `WEBHOOK_FAILURE_DISABLE_THRESHOLD` (5) the
+  endpoint is set `active = false`, surfaced in the UI as "Auto-disabled" (vs a
+  manual "Paused"). Stops a dead endpoint from eating retries forever.
+
+Still to do (Phase 3): more event types, per-`from`/`to` status filtering, and a
+notification when an endpoint auto-disables.
 
 ## Why this is cheap to hook in (current-state findings)
 

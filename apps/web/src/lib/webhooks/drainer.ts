@@ -11,8 +11,11 @@ import {
   markFailed,
   markRetry,
   pruneProcessedOutbox,
+  recordEndpointFailure,
+  resetEndpointFailures,
   type ClaimedDelivery,
 } from "@/lib/webhooks/store";
+import { WEBHOOK_FAILURE_DISABLE_THRESHOLD } from "@/lib/webhooks/types";
 
 /**
  * In-process outbox drainer. It claims due `webhook_deliveries` rows, POSTs the
@@ -130,6 +133,7 @@ export async function drainOnce(): Promise<void> {
 async function deliverOne(db: Database, d: ClaimedDelivery): Promise<void> {
   const target = await endpointDeliveryTarget(db, d.endpointId);
   if (!target || !target.active) {
+    // Endpoint is already off/gone: fail the row but don't touch the streak.
     await markFailed(db, d.id, null, "Endpoint is inactive or was removed.");
     return;
   }
@@ -142,25 +146,52 @@ async function deliverOne(db: Database, d: ClaimedDelivery): Promise<void> {
 
   if (result.ok) {
     await markDelivered(db, d.id, result.statusCode);
-  } else if (result.blocked) {
+    await resetEndpointFailures(db, d.endpointId);
+    return;
+  }
+
+  let terminal: boolean;
+  if (result.blocked) {
     // A URL that fails the SSRF check is terminal, not worth retrying.
     await markFailed(db, d.id, null, `Blocked URL: ${result.error}`);
+    terminal = true;
   } else {
-    await retryOrFail(db, d, result.statusCode, result.error);
+    terminal = await retryOrFail(db, d, result.statusCode, result.error);
+  }
+
+  // Only a give-up (retry budget exhausted, or terminal block) counts toward
+  // auto-disable; an intermediate retry leaves the streak untouched.
+  if (terminal) await recordEndpointFailureAndLog(db, d.endpointId);
+}
+
+async function recordEndpointFailureAndLog(
+  db: Database,
+  endpointId: string,
+): Promise<void> {
+  const disabled = await recordEndpointFailure(db, endpointId);
+  if (disabled) {
+    console.log(
+      `[webhooks] auto-disabled endpoint ${endpointId} after ${WEBHOOK_FAILURE_DISABLE_THRESHOLD} consecutive failures`,
+    );
   }
 }
 
+/**
+ * Schedule the next retry, or give up when the backoff schedule is exhausted.
+ * Returns true if this was the terminal give-up (row marked `failed`).
+ */
 async function retryOrFail(
   db: Database,
   d: ClaimedDelivery,
   statusCode: number | null,
   error: string,
-): Promise<void> {
+): Promise<boolean> {
   // `d.attempts` was already incremented when the row was claimed.
   const delay = BACKOFF_SECONDS[d.attempts - 1];
   if (delay === undefined) {
     await markFailed(db, d.id, statusCode, error);
-    return;
+    return true;
   }
   await markRetry(db, d.id, new Date(Date.now() + delay * 1_000), statusCode, error);
+  return false;
 }
