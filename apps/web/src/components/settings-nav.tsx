@@ -15,8 +15,7 @@ const ITEMS = [
   { href: "/settings/ideas", label: "Ideas" },
   { href: "/settings/hierarchy", label: "Hierarchy" },
   { href: "/settings/branding", label: "Branding" },
-  { href: "/settings/api-keys", label: "API keys" },
-  { href: "/settings/webhooks", label: "Webhooks" },
+  { href: "/settings/integrations", label: "Integrations" },
 ];
 
 /** Left sub-navigation for the Settings section. */
