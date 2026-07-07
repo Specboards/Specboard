@@ -5,6 +5,33 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [0.12.0] - 2026-07-07
+
+### Added
+
+- **Hosted MCP endpoint for AI agents** (`/api/mcp`). Coding agents (Claude
+  Code, Claude Desktop, claude.ai) connect to a single Streamable-HTTP endpoint
+  that exposes the backlog and git-backed specs through nine tools: read the
+  hierarchy and items, edit metadata and DB-native card bodies, commit spec
+  Markdown to the connected repo, and break a card down into child specs. Tools
+  call the same service layer as the REST API, so auth, the status workflow,
+  stage gates, and webhooks all match the web app. One endpoint serves both
+  self-host and the hosted SaaS.
+- **OAuth 2.1 sign-in for MCP** (migration 0032 adds `oauth_applications`,
+  `oauth_access_tokens`, and `oauth_consents`). Adding the endpoint URL is
+  enough: the client discovers the authorization server, registers itself
+  (Dynamic Client Registration), and walks the user through sign-in and a
+  consent screen in the browser; the agent then acts as that user and inherits
+  their workspace role. PKCE is required for every client, every authorization
+  is confirmed on an explicit consent screen, and loopback redirects follow
+  RFC 8252 (any ephemeral port on `localhost`). A personal API key
+  (`Authorization: Bearer sb_...`) remains the non-interactive alternative for
+  CI.
+- **Integrations settings** (Settings → Integrations), a tabbed view for MCP,
+  API keys, and Webhooks, with an MCP connect panel that shows this
+  deployment's endpoint URL and copy-paste setup for Claude Code and Claude
+  Desktop.
+
 ## [0.11.0] - 2026-07-05
 
 ### Added
