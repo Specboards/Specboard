@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { SpecParseError, extractSections, hasSpecId, parseSpec, previewSpec } from "./spec.js";
+import {
+  SpecParseError,
+  extractSections,
+  frontmatterBlock,
+  hasSpecId,
+  parseSpec,
+  previewSpec,
+  rewriteSpecBody,
+} from "./spec.js";
 
 const SAMPLE = `---
 id: 3f1a8c2e-0b7d-4e2a-9c11-2a6b8d4e1f00
@@ -75,5 +83,56 @@ describe("extractSections", () => {
     expect(sections).toHaveLength(2);
     expect(sections[0]!.level).toBe(2);
     expect(sections[1]!.level).toBe(3);
+  });
+});
+
+describe("frontmatterBlock", () => {
+  it("returns the exact frontmatter slice including the closing delimiter", () => {
+    const block = frontmatterBlock(SAMPLE);
+    expect(block).toBe(
+      "---\nid: 3f1a8c2e-0b7d-4e2a-9c11-2a6b8d4e1f00\ntitle: Example Feature\nkind: feature\n---\n",
+    );
+  });
+
+  it("returns null when there is no frontmatter", () => {
+    expect(frontmatterBlock("# Just a heading\n\nbody")).toBeNull();
+  });
+
+  it("handles CRLF line endings", () => {
+    const block = frontmatterBlock("---\r\nid: x\r\n---\r\n# Body");
+    expect(block).toBe("---\r\nid: x\r\n---\r\n");
+  });
+});
+
+describe("rewriteSpecBody", () => {
+  it("preserves frontmatter (id, title, kind) verbatim while replacing the body", () => {
+    const next = rewriteSpecBody(SAMPLE, "# New title\n\nRewritten by an agent.", {
+      id: "unused",
+      title: "unused",
+    });
+    // Frontmatter is byte-for-byte identical; only the body changed.
+    expect(next.startsWith(frontmatterBlock(SAMPLE)!)).toBe(true);
+    const reparsed = parseSpec(next);
+    expect(reparsed.frontmatter.id).toBe("3f1a8c2e-0b7d-4e2a-9c11-2a6b8d4e1f00");
+    expect(reparsed.frontmatter.kind).toBe("feature");
+    expect(reparsed.content).toContain("Rewritten by an agent.");
+    expect(reparsed.content).not.toContain("Users cannot do X.");
+  });
+
+  it("normalizes to one blank line after frontmatter and a single trailing newline", () => {
+    const next = rewriteSpecBody(SAMPLE, "\n\n# Body\n\n\n", { id: "x", title: "y" });
+    expect(next).toContain("---\n\n# Body\n");
+    expect(next.endsWith("# Body\n")).toBe(true);
+    expect(next.endsWith("\n\n")).toBe(false);
+  });
+
+  it("synthesizes minimal frontmatter when the file has none, keeping identity", () => {
+    const next = rewriteSpecBody("# Orphan\n\nno frontmatter", "# Body", {
+      id: "3f1a8c2e-0b7d-4e2a-9c11-2a6b8d4e1f00",
+      title: "Recovered",
+    });
+    const reparsed = parseSpec(next);
+    expect(reparsed.frontmatter.id).toBe("3f1a8c2e-0b7d-4e2a-9c11-2a6b8d4e1f00");
+    expect(reparsed.frontmatter.title).toBe("Recovered");
   });
 });

@@ -117,6 +117,44 @@ export function extractSections(markdown: string): SpecSection[] {
 }
 
 /**
+ * The literal frontmatter block at the top of a spec file - the opening `---`
+ * line through the closing `---` line, including its trailing newline - or
+ * `null` when the file has no frontmatter. Returning the raw slice (rather than
+ * re-serializing parsed YAML) lets callers rewrite a spec's body while keeping
+ * its frontmatter byte-for-byte, so the stable `id` and any author keys survive.
+ */
+export function frontmatterBlock(raw: string): string | null {
+  const firstLine = raw.match(/^---[ \t]*(?:\r?\n|$)/);
+  if (!firstLine) return null;
+  const bodyStart = firstLine[0].length;
+  const rest = raw.slice(bodyStart);
+  const close = rest.match(/(?:^|\r?\n)(---|\.\.\.)[ \t]*(?:\r?\n|$)/);
+  if (!close || close.index === undefined) return null;
+  const end = bodyStart + close.index + close[0].length;
+  return raw.slice(0, end);
+}
+
+/**
+ * Rewrite a spec file's Markdown body while preserving its exact frontmatter.
+ * The frontmatter (notably the stable `id`) is kept verbatim; only the body
+ * after it is replaced. When the file has no frontmatter, a minimal block is
+ * synthesized from `fallback` so the result is still a valid, identifiable
+ * spec. Used to let agents edit spec content without ever orphaning metadata.
+ */
+export function rewriteSpecBody(
+  raw: string,
+  body: string,
+  fallback: { id: string; title: string },
+): string {
+  const block =
+    frontmatterBlock(raw) ??
+    `---\nid: ${fallback.id}\ntitle: ${JSON.stringify(fallback.title)}\n---\n`;
+  // One blank line between frontmatter and body; exactly one trailing newline.
+  const trimmed = body.replace(/^\s*\n/, "").replace(/\s+$/, "");
+  return `${block}\n${trimmed}\n`;
+}
+
+/**
  * Returns true if the raw file already carries a Specboard `id`. Used by the
  * git integration to decide whether it must inject one on first import.
  */

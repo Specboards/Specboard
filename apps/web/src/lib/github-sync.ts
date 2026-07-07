@@ -221,7 +221,7 @@ export async function scanWorkspaceSpecs(db: Database, workspaceId: string): Pro
 }
 
 /** Slugify a feature name into a path segment (lowercase, hyphen-separated). */
-function featureSlug(name: string): string {
+export function featureSlug(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
