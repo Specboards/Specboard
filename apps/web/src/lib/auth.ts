@@ -19,6 +19,75 @@ function blockPublicEmailDomains(): boolean {
   return value === "1" || value === "true" || value === "yes";
 }
 
+/** Hosts that count as loopback for RFC 8252 native-app redirects. */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Parse a redirect URI, returning it only if it's a plain-http loopback. */
+function parseLoopbackRedirect(uri: unknown): URL | null {
+  if (typeof uri !== "string") return null;
+  try {
+    const parsed = new URL(uri);
+    return parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname)
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * RFC 8252 §7.3: a native client redirects to a loopback address with an
+ * ephemeral port, and the authorization server must match that redirect URI
+ * ignoring the port. Claude Code registers once (DCR) and then authorizes
+ * with a fresh localhost port per sign-in; better-auth's mcp plugin matches
+ * the registered URIs exactly, which rejects every attempt after the first.
+ * Bridge the gap by swapping the client's stored loopback redirect (same
+ * path, any loopback host) for the one requested, before the plugin checks.
+ * Loopback-interception risk is covered by PKCE, which we require.
+ */
+async function allowLoopbackRedirectPort(ctx: {
+  query?: Record<string, unknown>;
+  context: {
+    adapter: {
+      findOne: <T>(args: {
+        model: string;
+        where: { field: string; value: string }[];
+      }) => Promise<T | null>;
+      update: <T>(args: {
+        model: string;
+        where: { field: string; value: string }[];
+        update: Record<string, unknown>;
+      }) => Promise<T | null>;
+    };
+  };
+}): Promise<void> {
+  const requested = typeof ctx.query?.redirect_uri === "string" ? ctx.query.redirect_uri : "";
+  const clientId = typeof ctx.query?.client_id === "string" ? ctx.query.client_id : "";
+  const loopback = parseLoopbackRedirect(requested);
+  if (!loopback || !clientId) return;
+
+  const client = await ctx.context.adapter.findOne<{ redirectUrls: string }>({
+    model: "oauthApplication",
+    where: [{ field: "clientId", value: clientId }],
+  });
+  if (!client) return;
+  const urls = client.redirectUrls.split(",");
+  if (urls.includes(requested)) return;
+
+  const swapIndex = urls.findIndex((registered) => {
+    const parsed = parseLoopbackRedirect(registered);
+    return parsed !== null && parsed.pathname === loopback.pathname;
+  });
+  if (swapIndex === -1) return;
+
+  urls[swapIndex] = requested;
+  await ctx.context.adapter.update({
+    model: "oauthApplication",
+    where: [{ field: "clientId", value: clientId }],
+    update: { redirectUrls: urls.join(","), updatedAt: new Date() },
+  });
+}
+
 function createAuth(url: string) {
   // The MCP OAuth provider needs an explicit issuer for its discovery
   // metadata; everywhere else Better Auth can infer the URL per request.
@@ -171,6 +240,9 @@ function createAuth(url: string) {
         // dynamically-registered client could silently obtain an
         // authorization code from a signed-in user's browser.
         if (ctx.path === "/mcp/authorize") {
+          // Native clients re-authorize with a fresh loopback port (RFC 8252);
+          // reconcile the stored redirect before the plugin's exact match.
+          await allowLoopbackRedirectPort(ctx);
           return { context: { query: { ...ctx.query, prompt: "consent" } } };
         }
         if (ctx.path !== "/sign-up/email" || !blockPublicEmailDomains()) return;
