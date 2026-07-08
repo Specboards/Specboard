@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 
-import type { GitRepoClient, SpecFile, WriteFileInput } from "@specboard/git";
+import {
+  GitWriteConflictError,
+  type DeleteFileInput,
+  type GitRepoClient,
+  type InstallationRepo,
+  type SpecFile,
+  type WriteFileInput,
+} from "@specboard/git";
 
 import { e2eGithubFixturePath } from "@/lib/e2e";
 import type { RepoRecord } from "@/lib/github-sync";
@@ -72,6 +79,15 @@ export function fakeRepoClient(repo: Pick<RepoRecord, "owner" | "name">): GitRep
     async writeFile(input: WriteFileInput): Promise<{ commitSha: string; blobSha: string }> {
       const data = readFixture();
       const files = (data[key] ??= {});
+      // Mirror the real client's guard: null = must not exist, sha = must match.
+      if (input.expectedBlobSha !== undefined) {
+        const existing = files[input.path];
+        const conflict =
+          input.expectedBlobSha === null
+            ? existing !== undefined
+            : existing === undefined || blobShaOf(existing) !== input.expectedBlobSha;
+        if (conflict) throw new GitWriteConflictError(input.path);
+      }
       files[input.path] = input.content;
       writeFixture(data);
       return {
@@ -79,5 +95,38 @@ export function fakeRepoClient(repo: Pick<RepoRecord, "owner" | "name">): GitRep
         blobSha: blobShaOf(input.content),
       };
     },
+
+    async deleteFile(input: DeleteFileInput): Promise<{ commitSha: string }> {
+      const data = readFixture();
+      const files = data[key] ?? {};
+      const existing = files[input.path];
+      if (
+        existing === undefined ||
+        (input.expectedBlobSha !== undefined && blobShaOf(existing) !== input.expectedBlobSha)
+      ) {
+        throw new GitWriteConflictError(input.path);
+      }
+      delete files[input.path];
+      writeFixture(data);
+      return { commitSha: blobShaOf(`delete ${input.path}\n${existing}`) };
+    },
   };
+}
+
+/**
+ * The repos the fixture holds for one account, shaped like GitHub's
+ * installation-repo listing. Lets the connect pickers work in E2E: a repo
+ * seeded as `"acme/handbook"` shows up as connectable for the `acme`
+ * installation.
+ */
+export function e2eInstallationRepos(accountLogin: string): InstallationRepo[] {
+  const prefix = `${accountLogin}/`;
+  return Object.keys(readFixture())
+    .filter((key) => key.startsWith(prefix))
+    .map((key) => ({
+      owner: accountLogin,
+      name: key.slice(prefix.length),
+      defaultBranch: "main",
+      private: true,
+    }));
 }

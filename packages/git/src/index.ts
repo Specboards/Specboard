@@ -19,6 +19,8 @@ export interface GitRepoClient {
   readFile(path: string): Promise<SpecFile>;
   /** Write a file back, returning the new commit sha and the new blob sha. */
   writeFile(input: WriteFileInput): Promise<{ commitSha: string; blobSha: string }>;
+  /** Delete a file with a commit, returning the commit sha. */
+  deleteFile(input: DeleteFileInput): Promise<{ commitSha: string }>;
 }
 
 export interface WriteFileInput {
@@ -27,6 +29,31 @@ export interface WriteFileInput {
   message: string;
   /** "direct" commits to the branch; "pr" opens a PR from a new branch. */
   mode: "direct" | "pr";
+  /**
+   * Concurrent-edit guard. A blob sha means "update: the file must still be
+   * at this sha"; null means "create: the file must not exist yet". Omitted
+   * (undefined) keeps the unguarded last-write-wins behavior spec sync uses.
+   * A failed guard rejects with {@link GitWriteConflictError}.
+   */
+  expectedBlobSha?: string | null;
+}
+
+export interface DeleteFileInput {
+  path: string;
+  message: string;
+  /** When set, the file must still be at this blob sha (see WriteFileInput). */
+  expectedBlobSha?: string;
+}
+
+/**
+ * A guarded write or delete lost the race: the file changed (or appeared, or
+ * disappeared) on the remote since the caller loaded it.
+ */
+export class GitWriteConflictError extends Error {
+  constructor(path: string) {
+    super(`${path} changed on the remote since it was loaded.`);
+    this.name = "GitWriteConflictError";
+  }
 }
 
 /** Outcome of importing/reconciling one spec. */

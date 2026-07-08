@@ -1307,21 +1307,111 @@ export async function createGithubDocSpace(input: {
   return { space: body.space, repository: body.repository };
 }
 
-/** Save (commit) one Markdown file in a GitHub-backed doc area. */
+/**
+ * Connect a repository the GitHub App installation can already access as the
+ * area's doc source.
+ */
+export async function connectGithubDocSpace(input: {
+  productId: string;
+  area: DocArea;
+  owner: string;
+  name: string;
+  installationId: string;
+}): Promise<{ space: DocSpace; repository: { owner: string; name: string } }> {
+  const res = await fetch("/api/v1/doc-spaces/github", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      productId: input.productId,
+      area: input.area,
+      installationId: input.installationId,
+      existing: { owner: input.owner, name: input.name },
+    }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | {
+        space?: DocSpace;
+        repository?: { owner: string; name: string };
+        error?: string;
+      }
+    | null;
+  if (!res.ok || !body?.space || !body.repository) {
+    throw new Error(body?.error ?? `Connect failed with ${res.status}`);
+  }
+  return { space: body.space, repository: body.repository };
+}
+
+/**
+ * Save (commit) one Markdown file in a GitHub-backed doc area. `blobSha` is
+ * the sha the file had when loaded (null for a new page); a stale sha means
+ * someone else changed the file and the save is rejected. Returns the new sha
+ * for the next save.
+ */
 export async function saveGithubDocFile(input: {
   productId: string;
   area: DocArea;
   path: string;
   content: string;
-}): Promise<void> {
+  blobSha: string | null;
+}): Promise<{ blobSha: string }> {
   const res = await fetch("/api/v1/doc-spaces/github/file", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
   if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { blobSha?: string; error?: string }
+    | null;
+  if (!res.ok || typeof body?.blobSha !== "string") {
+    throw new Error(body?.error ?? `Save failed with ${res.status}`);
+  }
+  return { blobSha: body.blobSha };
+}
+
+/** Rename (or move) one Markdown file in a GitHub-backed doc area. */
+export async function renameGithubDocFile(input: {
+  productId: string;
+  area: DocArea;
+  path: string;
+  toPath: string;
+}): Promise<{ path: string; blobSha: string; content: string }> {
+  const res = await fetch("/api/v1/doc-spaces/github/file", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | { path?: string; blobSha?: string; content?: string; error?: string }
+    | null;
+  if (
+    !res.ok ||
+    typeof body?.path !== "string" ||
+    typeof body.blobSha !== "string" ||
+    typeof body.content !== "string"
+  ) {
+    throw new Error(body?.error ?? `Rename failed with ${res.status}`);
+  }
+  return { path: body.path, blobSha: body.blobSha, content: body.content };
+}
+
+/** Delete one Markdown file in a GitHub-backed doc area (one commit). */
+export async function deleteGithubDocFile(input: {
+  productId: string;
+  area: DocArea;
+  path: string;
+  blobSha: string;
+}): Promise<void> {
+  const res = await fetch("/api/v1/doc-spaces/github/file", {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Save failed with ${res.status}`);
+    throw new Error(body?.error ?? `Delete failed with ${res.status}`);
   }
 }

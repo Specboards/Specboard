@@ -2,6 +2,8 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  GitHubRepoClient,
+  GitWriteConflictError,
   reconcileSpecs,
   injectSpecId,
   type GitRepoClient,
@@ -169,6 +171,9 @@ class FakeClient implements GitRepoClient {
     this.writes.push(input);
     return Promise.resolve({ commitSha: "commit-sha", blobSha: "new-blob-sha" });
   }
+  deleteFile(): Promise<{ commitSha: string }> {
+    return Promise.resolve({ commitSha: "commit-sha" });
+  }
 }
 
 describe("reconcileSpecs", () => {
@@ -212,5 +217,136 @@ describe("reconcileSpecs", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ path: "specs/good/spec.md", idInjected: false });
     expect(result[0]!.spec.frontmatter.id).toBe(goodId);
+  });
+});
+
+/** Octokit stub covering the contents-API surface GitHubRepoClient touches. */
+function fakeOctokit(behavior: {
+  getContent?: () => Promise<{ data: unknown }>;
+  createOrUpdateFileContents?: (params: Record<string, unknown>) => Promise<{ data: unknown }>;
+  deleteFile?: (params: Record<string, unknown>) => Promise<{ data: unknown }>;
+}) {
+  return {
+    rest: {
+      repos: {
+        getContent:
+          behavior.getContent ??
+          (() => Promise.reject(Object.assign(new Error("not found"), { status: 404 }))),
+        createOrUpdateFileContents:
+          behavior.createOrUpdateFileContents ??
+          (() => Promise.resolve({ data: { commit: { sha: "c1" }, content: { sha: "b1" } } })),
+        deleteFile:
+          behavior.deleteFile ?? (() => Promise.resolve({ data: { commit: { sha: "c2" } } })),
+      },
+    },
+  } as unknown as ConstructorParameters<typeof GitHubRepoClient>[0];
+}
+
+const REPO = { owner: "acme", name: "docs", ref: "main" };
+
+describe("GitHubRepoClient guarded writes", () => {
+  it("sends the expected blob sha and skips the lookup on a guarded update", async () => {
+    const sent: Record<string, unknown>[] = [];
+    let lookedUp = false;
+    const octokit = fakeOctokit({
+      getContent: () => {
+        lookedUp = true;
+        return Promise.resolve({ data: { type: "file", sha: "other" } });
+      },
+      createOrUpdateFileContents: (params) => {
+        sent.push(params);
+        return Promise.resolve({ data: { commit: { sha: "c1" }, content: { sha: "b2" } } });
+      },
+    });
+    const client = new GitHubRepoClient(octokit, REPO);
+
+    const result = await client.writeFile({
+      path: "notes.md",
+      content: "hi",
+      message: "m",
+      mode: "direct",
+      expectedBlobSha: "b1",
+    });
+
+    expect(lookedUp).toBe(false);
+    expect(sent[0]!.sha).toBe("b1");
+    expect(result.blobSha).toBe("b2");
+  });
+
+  it("turns a stale-sha rejection into GitWriteConflictError", async () => {
+    const octokit = fakeOctokit({
+      createOrUpdateFileContents: () =>
+        Promise.reject(Object.assign(new Error("conflict"), { status: 409 })),
+    });
+    const client = new GitHubRepoClient(octokit, REPO);
+
+    await expect(
+      client.writeFile({
+        path: "notes.md",
+        content: "hi",
+        message: "m",
+        mode: "direct",
+        expectedBlobSha: "stale",
+      }),
+    ).rejects.toBeInstanceOf(GitWriteConflictError);
+  });
+
+  it("guarded create (null) sends no sha and maps 422 to a conflict", async () => {
+    const sent: Record<string, unknown>[] = [];
+    const octokit = fakeOctokit({
+      createOrUpdateFileContents: (params) => {
+        sent.push(params);
+        return Promise.reject(Object.assign(new Error("exists"), { status: 422 }));
+      },
+    });
+    const client = new GitHubRepoClient(octokit, REPO);
+
+    await expect(
+      client.writeFile({
+        path: "new.md",
+        content: "hi",
+        message: "m",
+        mode: "direct",
+        expectedBlobSha: null,
+      }),
+    ).rejects.toBeInstanceOf(GitWriteConflictError);
+    expect("sha" in sent[0]!).toBe(false);
+  });
+
+  it("unguarded writes still look up the current sha and pass errors through", async () => {
+    const octokit = fakeOctokit({
+      getContent: () => Promise.resolve({ data: { type: "file", sha: "current" } }),
+      createOrUpdateFileContents: () =>
+        Promise.reject(Object.assign(new Error("boom"), { status: 422 })),
+    });
+    const client = new GitHubRepoClient(octokit, REPO);
+
+    await expect(
+      client.writeFile({ path: "spec.md", content: "x", message: "m", mode: "direct" }),
+    ).rejects.toThrow("boom");
+  });
+
+  it("deletes with the guard sha and flags an already-deleted file", async () => {
+    const sent: Record<string, unknown>[] = [];
+    const octokit = fakeOctokit({
+      deleteFile: (params) => {
+        sent.push(params);
+        return Promise.resolve({ data: { commit: { sha: "c9" } } });
+      },
+    });
+    const client = new GitHubRepoClient(octokit, REPO);
+
+    const result = await client.deleteFile({
+      path: "old.md",
+      message: "m",
+      expectedBlobSha: "b1",
+    });
+    expect(result.commitSha).toBe("c9");
+    expect(sent[0]!.sha).toBe("b1");
+
+    // No expected sha and the file is gone (getContent 404s): conflict.
+    await expect(client.deleteFile({ path: "gone.md", message: "m" })).rejects.toBeInstanceOf(
+      GitWriteConflictError,
+    );
   });
 });

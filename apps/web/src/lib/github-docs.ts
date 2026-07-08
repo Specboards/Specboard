@@ -18,6 +18,8 @@ export interface GithubDocFile {
   path: string;
   /** Raw Markdown at the default branch. */
   content: string;
+  /** Blob sha at load time; saves send it back as the concurrent-edit guard. */
+  blobSha: string;
 }
 
 export interface GithubDocRepo {
@@ -60,7 +62,7 @@ export async function loadGithubDocs(
   const client = await resolveRepoClient(db, repo);
   const specFiles = await client.listSpecFiles(DOC_GLOBS);
   const files = specFiles
-    .map((f) => ({ path: f.path, content: f.raw }))
+    .map((f) => ({ path: f.path, content: f.raw, blobSha: f.blobSha }))
     .sort((a, b) => a.path.localeCompare(b.path));
   return {
     repo: {
@@ -98,8 +100,9 @@ export function validateDocPath(raw: unknown): string {
 }
 
 /**
- * Commit one Markdown file to the docs repo's default branch (create or
- * update; the git client resolves which). Returns the new commit sha.
+ * Commit one Markdown file to the docs repo's default branch. `expectedBlobSha`
+ * is the concurrent-edit guard: the sha the editor loaded (update), or null for
+ * a new page (create). Rejects with GitWriteConflictError when the file moved.
  */
 export async function saveGithubDocFile(
   db: Database,
@@ -107,14 +110,68 @@ export async function saveGithubDocFile(
   space: DocSpace,
   path: string,
   content: string,
-): Promise<{ commitSha: string }> {
+  expectedBlobSha: string | null,
+): Promise<{ commitSha: string; blobSha: string }> {
   const repo = await requireDocRepo(db, workspaceId, space);
   const client = await resolveRepoClient(db, repo);
-  const { commitSha } = await client.writeFile({
+  return client.writeFile({
     path,
     content,
     message: `docs: update ${path}`,
     mode: "direct",
+    expectedBlobSha,
   });
-  return { commitSha };
+}
+
+/** Delete one Markdown file from the docs repo (guarded by its loaded sha). */
+export async function deleteGithubDocFile(
+  db: Database,
+  workspaceId: string,
+  space: DocSpace,
+  path: string,
+  expectedBlobSha: string,
+): Promise<{ commitSha: string }> {
+  const repo = await requireDocRepo(db, workspaceId, space);
+  const client = await resolveRepoClient(db, repo);
+  return client.deleteFile({
+    path,
+    message: `docs: delete ${path}`,
+    expectedBlobSha,
+  });
+}
+
+/**
+ * Rename (or move) a doc file: commit the current content at the new path,
+ * then delete the old one. Two commits; the write is create-guarded so an
+ * existing file at the target is never clobbered, and the delete is guarded
+ * by the sha that was just read.
+ */
+export async function renameGithubDocFile(
+  db: Database,
+  workspaceId: string,
+  space: DocSpace,
+  fromPath: string,
+  toPath: string,
+): Promise<{ blobSha: string; content: string }> {
+  const repo = await requireDocRepo(db, workspaceId, space);
+  const client = await resolveRepoClient(db, repo);
+  let current;
+  try {
+    current = await client.readFile(fromPath);
+  } catch {
+    throw new DocError("That page no longer exists in the repository.");
+  }
+  const { blobSha } = await client.writeFile({
+    path: toPath,
+    content: current.raw,
+    message: `docs: rename ${fromPath} to ${toPath}`,
+    mode: "direct",
+    expectedBlobSha: null,
+  });
+  await client.deleteFile({
+    path: fromPath,
+    message: `docs: rename ${fromPath} to ${toPath}`,
+    expectedBlobSha: current.blobSha,
+  });
+  return { blobSha, content: current.raw };
 }
