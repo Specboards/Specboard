@@ -120,7 +120,7 @@ export function BacklogTable({
                   ) : null}
                   <Link
                     href={orgHref(`/backlog/${f.level}/${f.specId}`)}
-                    className="font-medium hover:underline"
+                    className="font-medium text-link hover:underline"
                   >
                     {f.title}
                   </Link>
@@ -143,7 +143,9 @@ export function BacklogTable({
                     </Badge>
                   )}
                 </span>
-                <div className="text-xs text-muted-foreground">{f.path}</div>
+                <div className="font-mono text-xs text-muted-foreground">
+                  {f.path}
+                </div>
               </TableCell>
               {productsById ? (
                 <TableCell>

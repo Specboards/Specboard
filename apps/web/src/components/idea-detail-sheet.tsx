@@ -232,7 +232,7 @@ export function IdeaDetailSheet({
               className={cn(
                 "flex w-12 shrink-0 flex-col items-center rounded-md border py-1 transition-colors",
                 voted
-                  ? "border-primary bg-primary/10 text-primary"
+                  ? "border-link bg-link/10 text-link"
                   : "text-muted-foreground hover:border-foreground/30 hover:text-foreground",
               )}
             >
@@ -312,7 +312,7 @@ export function IdeaDetailSheet({
               {promotedHref ? (
                 <Link
                   href={promotedHref}
-                  className="inline-block text-sm text-primary hover:underline"
+                  className="inline-block text-sm text-link hover:underline"
                 >
                   Promoted → {current.promotedFeatureTitle ?? "feature"}
                 </Link>

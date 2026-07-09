@@ -445,7 +445,7 @@ function ReadOnlyProperties({
                 href={text}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block px-2 py-1 text-sm text-primary hover:underline"
+                className="inline-block px-2 py-1 text-sm text-link hover:underline"
               >
                 {text}
               </a>
