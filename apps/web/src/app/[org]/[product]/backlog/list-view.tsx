@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { EmptyState } from "@/components/empty-state";
 import { WorkViewTabs } from "@/components/work-view-tabs";
+import { Badge } from "@/components/ui/badge";
+import { Box, BoxHeader } from "@/components/ui/box";
 import { ALL_PRODUCTS, resolveActiveProduct } from "@/lib/active-product";
 import { getDb } from "@/lib/db";
 import {
@@ -116,13 +118,19 @@ export async function ListView({
               No features match these filters.
             </p>
           ) : (
-            <BacklogTable
-              rows={rows}
-              canEdit={canEdit}
-              workflow={workflow}
-              productsById={productsById}
-              releaseNames={releaseNames}
-            />
+            <Box>
+              <BoxHeader>
+                <span>Features</span>
+                <Badge variant="counter">{rows.length}</Badge>
+              </BoxHeader>
+              <BacklogTable
+                rows={rows}
+                canEdit={canEdit}
+                workflow={workflow}
+                productsById={productsById}
+                releaseNames={releaseNames}
+              />
+            </Box>
           )}
         </>
       )}
