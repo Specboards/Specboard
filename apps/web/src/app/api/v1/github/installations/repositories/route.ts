@@ -5,12 +5,11 @@ import {
   type CreatedRepo,
 } from "@specboard/git";
 
-import { getSessionUser } from "@/lib/auth-session";
+import { authorizeOrgAdmin } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
 import { isE2E } from "@/lib/e2e";
 import { getGithubApp } from "@/lib/github-app";
 import { loadWorkspaceInstallations, resolveWorkspaceInstallation } from "@/lib/github-connect";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -22,18 +21,15 @@ export const dynamic = "force-dynamic";
  * lists installations performed by a verified admin of the GitHub account.
  */
 export async function GET(req: Request) {
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
+
   const db = getDb();
-  const user = await getSessionUser(req);
-  if (!db || !user) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
+  if (!authz.scope || !db) {
+    return Response.json({ installations: [], repositories: [], error: null });
   }
 
-  const membership = await getMembership(db, user.id);
-  if (!membership || membership.role !== "owner") {
-    return Response.json({ error: "Only the owner can connect repositories." }, { status: 403 });
-  }
-
-  const state = await loadWorkspaceInstallations(db, membership.workspaceId);
+  const state = await loadWorkspaceInstallations(db, authz.scope.workspaceId);
   return Response.json(state);
 }
 
@@ -72,16 +68,17 @@ function createRepoErrorMessage(err: unknown, name: string, org: string): string
  * the manual flow.
  */
 export async function POST(req: Request) {
-  const db = getDb();
-  const user = await getSessionUser(req);
-  if (!db || !user) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
 
-  const membership = await getMembership(db, user.id);
-  if (!membership || membership.role !== "owner") {
-    return Response.json({ error: "Only the owner can create repositories." }, { status: 403 });
+  const db = getDb();
+  if (!authz.scope || !db) {
+    return Response.json(
+      { error: "Creating repositories isn't available in local mode." },
+      { status: 501 },
+    );
   }
+  const workspaceId = authz.scope.workspaceId;
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const name = typeof body?.name === "string" ? body.name.trim() : "";
@@ -98,7 +95,7 @@ export async function POST(req: Request) {
 
   const installation = await resolveWorkspaceInstallation(
     db,
-    membership.workspaceId,
+    workspaceId,
     requestedInstallation,
   );
   if (!installation) {
@@ -174,7 +171,7 @@ export async function POST(req: Request) {
   const [repo] = await db
     .insert(repositories)
     .values({
-      workspaceId: membership.workspaceId,
+      workspaceId: workspaceId,
       githubInstallationId: installation.installationId,
       owner: created.owner,
       name: created.name,

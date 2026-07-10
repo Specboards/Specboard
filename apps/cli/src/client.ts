@@ -56,6 +56,8 @@ export class SpecboardClient {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
+    /** Org to scope requests to (sent as `x-org-slug`); needed for multi-org keys. */
+    private readonly orgSlug?: string,
   ) {}
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -66,6 +68,7 @@ export class SpecboardClient {
         method,
         headers: {
           "x-api-key": this.apiKey,
+          ...(this.orgSlug ? { "x-org-slug": this.orgSlug } : {}),
           ...(body !== undefined ? { "content-type": "application/json" } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,

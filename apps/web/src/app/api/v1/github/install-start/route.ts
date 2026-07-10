@@ -10,7 +10,7 @@ import {
   installUrlWithState,
 } from "@/lib/github-install";
 import { orgPath } from "@/lib/org-path";
-import { getMembership, workspaceSlug } from "@/lib/workspace";
+import { resolveApiMembership, workspaceSlug } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +34,13 @@ export async function GET(req: Request) {
     return redirectTo(`/sign-in?from=${encodeURIComponent("/")}`);
   }
 
-  const membership = await getMembership(db, user.id);
-  if (!membership) return redirectTo("/");
+  // The org comes from the ?org= param the settings page adds to this link
+  // (a top-level navigation can't send the x-org-slug header). Validated
+  // against a real membership, so it only ever names an org the user is in.
+  const orgSlug = new URL(req.url).searchParams.get("org")?.trim() || null;
+  const resolved = await resolveApiMembership(db, user.id, orgSlug);
+  if (!resolved.ok) return redirectTo("/");
+  const membership = resolved.membership;
   const slug = await workspaceSlug(db, membership.workspaceId);
   const repos = (q = "") => orgPath(slug, `/settings/repositories${q}`);
   if (membership.role !== "owner") return redirectTo(repos("?error=install"));

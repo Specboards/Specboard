@@ -156,9 +156,10 @@ export async function getMembership(
   userId: string,
 ): Promise<Member | null> {
   // Deterministic pick when a user belongs to more than one workspace (oldest
-  // membership) so API/CLI scope is stable rather than DB-order-dependent. The
-  // proper multi-org fix is to honor an org selector on the API surface too;
-  // until then this at least removes the nondeterminism.
+  // membership) so scope is stable rather than DB-order-dependent. This is the
+  // legacy single-org helper; the API surface now resolves an EXPLICIT org via
+  // `resolveApiMembership` instead, so a multi-org caller can never be silently
+  // pinned to the wrong tenant. Kept for the single-org/self-host paths.
   const rows = await db
     .select()
     .from(members)
@@ -166,6 +167,67 @@ export async function getMembership(
     .orderBy(members.createdAt)
     .limit(1);
   return rows[0] ?? null;
+}
+
+/** Active (non-deactivated) memberships for a user. */
+async function activeMemberships(db: Database, userId: string): Promise<Member[]> {
+  return db
+    .select()
+    .from(members)
+    .where(and(eq(members.userId, userId), isNull(members.deactivatedAt)))
+    .orderBy(members.createdAt);
+}
+
+/** Why an API request couldn't be pinned to a single validated org. */
+export type ApiMembershipError =
+  | { code: "no_workspace" }
+  | { code: "not_a_member" }
+  | { code: "org_ambiguous" };
+
+export type ApiMembershipResult =
+  | { ok: true; membership: Member }
+  | { ok: false; error: ApiMembershipError };
+
+/**
+ * Resolve the ONE workspace an API request acts in, given an optional explicit
+ * org slug (from the `x-org-slug` header or an `?org=` query param, extracted
+ * by the caller). This replaces the oldest-membership guess on the API surface
+ * (ADR 0001 D2): authority always comes from a validated membership, and an
+ * ambiguous multi-org caller is rejected rather than silently pinned.
+ *
+ * - **Explicit slug:** membership in THAT org is required. Unknown org or
+ *   non-membership both return `not_a_member` (indistinguishable on purpose,
+ *   so the API never confirms an org exists to a non-member).
+ * - **No slug, single-tenant:** the one workspace, auto-joined as a `member`
+ *   (unchanged self-host behavior).
+ * - **No slug, multi-tenant:** the caller's sole active membership when they
+ *   have exactly one (unambiguous, no confusion possible); `org_ambiguous`
+ *   when they have several (they must name one); `no_workspace` when none.
+ */
+export async function resolveApiMembership(
+  db: Database,
+  userId: string,
+  orgSlug: string | null,
+): Promise<ApiMembershipResult> {
+  if (orgSlug) {
+    const workspace = await getWorkspaceBySlug(db, orgSlug);
+    const membership = workspace
+      ? await getMembershipFor(db, userId, workspace.id)
+      : null;
+    if (!membership) return { ok: false, error: { code: "not_a_member" } };
+    return { ok: true, membership };
+  }
+
+  if (!isMultiTenant()) {
+    const membership = await ensureMembership(db, userId);
+    if (!membership) return { ok: false, error: { code: "no_workspace" } };
+    return { ok: true, membership };
+  }
+
+  const memberships = await activeMemberships(db, userId);
+  if (memberships.length === 0) return { ok: false, error: { code: "no_workspace" } };
+  if (memberships.length > 1) return { ok: false, error: { code: "org_ambiguous" } };
+  return { ok: true, membership: memberships[0]! };
 }
 
 /**

@@ -1,7 +1,7 @@
 import { getAuth } from "@/lib/auth";
-import { resolveReadAccess } from "@/lib/auth-session";
+import { orgSlugFromRequest, resolveReadAccess } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
-import { getMembership } from "@/lib/workspace";
+import { resolveApiMembership } from "@/lib/workspace";
 
 import { TOOLS, type McpContext } from "./tools";
 
@@ -66,19 +66,28 @@ export async function resolveMcpAuth(req: Request): Promise<McpAuth> {
     return { ok: false, unauthenticated: false, message: NO_WORKSPACE_MESSAGE };
   }
 
-  // No sb_ key or session: check for an OAuth access token.
+  // No sb_ key or session: check for an OAuth access token. The org comes from
+  // an `x-org-slug` header the MCP client sets (or the caller's sole membership
+  // when unambiguous); a multi-org caller who names none is rejected rather
+  // than silently pinned to their oldest org (the multi-org fix).
   const oauth = await resolveOAuthUser(req);
   if (oauth) {
     const db = getDb();
-    const membership = db ? await getMembership(db, oauth.userId) : null;
-    if (!membership) {
-      return { ok: false, unauthenticated: false, message: NO_WORKSPACE_MESSAGE };
+    const resolved = db
+      ? await resolveApiMembership(db, oauth.userId, orgSlugFromRequest(req))
+      : null;
+    if (!resolved || !resolved.ok) {
+      const message =
+        resolved && resolved.error.code === "org_ambiguous"
+          ? "You belong to more than one organization. Set the x-org-slug header to name one."
+          : NO_WORKSPACE_MESSAGE;
+      return { ok: false, unauthenticated: false, message };
     }
     return {
       ok: true,
       ctx: {
-        scope: { userId: oauth.userId, workspaceId: membership.workspaceId },
-        role: membership.role,
+        scope: { userId: oauth.userId, workspaceId: resolved.membership.workspaceId },
+        role: resolved.membership.role,
         isLocal: false,
       },
     };

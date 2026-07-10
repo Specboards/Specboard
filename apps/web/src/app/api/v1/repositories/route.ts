@@ -2,11 +2,10 @@ import { and, eq, repositories } from "@specboard/db";
 import { listInstallationRepositories } from "@specboard/git";
 
 import { getDb } from "@/lib/db";
-import { getSessionUser, resolveReadScope } from "@/lib/auth-session";
+import { authorizeOrgAdmin, resolveReadScope } from "@/lib/auth-session";
 import { getGithubApp } from "@/lib/github-app";
 import { resolveWorkspaceInstallation } from "@/lib/github-connect";
 import { syncRepository, type SyncSummary } from "@/lib/github-sync";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -76,28 +75,17 @@ function parseRegisterBody(body: unknown): RegisterBody | null {
  * commits (stable-id injection) into someone's source tree.
  */
 export async function POST(req: Request) {
-  const auth = await getSessionUser(req);
-  const db = getDb();
-  if (!auth || !db) {
-    return Response.json(
-      { error: "Repository management requires authentication." },
-      { status: auth ? 501 : 401 },
-    );
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
 
-  const membership = await getMembership(db, auth.id);
-  if (!membership) {
+  const db = getDb();
+  if (!authz.scope || !db) {
     return Response.json(
-      { error: "You do not belong to a workspace." },
-      { status: 403 },
+      { error: "Repository management isn't available in local mode." },
+      { status: 501 },
     );
   }
-  if (membership.role !== "owner") {
-    return Response.json(
-      { error: "Only the owner can connect repositories." },
-      { status: 403 },
-    );
-  }
+  const workspaceId = authz.scope.workspaceId;
 
   const parsed = parseRegisterBody(await req.json().catch(() => null));
   if (!parsed) {
@@ -109,7 +97,7 @@ export async function POST(req: Request) {
 
   const existing = await db.query.repositories.findFirst({
     where: and(
-      eq(repositories.workspaceId, membership.workspaceId),
+      eq(repositories.workspaceId, workspaceId),
       eq(repositories.owner, parsed.owner),
       eq(repositories.name, parsed.name),
     ),
@@ -124,7 +112,7 @@ export async function POST(req: Request) {
     // setup callback, so a client-supplied (guessable) id is never trusted.
     const installation = await resolveWorkspaceInstallation(
       db,
-      membership.workspaceId,
+      workspaceId,
       parsed.installationId,
     );
     if (!installation) {
@@ -165,7 +153,7 @@ export async function POST(req: Request) {
   const [repo] = await db
     .insert(repositories)
     .values({
-      workspaceId: membership.workspaceId,
+      workspaceId: workspaceId,
       githubInstallationId: parsed.installationId,
       owner: parsed.owner,
       name: parsed.name,

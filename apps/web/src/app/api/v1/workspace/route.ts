@@ -1,6 +1,6 @@
-import { getSessionUser } from "@/lib/auth-session";
+import { authorizeOrgAdmin, resolveReadScope } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
-import { getMembership, getWorkspaceById, updateWorkspace } from "@/lib/workspace";
+import { getWorkspaceById, updateWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -12,20 +12,14 @@ const NAME_MAX = 80;
  * gated above the general write role.
  */
 export async function PATCH(req: Request) {
-  const db = getDb();
-  const user = await getSessionUser(req);
-  if (!db || !user) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
 
-  const membership = await getMembership(db, user.id);
-  if (!membership) {
-    return Response.json({ error: "You do not belong to a workspace." }, { status: 403 });
-  }
-  if (membership.role !== "owner") {
+  const db = getDb();
+  if (!authz.scope || !db) {
     return Response.json(
-      { error: "Only the owner can change company details." },
-      { status: 403 },
+      { error: "Editing the organization isn't available in local mode." },
+      { status: 501 },
     );
   }
 
@@ -45,7 +39,7 @@ export async function PATCH(req: Request) {
     );
   }
 
-  const workspace = await updateWorkspace(db, membership.workspaceId, { name });
+  const workspace = await updateWorkspace(db, authz.scope.workspaceId, { name });
   if (!workspace) {
     return Response.json({ error: "Workspace not found." }, { status: 404 });
   }
@@ -57,18 +51,15 @@ export async function PATCH(req: Request) {
  * GET /api/v1/workspace — the caller's organization details. Any member.
  */
 export async function GET(req: Request) {
+  const authz = await resolveReadScope(req);
+  if (!authz.ok) return authz.response;
+
   const db = getDb();
-  const user = await getSessionUser(req);
-  if (!db || !user) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
+  if (!authz.scope || !db) {
+    return Response.json({ error: "No workspace in local mode." }, { status: 404 });
   }
 
-  const membership = await getMembership(db, user.id);
-  if (!membership) {
-    return Response.json({ error: "You do not belong to a workspace." }, { status: 403 });
-  }
-
-  const workspace = await getWorkspaceById(db, membership.workspaceId);
+  const workspace = await getWorkspaceById(db, authz.scope.workspaceId);
   if (!workspace) {
     return Response.json({ error: "Workspace not found." }, { status: 404 });
   }

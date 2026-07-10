@@ -85,7 +85,7 @@ export default async function RepositoriesSettingsPage({
       canConnect={access.role === "owner"}
       configured={configured}
       selfHosted={isSingleTenant()}
-      installUrl={slug ? "/api/v1/github/install-start" : null}
+      installUrl={slug ? `/api/v1/github/install-start?org=${encodeURIComponent(slug)}` : null}
       notice={noticeFor(await searchParams)}
       installations={installations}
     />

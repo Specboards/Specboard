@@ -1,9 +1,8 @@
 import { eq, repositories } from "@specboard/db";
 
 import { getDb } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth-session";
+import { authorizeOrgAdmin } from "@/lib/auth-session";
 import { syncRepository, type SyncSummary } from "@/lib/github-sync";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -15,27 +14,21 @@ export const dynamic = "force-dynamic";
  * import injects stable ids back into source repositories.
  */
 export async function POST(req: Request) {
-  const auth = await getSessionUser(req);
-  const db = getDb();
-  if (!auth || !db) {
-    return Response.json(
-      { error: "Importing specs requires authentication." },
-      { status: auth ? 501 : 401 },
-    );
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
 
-  const membership = await getMembership(db, auth.id);
-  if (!membership) {
-    return Response.json({ error: "You do not belong to a workspace." }, { status: 403 });
-  }
-  if (membership.role !== "owner") {
-    return Response.json({ error: "Only the owner can import specs." }, { status: 403 });
+  const db = getDb();
+  if (!authz.scope || !db) {
+    return Response.json(
+      { error: "Importing specs isn't available in local mode." },
+      { status: 501 },
+    );
   }
 
   const repos = await db
     .select()
     .from(repositories)
-    .where(eq(repositories.workspaceId, membership.workspaceId));
+    .where(eq(repositories.workspaceId, authz.scope.workspaceId));
 
   const total: SyncSummary = { upserted: 0, skipped: 0, idsInjected: 0, featuresCreated: 0 };
   const errors: { owner: string; name: string; error: string }[] = [];

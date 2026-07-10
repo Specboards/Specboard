@@ -1,9 +1,8 @@
 import { and, eq, repositories } from "@specboard/db";
 
 import { getDb } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth-session";
+import { authorizeOrgAdmin } from "@/lib/auth-session";
 import { createStarterSpec } from "@/lib/github-sync";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -14,21 +13,15 @@ export const dynamic = "force-dynamic";
  * Body: { repoId, featureName }.
  */
 export async function POST(req: Request) {
-  const auth = await getSessionUser(req);
-  const db = getDb();
-  if (!auth || !db) {
-    return Response.json(
-      { error: "Creating a starter spec requires authentication." },
-      { status: auth ? 501 : 401 },
-    );
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
 
-  const membership = await getMembership(db, auth.id);
-  if (!membership) {
-    return Response.json({ error: "You do not belong to a workspace." }, { status: 403 });
-  }
-  if (membership.role !== "owner") {
-    return Response.json({ error: "Only the owner can create a starter spec." }, { status: 403 });
+  const db = getDb();
+  if (!authz.scope || !db) {
+    return Response.json(
+      { error: "Creating a starter spec isn't available in local mode." },
+      { status: 501 },
+    );
   }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
@@ -41,7 +34,7 @@ export async function POST(req: Request) {
   const [repo] = await db
     .select()
     .from(repositories)
-    .where(and(eq(repositories.id, repoId), eq(repositories.workspaceId, membership.workspaceId)))
+    .where(and(eq(repositories.id, repoId), eq(repositories.workspaceId, authz.scope.workspaceId)))
     .limit(1);
   if (!repo) {
     return Response.json({ error: "Repository not found in your workspace." }, { status: 404 });

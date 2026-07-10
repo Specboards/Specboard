@@ -16,11 +16,14 @@ test.describe("github install flow: binding fails closed", () => {
 
     // A real installation id of the shared App, but a state that never came
     // from install-start. The request rides the owner's signed-in session.
+    // With no matching flow record there's no org to return to, so we bounce
+    // to a safe in-app location; the point is that nothing gets bound.
     const res = await page.request.get(
       "/api/v1/github/setup?installation_id=99999&setup_action=install&state=forged-nonce",
     );
 
-    expect(res.url()).toContain("error=install");
+    expect(res.ok()).toBeTruthy();
+    expect(res.url()).not.toContain("connected=1");
     expect(await installationCount(ws.id)).toBe(0);
   });
 
@@ -32,7 +35,8 @@ test.describe("github install flow: binding fails closed", () => {
       "/api/v1/github/oauth/callback?code=stolen-code&state=unknown-nonce",
     );
 
-    expect(res.url()).toContain("error=install");
+    expect(res.ok()).toBeTruthy();
+    expect(res.url()).not.toContain("connected=1");
     expect(await installationCount(ws.id)).toBe(0);
   });
 });

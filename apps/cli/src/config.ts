@@ -11,6 +11,12 @@ import { dirname, join } from "node:path";
 export interface CliConfig {
   baseUrl?: string;
   apiKey?: string;
+  /**
+   * Which organization to act in, by slug. Only needed when the key's user
+   * belongs to more than one org; the server rejects an ambiguous request
+   * otherwise. Env `SPECBOARD_ORG` overrides the file.
+   */
+  orgSlug?: string;
 }
 
 export function configPath(): string {
@@ -45,5 +51,6 @@ export function resolveConfig(): CliConfig {
   return {
     baseUrl: process.env.SPECBOARD_URL ?? file.baseUrl,
     apiKey: process.env.SPECBOARD_TOKEN ?? file.apiKey,
+    orgSlug: process.env.SPECBOARD_ORG ?? file.orgSlug,
   };
 }
