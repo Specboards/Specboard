@@ -6,7 +6,7 @@ import {
   type CreatedRepo,
 } from "@specboard/git";
 
-import { getSessionUser } from "@/lib/auth-session";
+import { authorizeOrgAdmin } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
 import { parseDocArea } from "@/lib/docs-service";
 import { isE2E } from "@/lib/e2e";
@@ -14,7 +14,6 @@ import { getGithubApp } from "@/lib/github-app";
 import { resolveWorkspaceInstallation } from "@/lib/github-connect";
 import { getStore } from "@/lib/store";
 import { DocError, ProductError } from "@/lib/store/types";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -51,19 +50,18 @@ function createRepoErrorMessage(err: unknown, name: string, org: string): string
  * reuses its row untouched.
  */
 export async function POST(req: Request) {
-  const db = getDb();
-  const user = await getSessionUser(req);
-  if (!db || !user) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
 
-  const membership = await getMembership(db, user.id);
-  if (!membership || membership.role !== "owner") {
+  const db = getDb();
+  if (!authz.scope || !db) {
     return Response.json(
-      { error: "Only the owner can connect repositories." },
-      { status: 403 },
+      { error: "Connecting a docs repository isn't available in local mode." },
+      { status: 501 },
     );
   }
+  const userId = authz.scope.userId;
+  const workspaceId = authz.scope.workspaceId;
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const productId = typeof body?.productId === "string" ? body.productId : "";
@@ -95,7 +93,7 @@ export async function POST(req: Request) {
 
   const installation = await resolveWorkspaceInstallation(
     db,
-    membership.workspaceId,
+    workspaceId,
     requestedInstallation,
   );
   if (!installation) {
@@ -108,8 +106,8 @@ export async function POST(req: Request) {
   if (existing) {
     return connectExistingRepo({
       db,
-      userId: user.id,
-      workspaceId: membership.workspaceId,
+      userId,
+      workspaceId: workspaceId,
       installation,
       productId,
       area,
@@ -182,8 +180,8 @@ export async function POST(req: Request) {
 
   return bindDocRepo({
     db,
-    userId: user.id,
-    workspaceId: membership.workspaceId,
+    userId,
+    workspaceId: workspaceId,
     installationId: installation.installationId,
     productId,
     area,

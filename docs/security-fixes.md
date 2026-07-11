@@ -125,16 +125,38 @@ tenant-context confusion and can produce incorrect authorization decisions.
 
 **Work items:**
 
-- [ ] Include an organization slug or ID in every API request, preferably as a
-  route segment such as `/api/v1/orgs/:org/...`.
-- [ ] Validate that the caller belongs to the requested organization with
-  `resolveActiveWorkspace` or an equivalent explicit membership lookup.
-- [ ] Remove the oldest-membership fallback from API authorization.
-- [ ] Require an explicit organization for personal API key and MCP requests,
-  or issue keys that are scoped to a single organization.
-- [ ] Update the client to derive the organization from the current route.
-- [ ] Add tests for a user who is an owner in one organization and a read-only
-  member in another.
+- [x] Include an organization in every API request. Chosen transport is the
+  `x-org-slug` request header (not a route segment): the browser client sends
+  the active org from the `/[org]/…` route, and browser navigations that can't
+  set a header (GitHub install redirects) pass `?org=` instead. Equivalent
+  security to a route segment since authority comes from the validated
+  membership, with far less churn across ~45 routes.
+- [x] Validate that the caller belongs to the requested organization:
+  new `resolveApiMembership` (lib/workspace.ts) looks the org up by slug and
+  requires a real membership; the three `auth-session.ts` helpers
+  (`resolveReadScope`/`resolveReadAccess`/`authorizeWrite` via `resolveScope`,
+  and `authorizeOrgAdmin`) all route through it, covering ~44 routes, and the
+  ~10 routes that resolved membership by hand were converted too.
+- [x] Remove the oldest-membership fallback from API authorization: an
+  explicit slug is required for a multi-org caller; naming none is rejected as
+  `org_ambiguous` (400) rather than silently pinned. A single-org caller with
+  no slug still resolves their sole membership (unambiguous), and single-tenant
+  self-host is unchanged.
+- [x] Require an explicit org for API-key and MCP requests: both flow through
+  the same resolver, so a multi-org key/token must send `x-org-slug` (the CLI
+  gained `SPECBOARD_ORG` / `--org` and a config field); the MCP OAuth path was
+  switched off `getMembership` too.
+- [x] Update the client to derive the org from the current route: `api-client`
+  now routes every call through an `apiFetch` wrapper that reads the slug from
+  the pathname and sets `x-org-slug`.
+- [x] Tests: `workspace-scope.int.test.ts` covers owner-in-A / read-only-in-B
+  (pins to the named org with the right role, refuses a non-member org,
+  refuses an ambiguous no-slug call, resolves a sole membership). The forged
+  GitHub-callback E2E tests were updated for the new safe-redirect behavior.
+
+**Note:** the GitHub `setup` / `oauth/callback` routes now resolve membership
+against the install flow's stored (org-validated) workspace instead of the
+caller's oldest, so a multi-org owner installs into the org they started from.
 
 **Acceptance criteria:** Every API request has one validated workspace scope,
 and a request for organization B cannot read or mutate organization A.

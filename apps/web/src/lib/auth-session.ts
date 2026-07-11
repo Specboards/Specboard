@@ -4,9 +4,72 @@ import { extractApiKey, verifyApiKeyUser } from "@/lib/api-keys";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import type { WorkspaceScope } from "@/lib/store/types";
-import { getMembership, type MemberRole } from "@/lib/workspace";
+import {
+  resolveApiMembership,
+  type ApiMembershipError,
+  type Member,
+  type MemberRole,
+} from "@/lib/workspace";
 
 export type SessionUser = { id: string; email: string; name: string };
+
+/**
+ * The explicit organization an API request is scoped to, or `null` when the
+ * caller didn't name one. The browser client sends the active org as the
+ * `x-org-slug` header (derived from the `/[org]/…` route); browser navigations
+ * that can't set a header (e.g. GitHub redirects) pass `?org=` instead. This
+ * is only a hint — {@link resolveApiMembership} validates it against a real
+ * membership, so a forged value can at most name an org the caller can't reach.
+ */
+export function orgSlugFromRequest(req: Request): string | null {
+  const header = req.headers.get("x-org-slug")?.trim();
+  if (header) return header;
+  const url = new URL(req.url);
+  const query = url.searchParams.get("org")?.trim();
+  return query || null;
+}
+
+/** Turn a membership-resolution failure into the API error response. */
+function membershipErrorResponse(error: ApiMembershipError): Response {
+  switch (error.code) {
+    case "org_ambiguous":
+      return Response.json(
+        {
+          error:
+            "You belong to more than one organization. Name the one to act in " +
+            "with the x-org-slug header (or ?org= for redirects).",
+        },
+        { status: 400 },
+      );
+    case "not_a_member":
+      return Response.json(
+        { error: "You do not have access to that organization." },
+        { status: 403 },
+      );
+    case "no_workspace":
+      return Response.json(
+        { error: "You do not belong to a workspace." },
+        { status: 403 },
+      );
+  }
+}
+
+/**
+ * Resolve the caller's validated membership for an API request against the
+ * explicit org they named (header/query). Shared by every authorization
+ * helper below so the oldest-membership guess lives in exactly zero places.
+ */
+async function resolveRequestMembership(
+  req: Request,
+  userId: string,
+): Promise<{ ok: true; membership: Member } | { ok: false; response: Response }> {
+  const db = getDb()!;
+  const result = await resolveApiMembership(db, userId, orgSlugFromRequest(req));
+  if (!result.ok) {
+    return { ok: false, response: membershipErrorResponse(result.error) };
+  }
+  return { ok: true, membership: result.membership };
+}
 
 /**
  * Resolve the user behind an API request from either a CLI API key
@@ -87,20 +150,12 @@ async function resolveScope(
     };
   }
 
-  const membership = await getMembership(db, user.id);
-  if (!membership) {
-    return {
-      ok: false,
-      response: Response.json(
-        { error: "You do not belong to a workspace." },
-        { status: 403 },
-      ),
-    };
-  }
+  const resolved = await resolveRequestMembership(req, user.id);
+  if (!resolved.ok) return resolved;
 
   return {
     ok: true,
-    scope: { userId: user.id, workspaceId: membership.workspaceId },
+    scope: { userId: user.id, workspaceId: resolved.membership.workspaceId },
   };
 }
 
@@ -130,22 +185,14 @@ export async function resolveReadAccess(req: Request): Promise<ReadAccessResult>
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const membership = await getMembership(db, user.id);
-  if (!membership) {
-    return {
-      ok: false,
-      response: Response.json(
-        { error: "You do not belong to a workspace." },
-        { status: 403 },
-      ),
-    };
-  }
+  const resolved = await resolveRequestMembership(req, user.id);
+  if (!resolved.ok) return resolved;
   return {
     ok: true,
     access: {
       userId: user.id,
-      workspaceId: membership.workspaceId,
-      role: membership.role,
+      workspaceId: resolved.membership.workspaceId,
+      role: resolved.membership.role,
     },
   };
 }
@@ -175,17 +222,9 @@ export async function authorizeOrgAdmin(req: Request): Promise<ScopeResult> {
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const membership = await getMembership(db, user.id);
-  if (!membership) {
-    return {
-      ok: false,
-      response: Response.json(
-        { error: "You do not belong to a workspace." },
-        { status: 403 },
-      ),
-    };
-  }
-  if (membership.role !== "owner") {
+  const resolved = await resolveRequestMembership(req, user.id);
+  if (!resolved.ok) return resolved;
+  if (resolved.membership.role !== "owner") {
     return {
       ok: false,
       response: Response.json(
@@ -196,6 +235,6 @@ export async function authorizeOrgAdmin(req: Request): Promise<ScopeResult> {
   }
   return {
     ok: true,
-    scope: { userId: user.id, workspaceId: membership.workspaceId },
+    scope: { userId: user.id, workspaceId: resolved.membership.workspaceId },
   };
 }

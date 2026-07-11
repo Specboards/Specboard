@@ -1,10 +1,8 @@
 import { revalidatePath } from "next/cache";
 
-import { getSessionUser, resolveReadScope } from "@/lib/auth-session";
+import { authorizeOrgAdmin, resolveReadScope } from "@/lib/auth-session";
 import { InvalidPatchError, listLevels, parseLevelsUpdate, updateLevels } from "@/lib/features-service";
-import { getDb } from "@/lib/db";
-import { getMembership } from "@/lib/workspace";
-import { LevelError, type WorkspaceScope } from "@/lib/store/types";
+import { LevelError } from "@/lib/store/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,28 +20,9 @@ export async function GET(req: Request) {
  * Admin-only (it reshapes every member's board); local file mode is ungated.
  */
 export async function PUT(req: Request) {
-  const db = getDb();
-  let scope: WorkspaceScope | undefined;
-  if (db) {
-    const user = await getSessionUser(req);
-    if (!user) {
-      return Response.json({ error: "Authentication required." }, { status: 401 });
-    }
-    const membership = await getMembership(db, user.id);
-    if (!membership) {
-      return Response.json(
-        { error: "You do not belong to a workspace." },
-        { status: 403 },
-      );
-    }
-    if (membership.role !== "owner") {
-      return Response.json(
-        { error: "Only the owner can change the hierarchy." },
-        { status: 403 },
-      );
-    }
-    scope = { userId: user.id, workspaceId: membership.workspaceId };
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
+  const scope = authz.scope ?? undefined;
 
   let body: unknown;
   try {

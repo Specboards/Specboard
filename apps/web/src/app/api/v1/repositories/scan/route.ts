@@ -1,7 +1,6 @@
 import { getDb } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth-session";
+import { authorizeOrgAdmin } from "@/lib/auth-session";
 import { scanWorkspaceSpecs } from "@/lib/github-sync";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -13,24 +12,18 @@ export const dynamic = "force-dynamic";
  * created. Admin-only, since scanning uses the workspace's GitHub App access.
  */
 export async function GET(req: Request) {
-  const auth = await getSessionUser(req);
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
+
   const db = getDb();
-  if (!auth || !db) {
+  if (!authz.scope || !db) {
     return Response.json(
-      { error: "Repository scanning requires authentication." },
-      { status: auth ? 501 : 401 },
+      { error: "Repository scanning isn't available in local mode." },
+      { status: 501 },
     );
   }
 
-  const membership = await getMembership(db, auth.id);
-  if (!membership) {
-    return Response.json({ error: "You do not belong to a workspace." }, { status: 403 });
-  }
-  if (membership.role !== "owner") {
-    return Response.json({ error: "Only the owner can scan repositories." }, { status: 403 });
-  }
-
-  const repos = await scanWorkspaceSpecs(db, membership.workspaceId);
+  const repos = await scanWorkspaceSpecs(db, authz.scope.workspaceId);
   const totalSpecs = repos.reduce((sum, r) => sum + r.specs.length, 0);
   return Response.json({ repos, totalSpecs });
 }

@@ -1,8 +1,7 @@
 import { eq, users, workspaces } from "@specboard/db";
 
-import { resolveReadScope } from "@/lib/auth-session";
+import { resolveReadAccess } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
-import { getMembership } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +12,15 @@ export const dynamic = "force-dynamic";
  * (no accounts) it reports `mode: "local"` with null identity.
  */
 export async function GET(req: Request) {
-  const authz = await resolveReadScope(req);
+  const authz = await resolveReadAccess(req);
   if (!authz.ok) return authz.response;
 
   const db = getDb();
-  if (!authz.scope || !db) {
+  if (!authz.access || !db) {
     return Response.json({ mode: "local", user: null, workspace: null, role: null });
   }
 
-  const { userId, workspaceId } = authz.scope;
+  const { userId, workspaceId, role } = authz.access;
   const [user] = await db
     .select({ id: users.id, name: users.name, email: users.email })
     .from(users)
@@ -32,12 +31,11 @@ export async function GET(req: Request) {
     .from(workspaces)
     .where(eq(workspaces.id, workspaceId))
     .limit(1);
-  const membership = await getMembership(db, userId);
 
   return Response.json({
     mode: "workspace",
     user: user ?? null,
     workspace: workspace ?? null,
-    role: membership?.role ?? null,
+    role,
   });
 }

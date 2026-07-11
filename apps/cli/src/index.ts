@@ -47,11 +47,11 @@ function fail(message: string): never {
 
 /** Build an authenticated client from config, or exit with guidance. */
 function client(): SpecboardClient {
-  const { baseUrl, apiKey } = resolveConfig();
+  const { baseUrl, apiKey, orgSlug } = resolveConfig();
   if (!baseUrl || !apiKey) {
     fail("not logged in. Run `specboard auth login` first.");
   }
-  return new SpecboardClient(baseUrl, apiKey);
+  return new SpecboardClient(baseUrl, apiKey, orgSlug);
 }
 
 async function ask(question: string, opts: { secret?: boolean } = {}): Promise<string> {
@@ -77,7 +77,11 @@ async function ask(question: string, opts: { secret?: boolean } = {}): Promise<s
 async function cmdLogin(argv: string[]): Promise<void> {
   const { values } = parseArgs({
     args: argv,
-    options: { url: { type: "string" }, key: { type: "string" } },
+    options: {
+      url: { type: "string" },
+      key: { type: "string" },
+      org: { type: "string" },
+    },
   });
   const existing = loadFileConfig();
   const baseUrl =
@@ -86,16 +90,17 @@ async function cmdLogin(argv: string[]): Promise<void> {
   const apiKey =
     values.key ?? process.env.SPECBOARD_TOKEN ??
     (await ask("API key (sb_…): ", { secret: true }));
+  const orgSlug = values.org ?? process.env.SPECBOARD_ORG ?? existing.orgSlug;
   if (!baseUrl || !apiKey) fail("a URL and an API key are required.");
 
   // Verify before saving so a bad key fails loudly here, not on first use.
-  const me = await new SpecboardClient(baseUrl, apiKey).me().catch((err) => {
+  const me = await new SpecboardClient(baseUrl, apiKey, orgSlug).me().catch((err) => {
     if (err instanceof ApiError && err.status === 401) {
       fail("that API key was rejected (401). Check the key and try again.");
     }
     throw err;
   });
-  saveFileConfig({ baseUrl, apiKey });
+  saveFileConfig({ baseUrl, apiKey, orgSlug });
   if (me.user) {
     process.stdout.write(
       `Logged in as ${me.user.name} <${me.user.email}>` +

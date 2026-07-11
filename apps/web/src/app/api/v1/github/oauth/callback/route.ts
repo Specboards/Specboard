@@ -13,7 +13,7 @@ import {
   findLiveInstallState,
 } from "@/lib/github-install";
 import { orgPath } from "@/lib/org-path";
-import { getMembership, workspaceSlug } from "@/lib/workspace";
+import { getMembershipFor, workspaceSlug } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -45,32 +45,27 @@ export async function GET(req: Request) {
     return redirectTo(`/sign-in?from=${from}`);
   }
 
-  const membership = await getMembership(db, user.id);
-  if (!membership) return redirectTo("/");
-  const slug = await workspaceSlug(db, membership.workspaceId);
-  const repos = (q = "") => orgPath(slug, `/settings/repositories${q}`);
-
   // Same double check as the setup callback: browser cookie + server record.
   const jar = await cookies();
   const expectedState = jar.get(INSTALL_STATE_COOKIE)?.value;
   jar.delete(INSTALL_STATE_COOKIE);
-  if (
-    membership.role !== "owner" ||
-    !code ||
-    !state ||
-    !expectedState ||
-    state !== expectedState
-  ) {
-    return redirectTo(repos("?error=install"));
+  if (!code || !state || !expectedState || state !== expectedState) {
+    return redirectTo("/");
   }
 
   const flow = await findLiveInstallState(db, state, user.id);
-  if (!flow) return redirectTo(repos("?error=install"));
+  if (!flow) return redirectTo("/");
   // The flow is single-use from here on, whatever the outcome.
   await deleteInstallState(db, flow.id);
 
+  // Membership is resolved against the flow's org-validated workspace, not the
+  // caller's oldest (the multi-org fix).
+  const membership = await getMembershipFor(db, user.id, flow.workspaceId);
+  const slug = await workspaceSlug(db, flow.workspaceId);
+  const repos = (q = "") => orgPath(slug, `/settings/repositories${q}`);
   if (
-    flow.workspaceId !== membership.workspaceId ||
+    !membership ||
+    membership.role !== "owner" ||
     !flow.installationId ||
     !flow.accountLogin ||
     !flow.accountType

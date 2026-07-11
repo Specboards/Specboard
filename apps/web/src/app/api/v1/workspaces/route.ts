@@ -4,6 +4,7 @@ import { seedSampleData } from "@/lib/sample-data";
 import {
   createWorkspaceWithOwner,
   getMembership,
+  getMembershipFor,
   WorkspaceSlugError,
 } from "@/lib/workspace";
 
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
   // concurrent setup could have joined them to an existing one as a viewer.
   let seeded = 0;
   if (wantsSampleData) {
-    const membership = await getMembership(db, user.id);
+    const membership = await getMembershipFor(db, user.id, workspace.id);
     if (membership?.role === "owner") {
       seeded = await seedSampleData(db, workspace.id);
     }

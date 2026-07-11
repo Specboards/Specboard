@@ -56,6 +56,31 @@ import type {
  * browser never talks to anything but the versioned API.
  */
 
+/**
+ * The active org slug, read from the `/[org]/…` route. Every UI page renders
+ * under an org segment, so the first path segment is the workspace the user is
+ * looking at. We forward it to the API as `x-org-slug` so the server scopes the
+ * request to THIS org instead of guessing from the caller's memberships (the
+ * multi-org tenant-confusion fix). The server validates it against a real
+ * membership, so it's only ever a hint.
+ */
+function activeOrgSlug(): string | null {
+  if (typeof window === "undefined") return null;
+  const slug = window.location.pathname.split("/")[1];
+  return slug ? decodeURIComponent(slug) : null;
+}
+
+/**
+ * `fetch` for the versioned API that tags each request with the active org.
+ * All calls in this module go through here so none can forget the header.
+ */
+function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const slug = activeOrgSlug();
+  const headers = new Headers(init.headers);
+  if (slug) headers.set("x-org-slug", slug);
+  return fetch(input, { ...init, headers });
+}
+
 /** Thrown when a write is rejected for lack of a session (HTTP 401). */
 export class AuthRequiredError extends Error {
   constructor() {
@@ -86,7 +111,7 @@ export class WorkspaceSlugTakenError extends Error {
  * assembles server-side, so both views show the same content.
  */
 export async function getItemDetail(specId: string): Promise<ItemDetailData> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/features/${encodeURIComponent(specId)}/context`,
   );
   if (res.status === 401) throw new AuthRequiredError();
@@ -101,7 +126,7 @@ export async function getItemDetail(specId: string): Promise<ItemDetailData> {
 
 /** Load a feature's full detail (metadata + spec content) for in-context edit. */
 export async function getFeature(specId: string): Promise<FeatureDetail> {
-  const res = await fetch(`/api/v1/features/${encodeURIComponent(specId)}`);
+  const res = await apiFetch(`/api/v1/features/${encodeURIComponent(specId)}`);
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { feature?: FeatureDetail; error?: string }
@@ -116,7 +141,7 @@ export async function patchFeature(
   specId: string,
   patch: FeaturePatch,
 ): Promise<void> {
-  const res = await fetch(`/api/v1/features/${encodeURIComponent(specId)}`, {
+  const res = await apiFetch(`/api/v1/features/${encodeURIComponent(specId)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -132,7 +157,7 @@ export async function patchFeature(
 export async function createWorkItem(
   input: CreateFeatureInput,
 ): Promise<FeatureRecord> {
-  const res = await fetch("/api/v1/features", {
+  const res = await apiFetch("/api/v1/features", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -149,7 +174,7 @@ export async function createWorkItem(
 
 /** Delete a DB-native work item by id. */
 export async function deleteWorkItem(specId: string): Promise<void> {
-  const res = await fetch(`/api/v1/features/${encodeURIComponent(specId)}`, {
+  const res = await apiFetch(`/api/v1/features/${encodeURIComponent(specId)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -161,7 +186,7 @@ export async function deleteWorkItem(specId: string): Promise<void> {
 
 /** The workspace's hierarchy levels, ordered top → leaf. */
 export async function listLevels(): Promise<WorkspaceLevel[]> {
-  const res = await fetch("/api/v1/levels");
+  const res = await apiFetch("/api/v1/levels");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { levels?: WorkspaceLevel[]; error?: string }
@@ -174,7 +199,7 @@ export async function listLevels(): Promise<WorkspaceLevel[]> {
 export async function updateLevels(
   levels: LevelUpdate[],
 ): Promise<WorkspaceLevel[]> {
-  const res = await fetch("/api/v1/levels", {
+  const res = await apiFetch("/api/v1/levels", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ levels }),
@@ -196,7 +221,7 @@ export async function updateLevels(
 export async function updateLevelFields(
   fields: Record<string, string[] | null>,
 ): Promise<WorkspaceLevel[]> {
-  const res = await fetch("/api/v1/levels/fields", {
+  const res = await apiFetch("/api/v1/levels/fields", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ fields }),
@@ -218,7 +243,7 @@ export async function updateLevelFields(
 export async function updateLevelTemplates(
   templates: Record<string, string | null>,
 ): Promise<WorkspaceLevel[]> {
-  const res = await fetch("/api/v1/levels/templates", {
+  const res = await apiFetch("/api/v1/levels/templates", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ templates }),
@@ -237,7 +262,7 @@ export async function updateLevelTemplates(
 export async function createDetailTemplate(
   input: DetailTemplateInput,
 ): Promise<DetailTemplate> {
-  const res = await fetch("/api/v1/detail-templates", {
+  const res = await apiFetch("/api/v1/detail-templates", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -257,7 +282,7 @@ export async function updateDetailTemplate(
   id: string,
   patch: DetailTemplatePatch,
 ): Promise<DetailTemplate> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/detail-templates/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
@@ -277,7 +302,7 @@ export async function updateDetailTemplate(
 
 /** Delete a detail template (admin-only). */
 export async function deleteDetailTemplate(id: string): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/detail-templates/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
@@ -292,7 +317,7 @@ export async function deleteDetailTemplate(id: string): Promise<void> {
 
 /** The workspace's workflow stages ([] = built-in default workflow). */
 export async function listStatuses(): Promise<WorkspaceStatus[]> {
-  const res = await fetch("/api/v1/statuses");
+  const res = await apiFetch("/api/v1/statuses");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { statuses?: WorkspaceStatus[]; error?: string }
@@ -305,7 +330,7 @@ export async function listStatuses(): Promise<WorkspaceStatus[]> {
 export async function updateStatuses(
   stages: StatusStageInput[],
 ): Promise<WorkspaceStatus[]> {
-  const res = await fetch("/api/v1/statuses", {
+  const res = await apiFetch("/api/v1/statuses", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ statuses: stages }),
@@ -322,7 +347,7 @@ export async function updateStatuses(
 
 /** The workspace's stage gates (checklist items per stage). */
 export async function listStageGates(): Promise<StageGate[]> {
-  const res = await fetch("/api/v1/stage-gates");
+  const res = await apiFetch("/api/v1/stage-gates");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { gates?: StageGate[]; error?: string }
@@ -337,7 +362,7 @@ export async function listStageGates(): Promise<StageGate[]> {
 export async function updateStageGates(
   gates: StageGateInput[],
 ): Promise<StageGate[]> {
-  const res = await fetch("/api/v1/stage-gates", {
+  const res = await apiFetch("/api/v1/stage-gates", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ gates }),
@@ -358,7 +383,7 @@ export async function setGateCompletion(
   gateId: string,
   completed: boolean,
 ): Promise<string[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/features/${encodeURIComponent(specId)}/gates`,
     {
       method: "PUT",
@@ -380,7 +405,7 @@ export async function setGateCompletion(
 
 /** Capture a new idea; returns the new record. */
 export async function createIdea(input: IdeaInput): Promise<IdeaRecord> {
-  const res = await fetch("/api/v1/ideas", {
+  const res = await apiFetch("/api/v1/ideas", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -400,7 +425,7 @@ export async function updateIdea(
   id: string,
   patch: IdeaPatch,
 ): Promise<IdeaRecord> {
-  const res = await fetch(`/api/v1/ideas/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/ideas/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -417,7 +442,7 @@ export async function updateIdea(
 
 /** Delete an idea. */
 export async function deleteIdea(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/ideas/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/ideas/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -432,7 +457,7 @@ export async function setIdeaVote(
   id: string,
   voted: boolean,
 ): Promise<IdeaRecord> {
-  const res = await fetch(`/api/v1/ideas/${encodeURIComponent(id)}/vote`, {
+  const res = await apiFetch(`/api/v1/ideas/${encodeURIComponent(id)}/vote`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ voted }),
@@ -451,7 +476,7 @@ export async function setIdeaVote(
 export async function promoteIdea(
   id: string,
 ): Promise<{ idea: IdeaRecord; feature: FeatureRecord }> {
-  const res = await fetch(`/api/v1/ideas/${encodeURIComponent(id)}/promote`, {
+  const res = await apiFetch(`/api/v1/ideas/${encodeURIComponent(id)}/promote`, {
     method: "POST",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -468,7 +493,7 @@ export async function promoteIdea(
 export async function updateIdeaStatuses(
   stages: StatusStageInput[],
 ): Promise<IdeaStage[]> {
-  const res = await fetch("/api/v1/idea-statuses", {
+  const res = await apiFetch("/api/v1/idea-statuses", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ statuses: stages }),
@@ -487,7 +512,7 @@ export async function updateIdeaStatuses(
 export async function updateIdeaSettings(
   patch: IdeaSettingsPatch,
 ): Promise<IdeaSettings> {
-  const res = await fetch("/api/v1/idea-settings", {
+  const res = await apiFetch("/api/v1/idea-settings", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -504,7 +529,7 @@ export async function updateIdeaSettings(
 
 /** Define a custom property (admin-only on the server); returns it. */
 export async function createProperty(input: PropertyInput): Promise<PropertyDef> {
-  const res = await fetch("/api/v1/properties", {
+  const res = await apiFetch("/api/v1/properties", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -524,7 +549,7 @@ export async function updateProperty(
   id: string,
   patch: PropertyPatch,
 ): Promise<PropertyDef> {
-  const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/properties/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -541,7 +566,7 @@ export async function updateProperty(
 
 /** Delete a custom property definition (admin-only). */
 export async function deleteProperty(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/properties/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/properties/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -553,7 +578,7 @@ export async function deleteProperty(id: string): Promise<void> {
 
 /** Create a release (admin-only on the server); returns the new record. */
 export async function createRelease(input: ReleaseInput): Promise<ReleaseRecord> {
-  const res = await fetch("/api/v1/releases", {
+  const res = await apiFetch("/api/v1/releases", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -573,7 +598,7 @@ export async function updateRelease(
   id: string,
   patch: ReleasePatch,
 ): Promise<ReleaseRecord> {
-  const res = await fetch(`/api/v1/releases/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/releases/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -590,7 +615,7 @@ export async function updateRelease(
 
 /** Delete a release (admin-only); its items are unscheduled, not deleted. */
 export async function deleteRelease(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/releases/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/releases/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -605,7 +630,7 @@ export async function addRelation(
   specId: string,
   input: { toSpecId: string; direction: CreatableRelationDirection },
 ): Promise<FeatureRelation[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/features/${encodeURIComponent(specId)}/relations`,
     {
       method: "POST",
@@ -628,7 +653,7 @@ export async function removeRelation(
   specId: string,
   linkId: string,
 ): Promise<FeatureRelation[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/features/${encodeURIComponent(specId)}/relations/${encodeURIComponent(linkId)}`,
     { method: "DELETE" },
   );
@@ -646,7 +671,7 @@ export async function removeRelation(
 export async function saveBoardPreferences(
   prefs: BoardPreferences,
 ): Promise<void> {
-  const res = await fetch("/api/v1/board-preferences", {
+  const res = await apiFetch("/api/v1/board-preferences", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(prefs),
@@ -663,7 +688,7 @@ export async function addGithubLink(
   specId: string,
   input: GithubLinkInput,
 ): Promise<GithubLink[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/features/${encodeURIComponent(specId)}/github-links`,
     {
       method: "POST",
@@ -686,7 +711,7 @@ export async function removeGithubLink(
   specId: string,
   linkId: string,
 ): Promise<GithubLink[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/features/${encodeURIComponent(specId)}/github-links/${encodeURIComponent(linkId)}`,
     { method: "DELETE" },
   );
@@ -702,7 +727,7 @@ export async function removeGithubLink(
 
 /** Save the current backlog filters as a named view. */
 export async function saveView(input: SavedViewInput): Promise<SavedView> {
-  const res = await fetch("/api/v1/views", {
+  const res = await apiFetch("/api/v1/views", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -719,7 +744,7 @@ export async function saveView(input: SavedViewInput): Promise<SavedView> {
 
 /** Delete a saved view by id. */
 export async function deleteView(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/views/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/views/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -738,7 +763,7 @@ export async function createWorkspace(
   seedSampleData: boolean,
   slug?: string,
 ): Promise<{ slug: string }> {
-  const res = await fetch("/api/v1/workspaces", {
+  const res = await apiFetch("/api/v1/workspaces", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name, seedSampleData, slug }),
@@ -792,7 +817,7 @@ export interface ConnectRepoInput {
 export async function connectRepository(
   input: ConnectRepoInput,
 ): Promise<{ sync: SyncResult | { error: string } | null }> {
-  const res = await fetch("/api/v1/repositories", {
+  const res = await apiFetch("/api/v1/repositories", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -822,7 +847,7 @@ export interface RepoScan {
  * Backs the onboarding "found N specs, create cards?" prompt. Admin-only.
  */
 export async function scanWorkspaceSpecs(): Promise<{ repos: RepoScan[]; totalSpecs: number }> {
-  const res = await fetch("/api/v1/repositories/scan");
+  const res = await apiFetch("/api/v1/repositories/scan");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { repos?: RepoScan[]; totalSpecs?: number; error?: string }
@@ -848,7 +873,7 @@ export async function createStarterSpec(input: {
   repoId: string;
   featureName: string;
 }): Promise<StarterSpecResult> {
-  const res = await fetch("/api/v1/repositories/starter-spec", {
+  const res = await apiFetch("/api/v1/repositories/starter-spec", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -877,7 +902,7 @@ export interface ImportResult {
  * confirmation behind the onboarding scan). Admin-only.
  */
 export async function importWorkspaceSpecs(): Promise<ImportResult> {
-  const res = await fetch("/api/v1/repositories/import", { method: "POST" });
+  const res = await apiFetch("/api/v1/repositories/import", { method: "POST" });
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { summary?: SyncResult; errors?: ImportResult["errors"]; error?: string }
@@ -896,7 +921,7 @@ export async function importWorkspaceSpecs(): Promise<ImportResult> {
  * only the sync connection and its GitHub links are removed. Admin-only.
  */
 export async function disconnectRepository(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/repositories/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/repositories/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -936,7 +961,7 @@ export interface InstallationConnectState {
  * GitHub hasn't been connected yet: show the "Connect GitHub" button.
  */
 export async function listInstallationRepositories(): Promise<InstallationConnectState> {
-  const res = await fetch("/api/v1/github/installations/repositories");
+  const res = await apiFetch("/api/v1/github/installations/repositories");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as Partial<InstallationConnectState> & {
     error?: string;
@@ -969,7 +994,7 @@ export async function createSpecRepository(input: {
   name: string;
   installationId: string;
 }): Promise<CreatedSpecRepo> {
-  const res = await fetch("/api/v1/github/installations/repositories", {
+  const res = await apiFetch("/api/v1/github/installations/repositories", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -988,7 +1013,7 @@ export async function createSpecRepository(input: {
 
 /** List the products (sibling backlogs) the caller can see. */
 export async function listProducts(): Promise<ProductRecord[]> {
-  const res = await fetch("/api/v1/products");
+  const res = await apiFetch("/api/v1/products");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { products?: ProductRecord[]; error?: string }
@@ -1001,7 +1026,7 @@ export async function listProducts(): Promise<ProductRecord[]> {
 export async function createProduct(
   input: CreateProductInput,
 ): Promise<ProductRecord> {
-  const res = await fetch("/api/v1/products", {
+  const res = await apiFetch("/api/v1/products", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1021,7 +1046,7 @@ export async function updateProduct(
   id: string,
   patch: ProductPatch,
 ): Promise<ProductRecord> {
-  const res = await fetch(`/api/v1/products/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/products/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -1038,7 +1063,7 @@ export async function updateProduct(
 
 /** Delete a product (must have no items). */
 export async function deleteProduct(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/products/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/products/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -1052,7 +1077,7 @@ export async function deleteProduct(id: string): Promise<void> {
 export async function listProductMembers(
   productId: string,
 ): Promise<ProductMemberRecord[]> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/products/${encodeURIComponent(productId)}/members`,
   );
   if (res.status === 401) throw new AuthRequiredError();
@@ -1068,7 +1093,7 @@ export async function setProductMember(
   productId: string,
   input: ProductMemberInput,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/products/${encodeURIComponent(productId)}/members`,
     {
       method: "POST",
@@ -1088,7 +1113,7 @@ export async function removeProductMember(
   productId: string,
   userId: string,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/v1/products/${encodeURIComponent(productId)}/members/${encodeURIComponent(userId)}`,
     { method: "DELETE" },
   );
@@ -1101,7 +1126,7 @@ export async function removeProductMember(
 
 /** List the organization's members (org-admin only). */
 export async function listOrgMembers(): Promise<OrgMemberRecord[]> {
-  const res = await fetch("/api/v1/org/members");
+  const res = await apiFetch("/api/v1/org/members");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { members?: OrgMemberRecord[]; error?: string }
@@ -1115,7 +1140,7 @@ export async function updateOrgMember(
   userId: string,
   patch: { role?: OrgRole; active?: boolean },
 ): Promise<void> {
-  const res = await fetch(`/api/v1/org/members/${encodeURIComponent(userId)}`, {
+  const res = await apiFetch(`/api/v1/org/members/${encodeURIComponent(userId)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -1129,7 +1154,7 @@ export async function updateOrgMember(
 
 /** Remove a member from the organization. Org-admin only. */
 export async function removeOrgMember(userId: string): Promise<void> {
-  const res = await fetch(`/api/v1/org/members/${encodeURIComponent(userId)}`, {
+  const res = await apiFetch(`/api/v1/org/members/${encodeURIComponent(userId)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -1141,7 +1166,7 @@ export async function removeOrgMember(userId: string): Promise<void> {
 
 /** List the org's invitations (org-admin only). */
 export async function listInvitations(): Promise<OrgInvitationRecord[]> {
-  const res = await fetch("/api/v1/org/invitations");
+  const res = await apiFetch("/api/v1/org/invitations");
   if (res.status === 401) throw new AuthRequiredError();
   const body = (await res.json().catch(() => null)) as
     | { invitations?: OrgInvitationRecord[]; error?: string }
@@ -1160,7 +1185,7 @@ export async function createInvitation(input: {
   role: OrgRole;
   productGrants?: InvitationProductGrant[];
 }): Promise<OrgInvitationRecord> {
-  const res = await fetch("/api/v1/org/invitations", {
+  const res = await apiFetch("/api/v1/org/invitations", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1177,7 +1202,7 @@ export async function createInvitation(input: {
 
 /** Revoke a pending invitation. Org-admin only. */
 export async function revokeInvitation(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/org/invitations/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/org/invitations/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -1189,7 +1214,7 @@ export async function revokeInvitation(id: string): Promise<void> {
 
 /** Re-send a pending invitation (regenerates the token). Org-admin only. */
 export async function resendInvitation(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/org/invitations/${encodeURIComponent(id)}/resend`, {
+  const res = await apiFetch(`/api/v1/org/invitations/${encodeURIComponent(id)}/resend`, {
     method: "POST",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -1201,7 +1226,7 @@ export async function resendInvitation(id: string): Promise<void> {
 
 /** Update the organization ("company") name. Admin-only on the server. */
 export async function updateWorkspace(name: string): Promise<void> {
-  const res = await fetch("/api/v1/workspace", {
+  const res = await apiFetch("/api/v1/workspace", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name }),
@@ -1221,7 +1246,7 @@ export async function setDocSpace(input: {
   externalUrl?: string | null;
   repoId?: string | null;
 }): Promise<DocSpace> {
-  const res = await fetch("/api/v1/doc-spaces", {
+  const res = await apiFetch("/api/v1/doc-spaces", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1238,7 +1263,7 @@ export async function setDocSpace(input: {
 
 /** Create a doc folder or page; returns the new record. */
 export async function createDocPage(input: DocPageInput): Promise<DocPageRecord> {
-  const res = await fetch("/api/v1/docs", {
+  const res = await apiFetch("/api/v1/docs", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1258,7 +1283,7 @@ export async function patchDocPage(
   id: string,
   patch: DocPagePatch,
 ): Promise<DocPageRecord> {
-  const res = await fetch(`/api/v1/docs/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/docs/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
@@ -1275,7 +1300,7 @@ export async function patchDocPage(
 
 /** Delete a doc page, or a folder and its contents. */
 export async function deleteDocPage(id: string): Promise<void> {
-  const res = await fetch(`/api/v1/docs/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/v1/docs/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (res.status === 401) throw new AuthRequiredError();
@@ -1294,7 +1319,7 @@ export async function createGithubDocSpace(input: {
   area: DocArea;
   name: string;
 }): Promise<{ space: DocSpace; repository: { owner: string; name: string } }> {
-  const res = await fetch("/api/v1/doc-spaces/github", {
+  const res = await apiFetch("/api/v1/doc-spaces/github", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1324,7 +1349,7 @@ export async function connectGithubDocSpace(input: {
   name: string;
   installationId: string;
 }): Promise<{ space: DocSpace; repository: { owner: string; name: string } }> {
-  const res = await fetch("/api/v1/doc-spaces/github", {
+  const res = await apiFetch("/api/v1/doc-spaces/github", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -1361,7 +1386,7 @@ export async function saveGithubDocFile(input: {
   content: string;
   blobSha: string | null;
 }): Promise<{ blobSha: string }> {
-  const res = await fetch("/api/v1/doc-spaces/github/file", {
+  const res = await apiFetch("/api/v1/doc-spaces/github/file", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1383,7 +1408,7 @@ export async function renameGithubDocFile(input: {
   path: string;
   toPath: string;
 }): Promise<{ path: string; blobSha: string; content: string }> {
-  const res = await fetch("/api/v1/doc-spaces/github/file", {
+  const res = await apiFetch("/api/v1/doc-spaces/github/file", {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -1410,7 +1435,7 @@ export async function deleteGithubDocFile(input: {
   path: string;
   blobSha: string;
 }): Promise<void> {
-  const res = await fetch("/api/v1/doc-spaces/github/file", {
+  const res = await apiFetch("/api/v1/doc-spaces/github/file", {
     method: "DELETE",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),

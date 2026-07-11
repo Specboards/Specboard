@@ -1,15 +1,12 @@
 import { revalidatePath } from "next/cache";
 
-import { getSessionUser, resolveReadScope } from "@/lib/auth-session";
-import { getDb } from "@/lib/db";
+import { authorizeOrgAdmin, resolveReadScope } from "@/lib/auth-session";
 import {
   InvalidPatchError,
   listStageGates,
   parseStageGates,
   replaceStageGates,
 } from "@/lib/features-service";
-import { getMembership } from "@/lib/workspace";
-import type { WorkspaceScope } from "@/lib/store/types";
 
 export const dynamic = "force-dynamic";
 
@@ -28,28 +25,9 @@ export async function GET(req: Request) {
  * checklist progress); local file mode is ungated.
  */
 export async function PUT(req: Request) {
-  const db = getDb();
-  let scope: WorkspaceScope | undefined;
-  if (db) {
-    const user = await getSessionUser(req);
-    if (!user) {
-      return Response.json({ error: "Authentication required." }, { status: 401 });
-    }
-    const membership = await getMembership(db, user.id);
-    if (!membership) {
-      return Response.json(
-        { error: "You do not belong to a workspace." },
-        { status: 403 },
-      );
-    }
-    if (membership.role !== "owner") {
-      return Response.json(
-        { error: "Only the owner can change stage gates." },
-        { status: 403 },
-      );
-    }
-    scope = { userId: user.id, workspaceId: membership.workspaceId };
-  }
+  const authz = await authorizeOrgAdmin(req);
+  if (!authz.ok) return authz.response;
+  const scope = authz.scope ?? undefined;
 
   let body: unknown;
   try {

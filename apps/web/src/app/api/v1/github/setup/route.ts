@@ -13,7 +13,7 @@ import {
   stashInstallationOnState,
 } from "@/lib/github-install";
 import { orgPath } from "@/lib/org-path";
-import { getMembership, workspaceSlug } from "@/lib/workspace";
+import { getMembershipFor, workspaceSlug } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -54,32 +54,31 @@ export async function GET(req: Request) {
     return redirectTo(`/sign-in?from=${from}`);
   }
 
-  const membership = await getMembership(db, user.id);
-  if (!membership) return redirectTo("/");
-  const slug = await workspaceSlug(db, membership.workspaceId);
-  const repos = (q = "") => orgPath(slug, `/settings/repositories${q}`);
   const jar = await cookies();
+  const expectedState = jar.get(INSTALL_STATE_COOKIE)?.value;
 
   // CSRF: the install must have started via /install-start on this session, so
-  // require the `state` GitHub echoed back to match the one-time cookie. The
-  // cookie survives until the OAuth callback finishes the (single-use) flow.
-  const expectedState = jar.get(INSTALL_STATE_COOKIE)?.value;
-  if (
-    membership.role !== "owner" ||
-    !installationId ||
-    !state ||
-    !expectedState ||
-    state !== expectedState
-  ) {
+  // require the `state` GitHub echoed back to match the one-time cookie. With
+  // no identifiable flow there's no org to return to, so bail to root.
+  if (!installationId || !state || !expectedState || state !== expectedState) {
     jar.delete(INSTALL_STATE_COOKIE);
-    return redirectTo(repos("?error=install"));
+    return redirectTo("/");
   }
 
-  // The server-side flow record is the source of truth: it must exist, be
-  // unexpired, belong to this user, and match the workspace they're acting in.
+  // The server-side flow record is the source of truth: it carries the
+  // org-validated workspace chosen at install-start, so membership is resolved
+  // against THAT workspace, never the caller's oldest (the multi-org fix).
   const flow = await findLiveInstallState(db, state, user.id);
-  if (!flow || flow.workspaceId !== membership.workspaceId) {
+  if (!flow) {
     jar.delete(INSTALL_STATE_COOKIE);
+    return redirectTo("/");
+  }
+  const membership = await getMembershipFor(db, user.id, flow.workspaceId);
+  const slug = await workspaceSlug(db, flow.workspaceId);
+  const repos = (q = "") => orgPath(slug, `/settings/repositories${q}`);
+  if (!membership || membership.role !== "owner") {
+    jar.delete(INSTALL_STATE_COOKIE);
+    await deleteInstallState(db, flow.id);
     return redirectTo(repos("?error=install"));
   }
 
