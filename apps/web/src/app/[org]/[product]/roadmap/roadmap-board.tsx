@@ -153,7 +153,7 @@ export function RoadmapBoard({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
             <Column
               key={column.releaseId ?? UNSCHEDULED}
@@ -218,7 +218,7 @@ function Column({
       : null;
 
   return (
-    <div className="space-y-2">
+    <div className="w-72 shrink-0 space-y-2 rounded-md bg-muted/35 p-2.5">
       {/* Heading: release name on top, dates (and non-default status) beneath. */}
       <div className="space-y-0.5 px-1">
         <div className="flex items-baseline justify-between gap-2">
