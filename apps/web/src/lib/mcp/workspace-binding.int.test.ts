@@ -44,8 +44,8 @@ describe.skipIf(!OWNER_URL)("MCP workspace binding", () => {
       (${ws.a}, 'Beta', ${slug.a}),
       (${ws.b}, 'Alpha', ${slug.b})`;
     await owner`insert into members (workspace_id, user_id, role) values
-      (${ws.a}, ${userId}, 'admin'),
-      (${ws.b}, ${userId}, 'admin')`;
+      (${ws.a}, ${userId}, 'owner'),
+      (${ws.b}, ${userId}, 'owner')`;
     await owner`insert into oauth_applications (client_id, redirect_urls, type) values
       (${clientId}, 'http://localhost/callback', 'public')`;
   });
