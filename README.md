@@ -12,7 +12,8 @@ into JIRA/Aha.
 Open-core: self-host the core for free, or use the hosted SaaS.
 
 - **Design:** [`ARCHITECTURE.md`](./ARCHITECTURE.md)
-- **Build plan:** [`docs/PLAN.md`](./docs/PLAN.md)
+- **Backlog:** [`docs/BACKLOG.md`](./docs/BACKLOG.md) (tracked in Specboard)
+- **Original build plan:** [`docs/archive/PLAN.md`](./docs/archive/PLAN.md)
 
 > Status: **active build**. Working: the web UI (Backlog · Board · Roadmap ·
 > Feature detail with dependencies/relations), spec parsing, status workflow,

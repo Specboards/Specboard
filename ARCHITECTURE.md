@@ -189,5 +189,5 @@ rich-text Details body (stored as Markdown), editable on the item page. GitHub
 feature linking: attach a PR/issue/branch to a feature, rolled up to parents,
 with live state refresh via the webhook. Still
 stubbed: editing spec content from the UI (PR write-back), spec **deletion**
-handling. See `docs/PLAN.md` for the build plan, `docs/BACKLOG.md` for shipped
-work (including the configurable hierarchy), and `docs/RUNBOOK-github-sync.md` for setup.
+handling. See `docs/archive/PLAN.md` for the original build plan, `docs/BACKLOG.md`
+for where the backlog now lives (in Specboard), and `docs/RUNBOOK-github-sync.md` for setup.

@@ -59,7 +59,7 @@ new MCP tool.
 ## [0.15.0] - 2026-07-11
 
 Security hardening batch from the July 2026 adversarial source review (see
-`docs/security-fixes.md`). No new product features; these close the P0-P2
+`docs/archive/security-fixes.md`). No new product features; these close the P0-P2
 findings.
 
 ### Changed

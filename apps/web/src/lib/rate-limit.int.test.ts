@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { consumeQuota } from "./rate-limit";
 
 /**
- * Fixed-window quota counter (docs/security-fixes.md, P2 per-workspace quotas
+ * Fixed-window quota counter (docs/archive/security-fixes.md, P2 per-workspace quotas
  * on expensive endpoints). Runs against DATABASE_URL; skips without one.
  */
 
