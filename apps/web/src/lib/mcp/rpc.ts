@@ -27,7 +27,9 @@ const INSTRUCTIONS =
   "nest each under the card. To roll changes up, read the child specs and " +
   "write a summary into the parent card with update_item(details). Remove a " +
   "DB-native card you no longer need with delete_item (spec-backed items are " +
-  "deleted in git, not here).";
+  "deleted in git, not here). Organize work into versions with list_releases " +
+  "and create_release (owner-only), then schedule an item into one via " +
+  "update_item(releaseId).";
 
 export type McpAuth =
   | { ok: true; ctx: McpContext }

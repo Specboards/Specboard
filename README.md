@@ -12,20 +12,25 @@ into JIRA/Aha.
 Open-core: self-host the core for free, or use the hosted SaaS.
 
 - **Design:** [`ARCHITECTURE.md`](./ARCHITECTURE.md)
-- **Build plan:** [`docs/PLAN.md`](./docs/PLAN.md)
+- **Backlog:** [`docs/BACKLOG.md`](./docs/BACKLOG.md) (tracked in Specboard)
+- **Original build plan:** [`docs/archive/PLAN.md`](./docs/archive/PLAN.md)
 
 > Status: **active build**. Working: the web UI (Backlog · Board · Roadmap ·
-> Feature detail with dependencies/relations), spec parsing, status workflow,
-> DB schema/seed, MCP tools, auth (sign-up/in, email verification, password
-> reset, account/settings), and GitHub sync (one-click App setup, repo
-> connect/picker, push reconcile). Still stubbed: editing spec content from the UI.
+> Ideas · Feature detail with dependencies/relations), multi-product backlogs,
+> releases, custom card properties, spec parsing, status workflow, DB
+> schema/seed, outbound webhooks, auth (sign-up/in, email verification, password
+> reset, account/settings), GitHub sync (one-click App setup, repo
+> connect/picker, push reconcile), and an MCP server for coding agents (hosted
+> OAuth 2.1 endpoint + a local stdio server) through which agents read, update,
+> and edit specs. Still stubbed: editing spec content from the app UI (agents do
+> this over MCP, which commits to git).
 
 ## Layout
 
 ```
 apps/
-  web/        Next.js App Router UI (Backlog · Board · Roadmap · Feature detail)
-  mcp/        MCP server exposing specs + metadata to coding agents
+  web/        Next.js App Router UI + the hosted MCP endpoint (/api/mcp, OAuth 2.1)
+  mcp/        Standalone stdio MCP server (self-host / offline agent access)
   cli/        `specboard` CLI over the /api/v1 surface (API-key auth)
 packages/
   core/       Spec parsing, status state machine, .specboard/config.yml schema
@@ -92,14 +97,27 @@ architecture's system-of-record split.
 
 ### MCP server (agents)
 
+Specboard speaks the Model Context Protocol so coding agents (Claude Code and
+others) can read and drive the backlog. Two ways to connect:
+
+**Hosted endpoint (recommended).** Every deployment serves an authenticated MCP
+endpoint at `POST /api/mcp` (e.g. `https://app.specboard.ai/api/mcp`) with OAuth
+2.1 sign-in, or an `x-api-key` for service accounts. Point your client at it and
+approve the browser consent screen; the connection binds to your user and the
+workspace you pick. Tools: `whoami`, `list_products`, `list_items`, `read_item`,
+`get_relations`, `create_item`, `update_item`, `delete_item`,
+`update_spec_content` and `create_spec` (both commit to git), and
+`list_releases` / `create_release`.
+
+**Local stdio server (self-host / offline).** A stdio MCP server is also bundled:
+
 ```bash
 pnpm --filter @specboard/mcp build
 DATABASE_URL=postgres://... node apps/mcp/dist/server.js
 ```
 
-Exposes `list_features` (with each feature's `blocks` / `blockedBy`) /
-`read_spec` / `update_status` (workflow-validated) / `get_relations` over stdio.
-Requires the seeded Postgres above.
+It exposes a read/update subset (list, read, relations, status) over stdio
+against the seeded Postgres above.
 
 ## Develop
 

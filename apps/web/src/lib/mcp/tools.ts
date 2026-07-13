@@ -2,10 +2,13 @@ import { eq, users, workspaces } from "@specboard/db";
 
 import { getDb } from "@/lib/db";
 import {
+  createRelease,
   createWorkItem,
   deleteWorkItem,
+  listReleases,
   parseCreateFeatureInput,
   parseFeaturePatch,
+  parseReleaseInput,
   patchFeature,
 } from "@/lib/features-service";
 import { createSpec, updateSpecContent } from "@/lib/spec-content";
@@ -488,6 +491,85 @@ export const TOOLS: McpTool[] = [
         repoId: typeof args.repoId === "string" ? args.repoId : undefined,
         message: typeof args.message === "string" ? args.message : undefined,
       });
+    },
+  },
+  {
+    name: "list_releases",
+    description:
+      "List the workspace's releases (ship vehicles / versions) with their " +
+      "id, name, status (planned/in_progress/shipped), start/target dates, " +
+      "notes, and the count of items scheduled into each. Pass a release `id` " +
+      "to update_item's `releaseId` to schedule an item into it. Dated " +
+      "releases come first (ascending target date), undated last.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    write: false,
+    run: async (_args, ctx) => {
+      const releases = await listReleases(ctx.scope);
+      return releases.map((r) => ({
+        id: r.id,
+        name: r.name,
+        status: r.status,
+        startDate: r.startDate,
+        targetDate: r.targetDate,
+        notes: r.notes,
+        itemCount: r.itemCount,
+      }));
+    },
+  },
+  {
+    name: "create_release",
+    description:
+      'Create a release (a ship vehicle / version like "v0.18.0") in the ' +
+      "workspace. Owner-only. Provide a unique `name`; optionally `status` " +
+      "(planned/in_progress/shipped, default planned), `startDate` and " +
+      "`targetDate` (YYYY-MM-DD), and `notes` (Markdown). Returns the new " +
+      "release id, which you pass to update_item's `releaseId` to schedule " +
+      "items into it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: 'Unique release name, e.g. "v0.18.0".',
+        },
+        status: {
+          type: "string",
+          description: "planned | in_progress | shipped (default planned).",
+        },
+        startDate: {
+          type: ["string", "null"],
+          description: "Planned start date, YYYY-MM-DD.",
+        },
+        targetDate: {
+          type: ["string", "null"],
+          description: "Target ship date, YYYY-MM-DD.",
+        },
+        notes: {
+          type: ["string", "null"],
+          description: "Free-form release notes (Markdown).",
+        },
+      },
+      required: ["name"],
+      additionalProperties: false,
+    },
+    write: true,
+    run: async (args, ctx) => {
+      // Release creation is a workspace-level admin action (mirrors the
+      // owner-only POST /api/v1/releases route), not a per-product write, so
+      // gate it here rather than leaving it to the store's product checks.
+      if (!ctx.isLocal && ctx.role !== "owner") {
+        throw new Error("Only the workspace owner can create releases.");
+      }
+      const release = await createRelease(parseReleaseInput(args), ctx.scope);
+      return {
+        id: release.id,
+        name: release.name,
+        status: release.status,
+        startDate: release.startDate,
+        targetDate: release.targetDate,
+        notes: release.notes,
+        itemCount: release.itemCount,
+      };
     },
   },
 ];
