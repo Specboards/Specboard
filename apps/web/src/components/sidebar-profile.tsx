@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * (auth disabled — the session endpoint errors) there's no account, so it
  * degrades to a bare theme toggle so dark mode still works.
  */
-export function SidebarProfile() {
+export function SidebarProfile({ collapsed = false }: { collapsed?: boolean }) {
   const { data, isPending, error } = useSession();
   const router = useRouter();
   const orgHref = useOrgPath();
@@ -53,7 +53,12 @@ export function SidebarProfile() {
   return (
     <div ref={ref} className="relative">
       {open ? (
-        <div className="absolute bottom-full left-0 mb-2 w-full space-y-1 rounded-md border bg-popover p-2 shadow-md">
+        <div
+          className={cn(
+            "absolute bottom-full left-0 mb-2 space-y-1 rounded-md border bg-popover p-2 shadow-md",
+            collapsed ? "w-48" : "w-full",
+          )}
+        >
           <div className="pb-1">
             <ThemeToggle className="w-full justify-center" />
           </div>
@@ -79,19 +84,29 @@ export function SidebarProfile() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        title={collapsed ? name : undefined}
+        aria-label={collapsed ? name : undefined}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted",
+          "flex w-full items-center rounded-md py-2 transition-colors hover:bg-muted",
+          collapsed ? "justify-center px-0" : "gap-2.5 px-2 text-left",
           open && "bg-muted",
         )}
       >
         <Avatar name={name} image={image} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{name}</span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {email}
-          </span>
-        </span>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        {!collapsed ? (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{name}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {email}
+              </span>
+            </span>
+            <ChevronsUpDown
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          </>
+        ) : null}
       </button>
     </div>
   );
