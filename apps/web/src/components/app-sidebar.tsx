@@ -7,12 +7,15 @@ import {
   Lightbulb,
   Map,
   Microscope,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { OrgSwitcher } from "@/components/org-switcher";
 import { ProductSwitcher } from "@/components/product-switcher";
@@ -99,64 +102,133 @@ export function AppSidebar({
   const pathname = usePathname();
   const orgHref = useOrgPath();
 
+  // Collapsed = icon rail (mark + area icons only). Persisted per browser;
+  // starts expanded on first paint (matches SSR), then reflects the stored
+  // choice after mount to avoid a hydration mismatch.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setCollapsed(localStorage.getItem("sb:collapsed") === "1");
+  }, []);
+  function toggleCollapsed() {
+    setCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem("sb:collapsed", next ? "1" : "0");
+      return next;
+    });
+  }
+
   if (HIDDEN_PREFIXES.some((p) => pathname.startsWith(p))) return null;
 
   return (
-    <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r bg-background">
-      <div className="space-y-3 px-4 py-4">
-        <Link
-          href={orgHref("/")}
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight"
-        >
-          <img
-            src="/brand/specboard-mark.png"
-            alt=""
-            className="h-5 w-5"
-          />
-          Specboard
-        </Link>
-        <OrgSwitcher orgs={orgs} />
-        <ProductSwitcher products={products} />
+    <aside
+      className={cn(
+        "sticky top-0 flex h-screen shrink-0 flex-col border-r bg-background transition-[width]",
+        collapsed ? "w-16" : "w-60",
+      )}
+    >
+      <div className={cn("py-4", collapsed ? "space-y-2 px-2" : "space-y-3 px-4")}>
+        <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between")}>
+          <Link
+            href={orgHref("/")}
+            aria-label="Specboard home"
+            className="flex items-center gap-2 text-sm font-semibold tracking-tight"
+          >
+            <img src="/brand/specboard-mark.png" alt="" className="h-6 w-6" />
+            {/* Two-tone wordmark: "Spec" foreground + "board" muted. */}
+            {!collapsed ? (
+              <span>
+                Spec<span className="text-muted-foreground">board</span>
+              </span>
+            ) : null}
+          </Link>
+          {!collapsed ? (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <PanelLeftClose className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+            className="flex w-full justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <PanelLeftOpen className="h-4 w-4" aria-hidden />
+          </button>
+        ) : (
+          <>
+            <OrgSwitcher orgs={orgs} />
+            <ProductSwitcher products={products} />
+          </>
+        )}
       </div>
       <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-2">
         {GROUPS.map((group, i) => (
           <div key={group.label ?? i} className="space-y-1">
-            {group.label ? (
+            {group.label && !collapsed ? (
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                 {group.label}
               </p>
             ) : null}
             {group.items.map((item) => (
-              <NavLink key={item.label} item={item} pathname={pathname} />
+              <NavLink
+                key={item.label}
+                item={item}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
             ))}
           </div>
         ))}
       </nav>
       <div className="border-t p-2">
-        <SidebarProfile />
+        <SidebarProfile collapsed={collapsed} />
       </div>
     </aside>
   );
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({
+  item,
+  pathname,
+  collapsed,
+}: {
+  item: NavItem;
+  pathname: string;
+  collapsed: boolean;
+}) {
   const orgHref = useOrgPath();
   const orgProductHref = useOrgProductPath();
   const Icon = item.icon;
-  const base =
-    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors";
+  const base = cn(
+    "flex items-center rounded-md text-sm transition-colors",
+    collapsed ? "justify-center px-0 py-2" : "gap-2.5 px-3 py-2",
+  );
 
   if (item.soon || !item.href) {
     return (
       <div
         className={cn(base, "cursor-default text-muted-foreground/50")}
         aria-disabled
+        title={collapsed ? `${item.label} (soon)` : undefined}
       >
         <Icon className="h-4 w-4" aria-hidden />
-        <span className="flex-1">{item.label}</span>
-        <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-          Soon
-        </span>
+        {!collapsed ? (
+          <>
+            <span className="flex-1">{item.label}</span>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+              Soon
+            </span>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -166,6 +238,8 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   return (
     <Link
       href={href}
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         base,
         active
@@ -174,7 +248,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       )}
     >
       <Icon className="h-4 w-4" aria-hidden />
-      <span>{item.label}</span>
+      {!collapsed ? <span>{item.label}</span> : null}
     </Link>
   );
 }
