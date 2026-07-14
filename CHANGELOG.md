@@ -5,6 +5,29 @@ All notable changes to Specboard are recorded here. The format is based on
 [Semantic Versioning](https://semver.org/). See [VERSIONING.md](./VERSIONING.md)
 for how and when the version is bumped.
 
+## [Unreleased]
+
+### Added
+
+- **Invite-only pre-release access.** A public `POST /api/access-request`
+  endpoint (validation, honeypot, per-IP throttle, CORS-locked to the marketing
+  origins) takes access requests from the marketing site, emailing the review
+  inbox and a confirmation to the requester via the existing Postmark service
+  (from `no-reply@specboard.ai`). A new `SPECBOARD_INVITE_ONLY` flag closes
+  public sign-up: only an email with a live pending org invitation can create an
+  account, so the existing approve-by-invitation flow is the way in. Off by
+  default (self-host keeps open sign-up).
+
+### Changed
+
+- **README rewritten to lead with the value proposition, "why Specboard",
+  features, and quick start** before the repo layout, so new users understand
+  what they're getting before diving into internals.
+- **Commercial/licensing contact unified to `contact@specboard.net`** across the
+  README and `LICENSING.md` (retiring `contact@palouse.io`). "Studio Palouse"
+  stays as the parent-company name, and Specboard is now noted as a member of
+  the Studio Palouse family of apps.
+
 ## [0.18.3] - 2026-07-13
 
 ### Changed

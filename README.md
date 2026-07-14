@@ -99,8 +99,13 @@ Optional environment flags for a hosted deployment:
   providers (gmail.com, outlook.com, ...).
 - `SPECBOARD_INVITE_ONLY` - close public sign-up; only addresses with a pending
   org invitation can create an account (used for the pre-release beta).
+- `ACCESS_REQUEST_NOTIFY_EMAIL` - where `POST /api/access-request` submissions
+  are sent for review (default `contact@specboard.net`).
+- `ACCESS_REQUEST_ALLOWED_ORIGINS` - comma-separated CORS allow-list for that
+  endpoint (default: the `specboard.ai` marketing origins + localhost).
 - `POSTMARK_SERVER_TOKEN` / `EMAIL_FROM` - transactional email (verification,
-  password reset, invites). Unset = email is a logged no-op.
+  password reset, invites, access-request notifications). Unset = email is a
+  logged no-op.
 
 ## Working with specs
 
