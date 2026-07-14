@@ -37,7 +37,7 @@ directory; otherwise it ships only in the hosted product.
 
 These features power the hosted service at
 [specboard.ai](https://specboard.ai). For a commercial or self-managed
-enterprise license, contact **contact@palouse.io**.
+enterprise license, contact **contact@specboard.net**.
 
 ## Contributing
 
@@ -68,9 +68,9 @@ What this means in practice:
   distribution, fork, or service, or in a way that suggests it is the official
   Specboard product, without written permission.
 
-To use the Specboard name or brand assets, email **contact@palouse.io**.
+To use the Specboard name or brand assets, email **contact@specboard.net**.
 
 ## Questions
 
 Anything unclear about how a particular use is licensed? Email
-**contact@palouse.io** before you build on it, and we're happy to clarify.
+**contact@specboard.net** before you build on it, and we're happy to clarify.

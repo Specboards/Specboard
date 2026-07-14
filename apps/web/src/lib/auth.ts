@@ -6,6 +6,8 @@ import { mcp } from "better-auth/plugins";
 import { isBlockedEmailDomain } from "@specboard/core";
 import { createDb, schema } from "@specboard/db";
 
+import { hasValidPendingInvitation, inviteOnlyEnabled } from "@/lib/access-gate";
+import { getDb } from "@/lib/db";
 import { isE2E } from "@/lib/e2e";
 import { renderActionEmail, sendEmail } from "@/lib/email";
 
@@ -246,13 +248,27 @@ function createAuth(url: string) {
           await allowLoopbackRedirectPort(ctx);
           return { context: { query: { ...ctx.query, prompt: "consent" } } };
         }
-        if (ctx.path !== "/sign-up/email" || !blockPublicEmailDomains()) return;
+        if (ctx.path !== "/sign-up/email") return;
         const email = typeof ctx.body?.email === "string" ? ctx.body.email : "";
-        if (isBlockedEmailDomain(email)) {
+        if (blockPublicEmailDomains() && isBlockedEmailDomain(email)) {
           throw new APIError("BAD_REQUEST", {
             message:
               "Please sign up with your work email address. Personal email providers are not supported on the hosted service.",
           });
+        }
+        // Pre-v1 invite-only gate: only emails with a live pending invitation may
+        // create an account. Invited users still flow through /sign-up normally
+        // (the invite email seeds a matching pending invitation); everyone else
+        // is directed to the marketing site's "Request access" form.
+        if (inviteOnlyEnabled()) {
+          const db = getDb();
+          const invited = db ? await hasValidPendingInvitation(db, email) : false;
+          if (!invited) {
+            throw new APIError("FORBIDDEN", {
+              message:
+                "Specboard is invite-only during the pre-release. Request access at https://www.specboard.ai/request-access and we'll be in touch.",
+            });
+          }
         }
       }),
     },

@@ -91,6 +91,84 @@ export function renderActionEmail(opts: {
   return { textBody, htmlBody };
 }
 
+/**
+ * A branded, informational email with no call-to-action button: an intro, then
+ * an optional list of label/value detail rows (used e.g. for the access-request
+ * notification and the requester's confirmation). Returns matching plain-text
+ * and HTML bodies.
+ */
+export function renderInfoEmail(opts: {
+  /** Optional greeting name; omitted for internal notifications. */
+  name?: string;
+  /** One or more intro paragraphs shown at the top. */
+  intro: string | string[];
+  /** Optional label/value rows rendered as a simple definition list. */
+  details?: { label: string; value: string }[];
+  /** Optional muted line shown below everything. */
+  footer?: string;
+}): { textBody: string; htmlBody: string } {
+  const { name, intro, details, footer } = opts;
+  const intros = Array.isArray(intro) ? intro : [intro];
+
+  const textBody = [
+    ...(name ? [`Hi ${name},`, ""] : []),
+    ...intros.flatMap((p) => [p, ""]),
+    ...(details && details.length
+      ? [...details.map((d) => `${d.label}: ${d.value}`), ""]
+      : []),
+    ...(footer ? [footer] : []),
+  ]
+    .join("\n")
+    .trim();
+
+  const detailRows = (details ?? [])
+    .map(
+      (d) =>
+        `<tr><td style="padding:4px 0;font-size:13px;color:#888;white-space:nowrap;vertical-align:top;">${escapeHtml(
+          d.label,
+        )}</td><td style="padding:4px 0 4px 16px;font-size:14px;color:#1a1a1a;">${escapeHtml(
+          d.value,
+        ).replace(/\n/g, "<br />")}</td></tr>`,
+    )
+    .join("");
+
+  const htmlBody = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;border:1px solid #e5e5e5;">
+            <tr>
+              <td style="padding:32px 32px 24px;">
+                <p style="margin:0 0 16px;font-size:16px;font-weight:600;">Specboard</p>
+                ${name ? `<p style="margin:0 0 8px;font-size:15px;">Hi ${escapeHtml(name)},</p>` : ""}
+                ${intros
+                  .map(
+                    (p) =>
+                      `<p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#444;">${escapeHtml(
+                        p,
+                      )}</p>`,
+                  )
+                  .join("")}
+                ${
+                  detailRows
+                    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 0;border-top:1px solid #eee;padding-top:8px;">${detailRows}</table>`
+                    : ""
+                }
+                ${footer ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#888;">${escapeHtml(footer)}</p>` : ""}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { textBody, htmlBody };
+}
+
 export async function sendEmail(message: OutboundEmail): Promise<void> {
   const token = process.env.POSTMARK_SERVER_TOKEN;
   const from = process.env.EMAIL_FROM;
