@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ import {
 } from "@/lib/api-client";
 import {
   RELEASE_STATUSES,
+  type ReleasePatch,
   type ReleaseRecord,
   type ReleaseStatus,
 } from "@/lib/store/types";
@@ -33,6 +34,14 @@ const RELEASE_STATUS_LABELS: Record<ReleaseStatus, string> = {
   in_progress: "In progress",
   shipped: "Shipped",
 };
+
+/** The statuses selectable inline. Shipping/reopening runs through the footer
+ * buttons (with a confirm) so it stays a deliberate action, not an autosave. */
+const INLINE_STATUSES = RELEASE_STATUSES.filter((s) => s !== "shipped");
+
+/** Borderless-until-hover control styling, matching the item property block. */
+const INLINE_CONTROL =
+  "h-8 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted";
 
 /** Render a release's date range as "start → ship", omitting missing ends. */
 function formatReleaseDates(
@@ -47,9 +56,13 @@ function formatReleaseDates(
 
 /**
  * Release detail panel, opened from a column heading on the Roadmap. Shows the
- * release's dates, status, item count, and Markdown notes, and (for admins) is
- * the single home for the Release / Edit / Delete actions that used to crowd
- * the column heading. Edit happens inline here rather than in a separate drawer.
+ * release's dates, status, item count, and Markdown notes.
+ *
+ * For admins the fields edit in place: click into name / status / dates / notes
+ * and the change autosaves on blur, the same click-to-edit pattern as work-item
+ * properties. The high-consequence transitions (ship, reopen, delete) stay as
+ * explicit footer buttons with a confirm, so they can't happen by an accidental
+ * click. Non-admins get a read-only rendering.
  */
 export function ReleaseDetailSheet({
   release,
@@ -63,19 +76,13 @@ export function ReleaseDetailSheet({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    status: "planned" as ReleaseStatus,
-    startDate: "",
-    targetDate: "",
-    notes: "",
-  });
-
-  // Leave edit mode when the panel opens on a different release.
-  useEffect(() => {
-    setEditing(false);
-  }, [release?.id]);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const [editingNotes, setEditingNotes] = useState(false);
+  // Serialize field autosaves: coalesce a change made while one is in flight.
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef<ReleasePatch | null>(null);
 
   function handleAuthError(err: unknown): boolean {
     if (err instanceof AuthRequiredError) {
@@ -94,40 +101,32 @@ export function ReleaseDetailSheet({
   }
   const current = release;
 
-  function startEdit() {
-    setForm({
-      name: current.name,
-      status: current.status,
-      startDate: current.startDate ?? "",
-      targetDate: current.targetDate ?? "",
-      notes: current.notes ?? "",
-    });
-    setEditing(true);
-  }
-
-  function saveEdits() {
-    const name = form.name.trim();
-    if (!name) {
-      toast.error("Name is required.");
+  /** Autosave a partial patch, coalescing overlapping edits. */
+  function commit(patch: ReleasePatch) {
+    if (inFlightRef.current) {
+      queuedRef.current = { ...(queuedRef.current ?? {}), ...patch };
       return;
     }
-    startTransition(async () => {
+    inFlightRef.current = true;
+    setSaveState("saving");
+    void (async () => {
       try {
-        await updateRelease(current.id, {
-          name,
-          status: form.status,
-          startDate: form.startDate || null,
-          targetDate: form.targetDate || null,
-          notes: form.notes.trim() || null,
-        });
-        toast.success("Release saved");
-        setEditing(false);
+        await updateRelease(current.id, patch);
+        setSaveState("saved");
         router.refresh();
       } catch (err) {
         if (handleAuthError(err)) return;
+        setSaveState("idle");
         toast.error(err instanceof Error ? err.message : "Save failed.");
+      } finally {
+        inFlightRef.current = false;
+        const queued = queuedRef.current;
+        if (queued) {
+          queuedRef.current = null;
+          commit(queued);
+        }
       }
-    });
+    })();
   }
 
   function setStatus(status: ReleaseStatus, confirmMsg?: string, successMsg?: string) {
@@ -178,88 +177,120 @@ export function ReleaseDetailSheet({
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {editing ? (
-            <div className="space-y-3">
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Name
-                </span>
+          {isAdmin ? (
+            // key on the release id so switching releases reseeds the
+            // uncontrolled defaults; a background refresh can't clobber a field
+            // being edited because we only read values on blur/change.
+            <div key={current.id} className="space-y-3">
+              <Field label="Name">
                 <Input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="h-8"
+                  defaultValue={current.name}
+                  className={INLINE_CONTROL}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim();
+                    if (!name) {
+                      e.target.value = current.name;
+                      toast.error("Name is required.");
+                      return;
+                    }
+                    if (name !== current.name) commit({ name });
+                  }}
                 />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Status
-                </span>
-                <Select
-                  value={form.status}
-                  onChange={(e) =>
-                    setForm({ ...form, status: e.target.value as ReleaseStatus })
-                  }
-                  className="h-8"
-                >
-                  {RELEASE_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {RELEASE_STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </Select>
-              </label>
+              </Field>
+
+              <Field label="Status">
+                {shipped ? (
+                  <div className="flex h-8 items-center px-2">
+                    <Badge variant="outline" className="text-[10px]">
+                      Shipped
+                    </Badge>
+                  </div>
+                ) : (
+                  <Select
+                    defaultValue={current.status}
+                    className={INLINE_CONTROL}
+                    onChange={(e) =>
+                      commit({ status: e.target.value as ReleaseStatus })
+                    }
+                  >
+                    {INLINE_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {RELEASE_STATUS_LABELS[s]}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+
               <div className="grid grid-cols-2 gap-3">
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Start date
-                  </span>
+                <Field label="Start date">
                   <Input
                     type="date"
-                    value={form.startDate}
+                    defaultValue={current.startDate ?? ""}
+                    className={INLINE_CONTROL}
                     onChange={(e) =>
-                      setForm({ ...form, startDate: e.target.value })
+                      commit({ startDate: e.target.value || null })
                     }
-                    className="h-8"
                   />
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Ship date
-                  </span>
+                </Field>
+                <Field label="Ship date">
                   <Input
                     type="date"
-                    value={form.targetDate}
+                    defaultValue={current.targetDate ?? ""}
+                    className={INLINE_CONTROL}
                     onChange={(e) =>
-                      setForm({ ...form, targetDate: e.target.value })
+                      commit({ targetDate: e.target.value || null })
                     }
-                    className="h-8"
                   />
-                </label>
+                </Field>
               </div>
-              <label className="block space-y-1.5">
+
+              <div className="space-y-1.5">
                 <span className="text-xs font-medium text-muted-foreground">
                   Notes
                 </span>
-                <Textarea
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  rows={8}
-                  placeholder="Scope, theme, or anything worth noting about this release."
-                />
-              </label>
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={saveEdits} disabled={pending}>
-                  {pending ? "Saving…" : "Save"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setEditing(false)}
-                  disabled={pending}
-                >
-                  Cancel
-                </Button>
+                {editingNotes ? (
+                  <Textarea
+                    autoFocus
+                    defaultValue={current.notes ?? ""}
+                    rows={8}
+                    placeholder="Scope, theme, or anything worth noting about this release."
+                    onBlur={(e) => {
+                      setEditingNotes(false);
+                      const notes = e.target.value.trim() || null;
+                      if (notes !== (current.notes ?? null)) commit({ notes });
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingNotes(true)}
+                    className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                  >
+                    {current.notes ? (
+                      <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
+                        <ReactMarkdown>{current.notes}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Add notes…
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
+
+              <p
+                className="h-4 text-[11px] text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                {saveState === "saving"
+                  ? "Saving…"
+                  : saveState === "saved"
+                    ? "Saved"
+                    : ""}
+              </p>
             </div>
           ) : (
             <Box>
@@ -288,7 +319,7 @@ export function ReleaseDetailSheet({
           )}
         </div>
 
-        {isAdmin && !editing ? (
+        {isAdmin ? (
           <div className="flex items-center gap-2 border-t px-5 py-3">
             {shipped ? (
               <Button
@@ -316,14 +347,9 @@ export function ReleaseDetailSheet({
                 Release
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={startEdit}
-              disabled={pending}
-            >
-              Edit
-            </Button>
+            <span className="text-xs text-muted-foreground">
+              {current.itemCount} item{current.itemCount === 1 ? "" : "s"}
+            </span>
             <button
               type="button"
               onClick={remove}
@@ -336,5 +362,21 @@ export function ReleaseDetailSheet({
         ) : null}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** A compact labeled row: muted label above an inline control. */
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      {children}
+    </label>
   );
 }

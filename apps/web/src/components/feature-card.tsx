@@ -18,6 +18,11 @@ function stop(e: React.PointerEvent | React.MouseEvent) {
   e.stopPropagation();
 }
 
+/** True when a click carries a modifier that should open a link in a new tab. */
+function isModifiedClick(e: React.MouseEvent): boolean {
+  return e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
+}
+
 function customFieldText(value: CustomFieldValue): string {
   if (value === null || value === undefined) return "";
   if (Array.isArray(value)) return value.join(", ");
@@ -100,7 +105,14 @@ export function FeatureCard({
             href={orgHref(`/backlog/${feature.level}/${feature.specId}`)}
             className="hover:underline"
             onPointerDown={stop}
-            onClick={stop}
+            onClick={(e) => {
+              e.stopPropagation();
+              // Plain click opens the in-context panel; a modified click still
+              // follows the href so the full page can open in a new tab.
+              if (isModifiedClick(e)) return;
+              e.preventDefault();
+              onOpen();
+            }}
           >
             {feature.title}
           </Link>

@@ -81,6 +81,18 @@ export function ItemProperties({
   const dirtyRef = useRef(false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Track the selected status locally so the allowed-transitions list
+  // recomputes the instant it changes. The flyout keeps the same item in state
+  // across an edit (it only refetches when the specId changes), so relying on a
+  // refreshed `feature.status` would leave the dropdown showing the old stage's
+  // transitions until the panel is closed and reopened.
+  const [statusValue, setStatusValue] = useState(feature.status);
+
+  // Re-sync when the parent hands us a different item, or fresh server truth
+  // for the same one (e.g. after a refresh following a save elsewhere).
+  useEffect(() => {
+    setStatusValue(feature.status);
+  }, [feature.status]);
 
   useEffect(() => {
     return () => {
@@ -181,9 +193,14 @@ export function ItemProperties({
     >
       <PropertyRow icon={Loader} label="Status">
         <div className="flex items-center gap-2">
-          <StatusDot status={feature.status} />
-          <Select name="status" defaultValue={feature.status} className={INLINE_SELECT}>
-            {statusOptions(feature.status, workflow).map((s) => (
+          <StatusDot status={statusValue} />
+          <Select
+            name="status"
+            value={statusValue}
+            onChange={(e) => setStatusValue(e.target.value)}
+            className={INLINE_SELECT}
+          >
+            {statusOptions(statusValue, workflow).map((s) => (
               <option key={s} value={s}>
                 {statusLabel(s, workflow)}
               </option>

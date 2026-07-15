@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { CardsFieldsEditor } from "@/components/cards-fields-editor";
+import { CollapsibleSettingsGroup } from "@/components/collapsible-settings-group";
 import { DetailTemplatesManager } from "@/components/detail-templates-manager";
 import { PropertiesManager } from "@/components/properties-manager";
 import { WorkflowEditor } from "@/components/workflow-editor";
@@ -41,9 +42,11 @@ export default async function CardsSettingsPage() {
 
   return (
     <div className="space-y-8">
-      <SettingsGroup
+      <CollapsibleSettingsGroup
+        id="workflow"
         title="Workflow"
-        description="The stages an item moves through — these are your board columns. Rename a stage in place, reorder, add, or remove stages."
+        description="The stages an item moves through - these are your board columns. Rename a stage in place, reorder, add, or remove stages."
+        defaultCollapsed
       >
         <Subsection
           title="Stages"
@@ -61,11 +64,13 @@ export default async function CardsSettingsPage() {
             canEdit={canEdit}
           />
         </Subsection>
-      </SettingsGroup>
+      </CollapsibleSettingsGroup>
 
-      <SettingsGroup
+      <CollapsibleSettingsGroup
+        id="fields"
         title="Fields"
         description="What appears on cards: which built-in fields are available per level, and your own custom properties."
+        defaultCollapsed
       >
         <Subsection
           title="Built-in fields"
@@ -87,44 +92,25 @@ export default async function CardsSettingsPage() {
             canEdit={canEdit}
           />
         </Subsection>
-      </SettingsGroup>
+      </CollapsibleSettingsGroup>
 
-      <SettingsGroup
+      <CollapsibleSettingsGroup
+        id="templates"
         title="Templates"
         description="Reusable detail skeletons, assigned per level. New cards at that level start from the template."
+        defaultCollapsed
       >
         <DetailTemplatesManager
           levels={levels}
           templates={detailTemplates}
           canEdit={canEdit}
         />
-      </SettingsGroup>
+      </CollapsibleSettingsGroup>
     </div>
   );
 }
 
-/** A titled, bordered settings panel that visually separates one area from the next. */
-function SettingsGroup({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-md border">
-      <div className="border-b px-5 py-4">
-        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-      </div>
-      <div className="space-y-8 p-5">{children}</div>
-    </section>
-  );
-}
-
-/** A labeled subsection inside a {@link SettingsGroup}. */
+/** A labeled subsection inside a {@link CollapsibleSettingsGroup}. */
 function Subsection({
   title,
   description,
