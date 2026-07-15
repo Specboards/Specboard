@@ -25,6 +25,32 @@ user-controlled URL **without** going through `sender.ts`, or a logic bug in the
 guard. A network-layer egress policy contains that blast radius regardless of
 app code.
 
+## Platform constraint & decision (2026-07-15)
+
+Investigated implementing this and found the transparent "network firewall"
+option is **not feasible on the current Fly deployment**:
+
+- The runtime container runs as the unprivileged `node` user with no
+  `NET_ADMIN`, so in-container `iptables`/`nftables` egress rules can't be
+  installed.
+- A blanket "block private ranges" filter would also sever the app's **own**
+  data-plane traffic: it reaches Postgres over `*.flycast`, a **private** Fly
+  6PN IPv6 address (`fdaa::/8`). Any private-range block has to carve out the
+  6PN range precisely, and can't be applied at a layer we control here.
+- Node's `fetch`/undici do **not** auto-honor `HTTP_PROXY`, so a forward-proxy
+  sidecar only governs traffic the webhook sender is **explicitly** routed
+  through (via an undici `ProxyAgent`). It re-validates the webhook path but is
+  not a transparent catch-all for arbitrary egress.
+
+**Decision:** the shipped in-code SSRF guard (`ssrf.ts` + `sender.ts`) is the
+accepted control - it already meets the card's acceptance criteria (HTTPS-only,
+`ipaddr.js` non-global rejection, connection pinning against DNS rebinding,
+manual-redirect, regression tests). The app-routed re-validation sidecar below
+remains a documented **optional** future defense-in-depth for the webhook path
+(a second, independent check in a separate process), to be picked up as its own
+focused task with shared SSRF logic (bundled, not duplicated). The options below
+are retained for that future work and for other deployment targets.
+
 ## Goal
 
 From the app's runtime network, outbound connections to the following must be
