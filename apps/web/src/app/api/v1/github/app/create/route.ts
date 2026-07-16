@@ -88,6 +88,12 @@ export async function GET(req: Request) {
       pull_requests: "write",
       issues: "read",
       metadata: "read",
+      // Organization Members (read) lets the install-bind flow verify, via the
+      // installer's own user token, that they administer the org an installation
+      // belongs to (GET /user/memberships/orgs/{org}). Without it that lookup
+      // 403s and every org installation fails to complete. Read-only; the App
+      // never manages membership.
+      members: "read",
     },
     default_events: ["push", "pull_request", "issues"],
   };
