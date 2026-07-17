@@ -29,30 +29,27 @@ test.describe("settings: product groups", () => {
       page.locator("li").filter({ hasText: "Payments API" }),
     ).toBeVisible();
 
-    // Create a group in the Groups card. The form starts as an "Add group"
-    // affordance (see the "add" UX rule); open it before filling.
+    // Create a group. Creation starts as an "Add group" affordance (see the
+    // "add" UX rule) that opens a drawer; fill and submit it.
     await page.getByRole("button", { name: "Add group" }).click();
-    await page.getByPlaceholder("New group name").fill("Payments Platform");
-    await page.getByRole("button", { name: "Add group" }).click();
+    await page.getByLabel("Name").fill("Payments Platform");
+    await page.getByRole("button", { name: "Create group" }).click();
     const groupRow = page
       .locator("li")
       .filter({ hasText: "Payments Platform" })
       .filter({ hasText: "products" });
     await expect(groupRow.getByText("0 products")).toBeVisible();
 
-    // Assign the product to the group via the product's inline editor. In edit
-    // mode the row's name lives in an input (not text), so re-locating by text
-    // fails; the group select is unique page-wide (`name="groupId"`; the
-    // groups card's own selects use aria-label/parentId).
+    // Assign the product to the group via the product's edit drawer (the
+    // group select is unique page-wide: `name="groupId"`). The tree re-homes
+    // the product under the group, so its roll-up count ticks up.
     const productRow = page.locator("li").filter({ hasText: "Payments API" });
     await productRow.getByRole("button", { name: "Edit" }).click();
     await page
       .locator('select[name="groupId"]')
       .selectOption({ label: "Payments Platform" });
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(
-      productRow.getByText("Payments Platform", { exact: true }),
-    ).toBeVisible();
+    await expect(groupRow.getByText("1 product", { exact: true })).toBeVisible();
 
     // The switcher now offers the group scope; selecting it lands on the
     // group-scoped backlog under the `~key` segment.
@@ -85,10 +82,10 @@ test.describe("settings: product groups", () => {
     await page.getByRole("button", { name: "Create product" }).click();
     const cardsRow = page.locator("li").filter({ hasText: "Cards" });
     await expect(cardsRow).toBeVisible();
-    // Open the "Add group" affordance before filling the group form.
+    // Open the "Add group" affordance (a drawer) before filling the form.
     await page.getByRole("button", { name: "Add group" }).click();
-    await page.getByPlaceholder("New group name").fill("Retail");
-    await page.getByRole("button", { name: "Add group" }).click();
+    await page.getByLabel("Name").fill("Retail");
+    await page.getByRole("button", { name: "Create group" }).click();
     await cardsRow.getByRole("button", { name: "Edit" }).click();
     await page
       .locator('select[name="groupId"]')
