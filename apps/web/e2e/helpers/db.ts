@@ -11,7 +11,10 @@ import {
   ideaStatuses,
   ideas,
   isNull,
+  ne,
   outboxEvents,
+  productGroups,
+  products,
   releases,
   repositories,
   schema,
@@ -73,6 +76,21 @@ export async function resetBoard(workspaceId: string): Promise<void> {
 /** Remove every release in the workspace (items are unscheduled by SET NULL). */
 export async function resetReleases(workspaceId: string): Promise<void> {
   await db().delete(releases).where(eq(releases.workspaceId, workspaceId));
+}
+
+/** Remove every product group and every non-default product (test-created
+ * products carry no items, so the delete is unblocked). */
+export async function resetProductGroups(workspaceId: string): Promise<void> {
+  await db()
+    .update(products)
+    .set({ groupId: null })
+    .where(eq(products.workspaceId, workspaceId));
+  await db()
+    .delete(productGroups)
+    .where(eq(productGroups.workspaceId, workspaceId));
+  await db()
+    .delete(products)
+    .where(and(eq(products.workspaceId, workspaceId), ne(products.key, "default")));
 }
 
 /** Remove every idea, review stage, and portal setting in the workspace. */

@@ -4,6 +4,8 @@ import path from "node:path";
 
 import {
   DEFAULT_PRODUCT_KEY,
+  descendantGroupIds,
+  groupKeyFromName,
   isLeafLevel,
   isPropertyType,
   isValidParentLevel,
@@ -11,6 +13,8 @@ import {
   LOCAL_PRODUCT_ACCESS,
   parseSpec,
   productKeyFromName,
+  wouldCreateCycle,
+  wouldExceedDepth,
   promotedIdeaStatus,
   propertyKeyFromLabel,
   resolveIdeaStages,
@@ -25,6 +29,7 @@ import {
   compareReleases,
   DetailTemplateError,
   FeatureError,
+  GroupError,
   LevelError,
   ProductError,
   PropertyError,
@@ -34,6 +39,7 @@ import {
   type BoardKey,
   type BoardPreferences,
   type CreateFeatureInput,
+  type CreateProductGroupInput,
   type CreateProductInput,
   type DetailTemplate,
   type DetailTemplateInput,
@@ -60,7 +66,11 @@ import {
   type IdeaRecord,
   type IdeaSettings,
   type IdeaSettingsPatch,
+  type GroupProductSummary,
+  type GroupSummary,
   type ProductAccess,
+  type ProductGroupPatch,
+  type ProductGroupRecord,
   type ProductMemberInput,
   type ProductMemberRecord,
   type ProductPatch,
@@ -145,6 +155,18 @@ interface LocalProduct {
   visibility: "org" | "private";
   position: number;
   color?: string | null;
+  groupId?: string | null;
+}
+
+/** A product group persisted in local file mode. */
+interface LocalProductGroup {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  parentId: string | null;
+  position: number;
 }
 
 /** The default product seeded when none is persisted (id is stable). */
@@ -325,6 +347,29 @@ export class LocalFileStore implements FeatureStore {
     await fs.mkdir(path.dirname(this.productsPath), { recursive: true });
     await fs.writeFile(
       this.productsPath,
+      JSON.stringify(rows, null, 2) + "\n",
+      "utf8",
+    );
+  }
+
+  private get productGroupsPath() {
+    return path.join(this.root, ".specboard", "local-product-groups.json");
+  }
+
+  private async readGroups(): Promise<LocalProductGroup[]> {
+    try {
+      return JSON.parse(
+        await fs.readFile(this.productGroupsPath, "utf8"),
+      ) as LocalProductGroup[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeGroups(rows: LocalProductGroup[]): Promise<void> {
+    await fs.mkdir(path.dirname(this.productGroupsPath), { recursive: true });
+    await fs.writeFile(
+      this.productGroupsPath,
       JSON.stringify(rows, null, 2) + "\n",
       "utf8",
     );
@@ -1384,6 +1429,7 @@ export class LocalFileStore implements FeatureStore {
       visibility: p.visibility,
       position: p.position,
       color: p.color ?? null,
+      groupId: p.groupId ?? null,
       itemCount: counts.get(p.id) ?? 0,
       viewerRole: null,
     };
@@ -1447,8 +1493,176 @@ export class LocalFileStore implements FeatureStore {
     if (patch.visibility !== undefined) p.visibility = patch.visibility;
     if (patch.position !== undefined) p.position = patch.position;
     if (patch.color !== undefined) p.color = patch.color;
+    if (patch.groupId !== undefined) {
+      if (patch.groupId !== null) {
+        const groups = await this.readGroups();
+        if (!groups.some((g) => g.id === patch.groupId)) {
+          throw new GroupError(`Unknown product group: ${patch.groupId}`);
+        }
+      }
+      p.groupId = patch.groupId;
+    }
     await this.writeProducts(products);
     return this.toProductRecord(p, await this.productItemCounts());
+  }
+
+  async listProductGroups(
+    _scope?: WorkspaceScope,
+  ): Promise<ProductGroupRecord[]> {
+    const [groups, products] = await Promise.all([
+      this.readGroups(),
+      this.readProducts(),
+    ]);
+    return groups
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+      .map((g) => ({
+        ...g,
+        productCount: products.filter((p) => p.groupId === g.id).length,
+      }));
+  }
+
+  async createProductGroup(
+    input: CreateProductGroupInput,
+    _scope?: WorkspaceScope,
+  ): Promise<ProductGroupRecord> {
+    const name = input.name.trim();
+    if (!name) throw new GroupError("Group name is required.");
+    const groups = await this.readGroups();
+    const parentId = input.parentId ?? null;
+    if (parentId) {
+      if (!groups.some((g) => g.id === parentId)) {
+        throw new GroupError(`Unknown product group: ${parentId}`);
+      }
+      if (wouldExceedDepth(groups, "new-group", parentId)) {
+        throw new GroupError("Groups can only be nested a few levels deep.");
+      }
+    }
+    const group: LocalProductGroup = {
+      id: randomUUID(),
+      key: groupKeyFromName(name, new Set(groups.map((g) => g.key))),
+      name,
+      description: input.description ?? null,
+      color: input.color ?? null,
+      parentId,
+      position: groups.reduce((m, g) => Math.max(m, g.position), -1) + 1,
+    };
+    await this.writeGroups([...groups, group]);
+    return { ...group, productCount: 0 };
+  }
+
+  async updateProductGroup(
+    id: string,
+    patch: ProductGroupPatch,
+    _scope?: WorkspaceScope,
+  ): Promise<ProductGroupRecord> {
+    const groups = await this.readGroups();
+    const g = groups.find((x) => x.id === id);
+    if (!g) throw new GroupError(`Unknown product group: ${id}`);
+    if (patch.name !== undefined) {
+      const name = patch.name.trim();
+      if (!name) throw new GroupError("Group name is required.");
+      g.name = name;
+    }
+    if (patch.description !== undefined) g.description = patch.description;
+    if (patch.color !== undefined) g.color = patch.color;
+    if (patch.position !== undefined) g.position = patch.position;
+    if (patch.parentId !== undefined) {
+      if (patch.parentId !== null) {
+        if (!groups.some((x) => x.id === patch.parentId)) {
+          throw new GroupError(`Unknown product group: ${patch.parentId}`);
+        }
+        if (wouldCreateCycle(groups, id, patch.parentId)) {
+          throw new GroupError(
+            "A group can't be nested inside itself or its own subgroups.",
+          );
+        }
+        if (wouldExceedDepth(groups, id, patch.parentId)) {
+          throw new GroupError("Groups can only be nested a few levels deep.");
+        }
+      }
+      g.parentId = patch.parentId;
+    }
+    await this.writeGroups(groups);
+    const products = await this.readProducts();
+    return {
+      ...g,
+      productCount: products.filter((p) => p.groupId === g.id).length,
+    };
+  }
+
+  async deleteProductGroup(id: string, _scope?: WorkspaceScope): Promise<void> {
+    const groups = await this.readGroups();
+    if (!groups.some((g) => g.id === id)) {
+      throw new GroupError(`Unknown product group: ${id}`);
+    }
+    if (groups.some((g) => g.parentId === id)) {
+      throw new GroupError("Can't delete a group while it still has subgroups.");
+    }
+    const products = await this.readProducts();
+    if (products.some((p) => p.groupId === id)) {
+      throw new GroupError("Can't delete a group while it still has products.");
+    }
+    await this.writeGroups(groups.filter((g) => g.id !== id));
+  }
+
+  async getGroupSummary(
+    id: string,
+    _scope?: WorkspaceScope,
+  ): Promise<GroupSummary> {
+    const [groups, products, allFeatures] = await Promise.all([
+      this.readGroups(),
+      this.readProducts(),
+      this.loadAll(),
+    ]);
+    const group = groups.find((g) => g.id === id);
+    if (!group) throw new GroupError(`Unknown product group: ${id}`);
+
+    const subtree = descendantGroupIds(groups, id);
+    const member = products.filter((p) => p.groupId && subtree.has(p.groupId));
+    const summaries = new Map<string, GroupProductSummary>(
+      member.map((p) => [
+        p.id,
+        { productId: p.id, itemCount: 0, statusCounts: {}, releases: [] },
+      ]),
+    );
+    const releaseTotals = new Map<string, Map<string, { total: number; done: number }>>();
+    for (const f of allFeatures) {
+      if (!f.productId) continue;
+      const summary = summaries.get(f.productId);
+      if (!summary) continue;
+      summary.itemCount += 1;
+      summary.statusCounts[f.status] = (summary.statusCounts[f.status] ?? 0) + 1;
+      if (f.releaseId) {
+        const byRelease =
+          releaseTotals.get(f.productId) ??
+          new Map<string, { total: number; done: number }>();
+        releaseTotals.set(f.productId, byRelease);
+        const entry = byRelease.get(f.releaseId) ?? { total: 0, done: 0 };
+        entry.total += 1;
+        if (f.status === "done") entry.done += 1;
+        byRelease.set(f.releaseId, entry);
+      }
+    }
+    for (const [productId, byRelease] of releaseTotals) {
+      const summary = summaries.get(productId);
+      if (!summary) continue;
+      summary.releases = [...byRelease.entries()].map(
+        ([releaseId, { total, done }]) => ({ releaseId, total, done }),
+      );
+    }
+
+    const productCount = (gid: string) =>
+      products.filter((p) => p.groupId === gid).length;
+    return {
+      group: { ...group, productCount: productCount(group.id) },
+      subgroups: groups
+        .filter((g) => g.parentId === id)
+        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+        .map((g) => ({ ...g, productCount: productCount(g.id) })),
+      products: [...member]
+        .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+        .map((p) => summaries.get(p.id)!),
+    };
   }
 
   async deleteProduct(id: string, _scope?: WorkspaceScope): Promise<void> {

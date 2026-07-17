@@ -12,15 +12,18 @@ import {
   importWorkspaceSpecs,
   listInstallationRepositories,
   scanWorkspaceSpecs,
+  setRepositoryProducts,
   type CreatedSpecRepo,
   type ImportResult,
   type InstallationConnectState,
   type InstallationRepo,
+  type RepoProductLinksPayload,
   type RepoScan,
   type StarterSpecResult,
   type SyncResult,
   type WorkspaceInstallation,
 } from "@/lib/api-client";
+import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -45,6 +48,12 @@ export interface ConnectedRepo {
 
 export type SetupNotice = { kind: "ok" | "error"; message: string } | null;
 
+/** A product option for the per-repo link editor. */
+export interface RepoProductOption {
+  id: string;
+  name: string;
+}
+
 interface RepositoriesManagerProps {
   repos: ConnectedRepo[];
   /** Whether the viewer (admin) may set up / connect / re-sync repositories. */
@@ -60,20 +69,34 @@ interface RepositoriesManagerProps {
   notice: SetupNotice;
   /** Server-prefetched connect-picker state, so it renders without a pop-in. */
   installations: InstallationConnectState;
+  /** The workspace's products (viewer-readable), for the repo link editor. */
+  products?: RepoProductOption[];
+  /** Each repo's product links, keyed by repo id (absent repo = link-less). */
+  links?: Record<string, RepoProductLinksPayload>;
 }
 
 /** The workspace's organization installation to target for repo creation. */
-function orgInstallationOf(installations: WorkspaceInstallation[]): string | null {
-  return installations.find((i) => i.accountType === "Organization")?.installationId ?? null;
+function orgInstallationOf(
+  installations: WorkspaceInstallation[],
+): string | null {
+  return (
+    installations.find((i) => i.accountType === "Organization")
+      ?.installationId ?? null
+  );
 }
 
 type Status = { kind: "ok" | "error"; message: string } | null;
 
-function syncMessage(sync: SyncResult | { error: string }): { kind: "ok" | "error"; message: string } {
+function syncMessage(sync: SyncResult | { error: string }): {
+  kind: "ok" | "error";
+  message: string;
+} {
   if ("error" in sync) return { kind: "error", message: sync.error };
   const parts = [`${sync.upserted} imported`, `${sync.skipped} unchanged`];
-  if (sync.idsInjected > 0) parts.push(`${sync.idsInjected} stable id(s) assigned`);
-  if (sync.featuresCreated > 0) parts.push(`${sync.featuresCreated} feature(s) created`);
+  if (sync.idsInjected > 0)
+    parts.push(`${sync.idsInjected} stable id(s) assigned`);
+  if (sync.featuresCreated > 0)
+    parts.push(`${sync.featuresCreated} feature(s) created`);
   return { kind: "ok", message: parts.join(" · ") };
 }
 
@@ -85,6 +108,8 @@ export function RepositoriesManager({
   installUrl,
   notice,
   installations,
+  products = [],
+  links = {},
 }: RepositoriesManagerProps) {
   // Bumped after a repo is connected so the import panel re-scans for new specs.
   const [scanNonce, setScanNonce] = useState(0);
@@ -95,8 +120,8 @@ export function RepositoriesManager({
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Repositories</h1>
         <p className="text-sm text-muted-foreground">
-          Specboard imports <code>specs/**/spec.md</code> from connected repositories and keeps the
-          board in sync on every push.
+          Specboard imports <code>specs/**/spec.md</code> from connected
+          repositories and keeps the board in sync on every push.
         </p>
       </div>
 
@@ -112,7 +137,13 @@ export function RepositoriesManager({
         </p>
       ) : null}
 
-      <RepoList repos={repos} canResync={canConnect && configured} canManage={canConnect} />
+      <RepoList
+        repos={repos}
+        canResync={canConnect && configured}
+        canManage={canConnect}
+        products={products}
+        links={links}
+      />
 
       {canConnect && configured && repos.length > 0 ? (
         <SpecImportPanel
@@ -172,7 +203,10 @@ function SpecImportPanel({
   const boardPath = useOrgProductPath();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scan, setScan] = useState<{ repos: RepoScan[]; totalSpecs: number } | null>(null);
+  const [scan, setScan] = useState<{
+    repos: RepoScan[];
+    totalSpecs: number;
+  } | null>(null);
   const [importing, startImport] = useTransition();
   const [result, setResult] = useState<ImportResult | null>(null);
 
@@ -217,26 +251,38 @@ function SpecImportPanel({
       <CardHeader>
         <CardTitle>Import your specs</CardTitle>
         <CardDescription>
-          We scan your connected repositories for <code>spec.md</code> files and turn each one into a
-          work item on your board. Nothing is created until you confirm.
+          We scan your connected repositories for <code>spec.md</code> files and
+          turn each one into a work item on your board. Nothing is created until
+          you confirm.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {loading && !scan ? (
           <div className="space-y-2" aria-busy="true">
-            <p className="text-xs text-muted-foreground">Scanning your repositories for specs…</p>
+            <p className="text-xs text-muted-foreground">
+              Scanning your repositories for specs…
+            </p>
             <Skeleton className="h-9 w-full" />
             <Skeleton className="h-9 w-3/4" />
           </div>
         ) : error ? (
           <div className="space-y-2">
             <p className="text-xs text-destructive">{error}</p>
-            <Button size="sm" variant="outline" onClick={() => void rescan()} disabled={loading}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void rescan()}
+              disabled={loading}
+            >
               {loading ? "…" : "Try again"}
             </Button>
           </div>
         ) : result ? (
-          <ImportResultView result={result} boardHref={boardPath("/backlog")} onRescan={() => void rescan()} />
+          <ImportResultView
+            result={result}
+            boardHref={boardPath("/backlog")}
+            onRescan={() => void rescan()}
+          />
         ) : totalSpecs === 0 ? (
           <EmptySpecsState
             repos={repos}
@@ -250,15 +296,22 @@ function SpecImportPanel({
         ) : (
           <div className="space-y-3">
             <p className="text-sm">
-              We found <strong>{totalSpecs}</strong> spec{totalSpecs === 1 ? "" : "s"} across your
-              connected repositories.
+              We found <strong>{totalSpecs}</strong> spec
+              {totalSpecs === 1 ? "" : "s"} across your connected repositories.
             </p>
             <SpecScanList repos={scan!.repos} />
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={runImport} disabled={importing}>
-                {importing ? "Creating…" : `Create ${totalSpecs} card${totalSpecs === 1 ? "" : "s"}`}
+                {importing
+                  ? "Creating…"
+                  : `Create ${totalSpecs} card${totalSpecs === 1 ? "" : "s"}`}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => void rescan()} disabled={importing || loading}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void rescan()}
+                disabled={importing || loading}
+              >
                 Rescan
               </Button>
             </div>
@@ -295,9 +348,14 @@ function SpecScanList({ repos }: { repos: RepoScan[] }) {
             </p>
             <ul className="divide-y rounded-md border">
               {shown.map((spec) => (
-                <li key={spec.path} className="flex items-center justify-between gap-3 px-3 py-2">
+                <li
+                  key={spec.path}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
                   <span className="min-w-0 truncate text-sm">{spec.title}</span>
-                  <code className="shrink-0 text-[11px] text-muted-foreground">{spec.path}</code>
+                  <code className="shrink-0 text-[11px] text-muted-foreground">
+                    {spec.path}
+                  </code>
                 </li>
               ))}
             </ul>
@@ -331,7 +389,8 @@ function ImportResultView({
         {created > 0 ? (
           <>
             {" "}
-            and created <strong>{created}</strong> feature group{created === 1 ? "" : "s"}
+            and created <strong>{created}</strong> feature group
+            {created === 1 ? "" : "s"}
           </>
         ) : null}
         .
@@ -339,7 +398,10 @@ function ImportResultView({
       {result.errors.length > 0 ? (
         <div className="space-y-1">
           {result.errors.map((e) => (
-            <p key={`${e.owner}/${e.name}`} className="text-xs text-destructive">
+            <p
+              key={`${e.owner}/${e.name}`}
+              className="text-xs text-destructive"
+            >
               {e.owner}/{e.name}: {e.error}
             </p>
           ))}
@@ -410,7 +472,11 @@ function EmptySpecsState({
         setCreated(result);
         router.refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't create the starter spec.");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Couldn't create the starter spec.",
+        );
       }
     });
   }
@@ -422,7 +488,8 @@ function EmptySpecsState({
           Committed <code>{created.path}</code>
           {targetRepo ? (
             <>
-              {" "}to{" "}
+              {" "}
+              to{" "}
               <span className="font-medium">
                 {targetRepo.owner}/{targetRepo.name}
               </span>
@@ -445,15 +512,19 @@ function EmptySpecsState({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm">We didn&apos;t find any specs in your connected repositories yet.</p>
+      <p className="text-sm">
+        We didn&apos;t find any specs in your connected repositories yet.
+      </p>
       <p className="text-xs text-muted-foreground">
         Let&apos;s create your first one. We&apos;ll commit a starter{" "}
-        <code>specs/&lt;feature&gt;/spec.md</code> to your repo and turn it into a card, so you can
-        see how specs and the board stay in sync.
+        <code>specs/&lt;feature&gt;/spec.md</code> to your repo and turn it into
+        a card, so you can see how specs and the board stay in sync.
       </p>
       <form onSubmit={submit} className="space-y-3">
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Feature name</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            Feature name
+          </span>
           <Input
             value={featureName}
             onChange={(e) => setFeatureName(e.target.value)}
@@ -463,7 +534,9 @@ function EmptySpecsState({
         </label>
         {repos.length > 1 ? (
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Repository</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Repository
+            </span>
             <select
               value={repoId}
               onChange={(e) => setPickedRepoId(e.target.value)}
@@ -471,7 +544,11 @@ function EmptySpecsState({
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
             >
               {[...repos]
-                .sort((a, b) => Number(b.isSpecRepo ?? false) - Number(a.isSpecRepo ?? false))
+                .sort(
+                  (a, b) =>
+                    Number(b.isSpecRepo ?? false) -
+                    Number(a.isSpecRepo ?? false),
+                )
                 .map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.owner}/{r.name}
@@ -539,21 +616,39 @@ function CreateSpecRepoNudge({
         Prefer a dedicated repo just for specs?
       </summary>
       <div className="mt-3 space-y-3 text-xs text-muted-foreground">
-        <p>Keep your specs in their own repository, separate from application code.</p>
+        <p>
+          Keep your specs in their own repository, separate from application
+          code.
+        </p>
         {orgInstallationId ? (
-          <CreateSpecRepoForm installationId={orgInstallationId} onCreated={onCreated} />
+          <CreateSpecRepoForm
+            installationId={orgInstallationId}
+            onCreated={onCreated}
+          />
         ) : null}
-        {orgInstallationId ? <p className="font-medium">Or do it yourself:</p> : null}
+        {orgInstallationId ? (
+          <p className="font-medium">Or do it yourself:</p>
+        ) : null}
         <ol className="list-decimal space-y-1 pl-4">
           <li>
-            <a href={newRepoUrl} target="_blank" rel="noreferrer" className="underline">
+            <a
+              href={newRepoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
               Create a repo on GitHub
             </a>{" "}
             (we suggest naming it <code>specs</code>).
           </li>
           <li>
             {installUrl ? (
-              <a href={installUrl} target="_blank" rel="noreferrer" className="underline">
+              <a
+                href={installUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
                 Install Specboard
               </a>
             ) : (
@@ -598,12 +693,19 @@ function CreateSpecRepoForm({
     startTransition(async () => {
       setError(null);
       try {
-        const result = await createSpecRepository({ name: repoName, installationId });
+        const result = await createSpecRepository({
+          name: repoName,
+          installationId,
+        });
         setCreated(result);
         router.refresh();
         onCreated();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Couldn't create the repository.");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Couldn't create the repository.",
+        );
       }
     });
   }
@@ -612,7 +714,12 @@ function CreateSpecRepoForm({
     return (
       <p>
         Created and connected{" "}
-        <a href={created.htmlUrl} target="_blank" rel="noreferrer" className="underline">
+        <a
+          href={created.htmlUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="underline"
+        >
           {created.owner}/{created.name}
         </a>
         . Now create your first spec in it below.
@@ -622,7 +729,10 @@ function CreateSpecRepoForm({
 
   return (
     <form onSubmit={submit} className="space-y-2">
-      <p>We can create a private repo in your GitHub organization and connect it for you.</p>
+      <p>
+        We can create a private repo in your GitHub organization and connect it
+        for you.
+      </p>
       <div className="flex items-center gap-2">
         <Input
           value={name}
@@ -652,17 +762,28 @@ function SetupGitHubCard() {
       <CardHeader>
         <CardTitle>Connect Specboard to GitHub</CardTitle>
         <CardDescription>
-          We&apos;ll create a GitHub App on your account or organization in one click, and you
-          confirm on GitHub. After that you can install it on repositories and sync specs.
+          We&apos;ll create a GitHub App on your account or organization in one
+          click, and you confirm on GitHub. After that you can install it on
+          repositories and sync specs.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action="/api/v1/github/app/create" method="get" className="space-y-4">
+        <form
+          action="/api/v1/github/app/create"
+          method="get"
+          className="space-y-4"
+        >
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">
-              GitHub organization <span className="font-normal">(optional)</span>
+              GitHub organization{" "}
+              <span className="font-normal">(optional)</span>
             </span>
-            <Input name="org" placeholder="your-org" autoCapitalize="none" autoCorrect="off" />
+            <Input
+              name="org"
+              placeholder="your-org"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
             <span className="block text-xs text-muted-foreground">
               Leave blank to create it on your personal GitHub account.
             </span>
@@ -685,8 +806,9 @@ function HostedNotConfiguredCard() {
       <CardHeader>
         <CardTitle>GitHub isn&apos;t available yet</CardTitle>
         <CardDescription>
-          GitHub is managed by Specboard on the hosted plan. If you don&apos;t see the option to
-          install it, please contact support and we&apos;ll get you connected.
+          GitHub is managed by Specboard on the hosted plan. If you don&apos;t
+          see the option to install it, please contact support and we&apos;ll
+          get you connected.
         </CardDescription>
       </CardHeader>
     </Card>
@@ -697,24 +819,38 @@ function RepoList({
   repos,
   canResync,
   canManage,
+  products,
+  links,
 }: {
   repos: ConnectedRepo[];
   canResync: boolean;
   canManage: boolean;
+  products: RepoProductOption[];
+  links: Record<string, RepoProductLinksPayload>;
 }) {
   if (repos.length === 0) {
     return (
-      <Card>
-        <CardContent className="py-6 text-sm text-muted-foreground">
-          No repositories connected yet.
-        </CardContent>
-      </Card>
+      <EmptyState
+        title="No repositories connected"
+        description={
+          canManage
+            ? "Specboard reads your specs from a connected GitHub repository. Connect one using the section below to import every spec and keep this list in sync on each push."
+            : "Specboard reads your specs from a connected GitHub repository. Once an admin connects one, it appears here."
+        }
+      />
     );
   }
   return (
     <div className="space-y-3">
       {repos.map((repo) => (
-        <RepoRow key={repo.id} repo={repo} canResync={canResync} canManage={canManage} />
+        <RepoRow
+          key={repo.id}
+          repo={repo}
+          canResync={canResync}
+          canManage={canManage}
+          products={products}
+          links={links[repo.id] ?? null}
+        />
       ))}
     </div>
   );
@@ -724,15 +860,21 @@ function RepoRow({
   repo,
   canResync,
   canManage,
+  products,
+  links: initialLinks,
 }: {
   repo: ConnectedRepo;
   canResync: boolean;
   canManage: boolean;
+  products: RepoProductOption[];
+  links: RepoProductLinksPayload | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<Status>(null);
   const [confirming, setConfirming] = useState(false);
+  const [editingProducts, setEditingProducts] = useState(false);
+  const [links, setLinks] = useState(initialLinks);
 
   function resync() {
     startTransition(async () => {
@@ -744,10 +886,15 @@ function RepoRow({
           name: repo.name,
           defaultBranch: repo.defaultBranch,
         });
-        setStatus(sync ? syncMessage(sync) : { kind: "ok", message: "Re-synced." });
+        setStatus(
+          sync ? syncMessage(sync) : { kind: "ok", message: "Re-synced." },
+        );
         router.refresh();
       } catch (err) {
-        setStatus({ kind: "error", message: err instanceof Error ? err.message : "Re-sync failed." });
+        setStatus({
+          kind: "error",
+          message: err instanceof Error ? err.message : "Re-sync failed.",
+        });
       }
     });
   }
@@ -768,65 +915,242 @@ function RepoRow({
     });
   }
 
+  const nameById = new Map(products.map((p) => [p.id, p.name]));
+  const linkedNames = (links?.productIds ?? [])
+    .map((id) => ({
+      id,
+      name: nameById.get(id) ?? "Unknown product",
+      isDefault: id === links?.defaultProductId,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.isDefault) - Number(a.isDefault) ||
+        a.name.localeCompare(b.name),
+    );
+
   return (
     <Card>
-      <CardContent className="flex items-center justify-between gap-4 py-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">
-            {repo.owner}/{repo.name}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Branch <code>{repo.defaultBranch}</code>
-            {status ? (
-              <>
-                {" · "}
-                <span className={status.kind === "error" ? "text-destructive" : ""}>
-                  {status.message}
-                </span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {confirming ? (
-            <>
-              <span className="text-xs text-muted-foreground">
-                Stop syncing? Imported items stay on the board.
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setConfirming(false)}
-                disabled={pending}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" variant="destructive" onClick={disconnect} disabled={pending}>
-                {pending ? "…" : "Disconnect"}
-              </Button>
-            </>
-          ) : (
-            <>
-              {canResync ? (
-                <Button size="sm" variant="outline" onClick={resync} disabled={pending}>
-                  {pending ? "…" : "Re-sync"}
-                </Button>
+      <CardContent className="space-y-3 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">
+              {repo.owner}/{repo.name}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Branch <code>{repo.defaultBranch}</code>
+              {status ? (
+                <>
+                  {" · "}
+                  <span
+                    className={
+                      status.kind === "error" ? "text-destructive" : ""
+                    }
+                  >
+                    {status.message}
+                  </span>
+                </>
               ) : null}
-              {canManage ? (
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {confirming ? (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  Stop syncing? Imported items stay on the board.
+                </span>
                 <Button
                   size="sm"
-                  variant="ghost"
-                  onClick={() => setConfirming(true)}
+                  variant="outline"
+                  onClick={() => setConfirming(false)}
                   disabled={pending}
                 >
-                  Disconnect
+                  Cancel
                 </Button>
-              ) : null}
-            </>
-          )}
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={disconnect}
+                  disabled={pending}
+                >
+                  {pending ? "…" : "Disconnect"}
+                </Button>
+              </>
+            ) : (
+              <>
+                {canManage && products.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditingProducts((v) => !v)}
+                    disabled={pending}
+                  >
+                    Products
+                  </Button>
+                ) : null}
+                {canResync ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={resync}
+                    disabled={pending}
+                  >
+                    {pending ? "…" : "Re-sync"}
+                  </Button>
+                ) : null}
+                {canManage ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setConfirming(true)}
+                    disabled={pending}
+                  >
+                    Disconnect
+                  </Button>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
+        {linkedNames.length > 0 ? (
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {linkedNames.map((p) => (
+              <span key={p.id} className="rounded-full border px-2 py-0.5">
+                {p.name}
+                {p.isDefault ? " ★" : ""}
+              </span>
+            ))}
+            <span>★ = new specs land here</span>
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Unassigned: new specs land in the workspace&apos;s default product.
+          </p>
+        )}
+        {editingProducts && canManage ? (
+          <RepoProductsEditor
+            repoId={repo.id}
+            products={products}
+            links={links}
+            onSaved={(next) => {
+              setLinks(next);
+              setEditingProducts(false);
+            }}
+            onCancel={() => setEditingProducts(false)}
+          />
+        ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Inline editor for a repo's product links: check the products this repo
+ * feeds, pick the default (where sync puts newly discovered specs). Clearing
+ * every product is allowed; the repo then falls back to the workspace's
+ * default product.
+ */
+function RepoProductsEditor({
+  repoId,
+  products,
+  links,
+  onSaved,
+  onCancel,
+}: {
+  repoId: string;
+  products: RepoProductOption[];
+  links: RepoProductLinksPayload | null;
+  onSaved: (links: RepoProductLinksPayload) => void;
+  onCancel: () => void;
+}) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(links?.productIds ?? []),
+  );
+  const [defaultId, setDefaultId] = useState<string | null>(
+    links?.defaultProductId ?? null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        // The default must stay one of the linked products.
+        if (defaultId === id) {
+          setDefaultId([...next][0] ?? null);
+        }
+      } else {
+        next.add(id);
+        if (!defaultId) setDefaultId(id);
+      }
+      return next;
+    });
+  }
+
+  function onSave() {
+    startTransition(async () => {
+      setError(null);
+      try {
+        const next = await setRepositoryProducts(repoId, {
+          productIds: [...selected],
+          defaultProductId: selected.size > 0 ? defaultId : null,
+        });
+        onSaved(next);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Save failed.");
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-xs font-medium text-muted-foreground">
+        Products this repo feeds; the default is where its new specs land.
+      </p>
+      <ul className="space-y-1">
+        {products.map((p) => {
+          const checked = selected.has(p.id);
+          return (
+            <li key={p.id} className="flex items-center gap-3 text-sm">
+              <label className="flex flex-1 items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(p.id)}
+                />
+                {p.name}
+              </label>
+              <label
+                className={`flex items-center gap-1 text-xs ${
+                  checked ? "text-muted-foreground" : "text-muted-foreground/40"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`default-${repoId}`}
+                  checked={defaultId === p.id}
+                  disabled={!checked}
+                  onChange={() => setDefaultId(p.id)}
+                />
+                default
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <div className="flex gap-2">
+        <Button size="sm" onClick={onSave} disabled={pending}>
+          {pending ? "Saving…" : "Save"}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel} disabled={pending}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -855,7 +1179,9 @@ function ConnectSection({
   const [installations, setInstallations] = useState<WorkspaceInstallation[]>(
     initial.installations,
   );
-  const [available, setAvailable] = useState<InstallationRepo[]>(initial.repositories);
+  const [available, setAvailable] = useState<InstallationRepo[]>(
+    initial.repositories,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -866,35 +1192,41 @@ function ConnectSection({
       setAvailable(state.repositories);
       setLoadError(state.error);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Couldn't load repositories.");
+      setLoadError(
+        err instanceof Error ? err.message : "Couldn't load repositories.",
+      );
     } finally {
       setLoading(false);
     }
   }, []);
 
   const hasInstallation = installations.length > 0;
-  const connectedKeys = new Set(connected.map((r) => `${r.owner}/${r.name}`.toLowerCase()));
+  const connectedKeys = new Set(
+    connected.map((r) => `${r.owner}/${r.name}`.toLowerCase()),
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Connect a repository</CardTitle>
         <CardDescription>
-          Install the Specboard GitHub App on the repositories you want to sync, then connect them
-          here. No copying ids by hand.
+          Install the Specboard GitHub App on the repositories you want to sync,
+          then connect them here. No copying ids by hand.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {installUrl ? (
           <a href={installUrl} className="inline-flex">
             <Button type="button">
-              {hasInstallation ? "Add or manage repositories on GitHub" : "Connect GitHub"}
+              {hasInstallation
+                ? "Add or manage repositories on GitHub"
+                : "Connect GitHub"}
             </Button>
           </a>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Set <code>NEXT_PUBLIC_GITHUB_APP_SLUG</code> to enable the one-click GitHub install, or
-            use manual entry below.
+            Set <code>NEXT_PUBLIC_GITHUB_APP_SLUG</code> to enable the one-click
+            GitHub install, or use manual entry below.
           </p>
         )}
 
@@ -905,7 +1237,9 @@ function ConnectSection({
           </div>
         ) : (
           <>
-            {loadError ? <p className="text-xs text-destructive">{loadError}</p> : null}
+            {loadError ? (
+              <p className="text-xs text-destructive">{loadError}</p>
+            ) : null}
             {hasInstallation ? (
               <RepoPicker
                 repos={available}
@@ -948,19 +1282,24 @@ function RepoPicker({
   if (repos.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        The App is installed, but you haven&apos;t granted it access to any repositories yet.
+        The App is installed, but you haven&apos;t granted it access to any
+        repositories yet.
       </p>
     );
   }
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">Available repositories</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        Available repositories
+      </p>
       <div className="divide-y rounded-md border">
         {repos.map((repo) => (
           <PickerRow
             key={`${repo.owner}/${repo.name}`}
             repo={repo}
-            alreadyConnected={connectedKeys.has(`${repo.owner}/${repo.name}`.toLowerCase())}
+            alreadyConnected={connectedKeys.has(
+              `${repo.owner}/${repo.name}`.toLowerCase(),
+            )}
             onConnected={onConnected}
           />
         ))}
@@ -999,7 +1338,10 @@ function PickerRow({
         router.refresh();
         onConnected();
       } catch (err) {
-        setStatus({ kind: "error", message: err instanceof Error ? err.message : "Connect failed." });
+        setStatus({
+          kind: "error",
+          message: err instanceof Error ? err.message : "Connect failed.",
+        });
       }
     });
   }
@@ -1014,7 +1356,9 @@ function PickerRow({
           ) : null}
         </p>
         {status ? (
-          <p className={`text-xs ${status.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+          <p
+            className={`text-xs ${status.kind === "error" ? "text-destructive" : "text-muted-foreground"}`}
+          >
             {status.message}
           </p>
         ) : null}
@@ -1022,7 +1366,12 @@ function PickerRow({
       {alreadyConnected ? (
         <span className="text-xs text-muted-foreground">Connected</span>
       ) : (
-        <Button size="sm" variant="outline" onClick={connect} disabled={pending}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={connect}
+          disabled={pending}
+        >
           {pending ? "…" : "Connect"}
         </Button>
       )}
@@ -1045,7 +1394,10 @@ function ManualConnectForm() {
     const defaultBranch = String(data.get("defaultBranch") ?? "").trim();
 
     if (!installationId || !owner || !name) {
-      setStatus({ kind: "error", message: "Installation ID, owner, and name are required." });
+      setStatus({
+        kind: "error",
+        message: "Installation ID, owner, and name are required.",
+      });
       return;
     }
 
@@ -1058,18 +1410,26 @@ function ManualConnectForm() {
           name,
           defaultBranch: defaultBranch || undefined,
         });
-        const msg = sync ? syncMessage(sync) : { kind: "ok" as const, message: "Connected." };
+        const msg = sync
+          ? syncMessage(sync)
+          : { kind: "ok" as const, message: "Connected." };
         setStatus(
           msg.kind === "ok"
             ? { kind: "ok", message: `Connected. ${msg.message}.` }
-            : { kind: "error", message: `Connected, but import failed: ${msg.message}` },
+            : {
+                kind: "error",
+                message: `Connected, but import failed: ${msg.message}`,
+              },
         );
         form.reset();
         router.refresh();
       } catch (err) {
         setStatus({
           kind: "error",
-          message: err instanceof Error ? err.message : "Couldn't connect the repository.",
+          message:
+            err instanceof Error
+              ? err.message
+              : "Couldn't connect the repository.",
         });
       }
     });
@@ -1083,26 +1443,36 @@ function ManualConnectForm() {
       <form onSubmit={onSubmit} className="mt-3 space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Owner</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Owner
+            </span>
             <Input name="owner" placeholder="Specboards" required />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Repository</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Repository
+            </span>
             <Input name="name" placeholder="Specboard" required />
           </label>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Installation ID</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Installation ID
+            </span>
             <Input name="installationId" placeholder="12345678" required />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Default branch</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              Default branch
+            </span>
             <Input name="defaultBranch" placeholder="main" />
           </label>
         </div>
         {status ? (
-          <p className={`text-xs ${status.kind === "ok" ? "text-muted-foreground" : "text-destructive"}`}>
+          <p
+            className={`text-xs ${status.kind === "ok" ? "text-muted-foreground" : "text-destructive"}`}
+          >
             {status.message}
           </p>
         ) : null}

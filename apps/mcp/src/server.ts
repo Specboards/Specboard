@@ -8,6 +8,7 @@ import {
   canReadProduct,
   canWriteProduct,
   canTransition,
+  descendantGroupIds,
   isForwardTransition,
   resolveWorkflow,
   safeParseRepoConfig,
@@ -22,6 +23,7 @@ import {
   featureLinks,
   features,
   members,
+  productGroups,
   productMembers,
   products,
   repositories,
@@ -175,7 +177,7 @@ function errorResult(err: unknown) {
 
 server.tool(
   "list_features",
-  "List features with their metadata, filterable by status/assignee/product.",
+  "List features with their metadata, filterable by status/assignee/product/group.",
   {
     workspace: z
       .string()
@@ -188,15 +190,25 @@ server.tool(
       .describe(
         "Product key (sibling backlog) to filter to; see list_products",
       ),
+    group: z
+      .string()
+      .optional()
+      .describe(
+        "Product group key to filter to (includes nested groups' products); see list_product_groups",
+      ),
   },
-  async ({ workspace, status, assignee, product }) => {
+  async ({ workspace, status, assignee, product, group }) => {
     try {
       const scope = await mcpScope();
       assertWorkspaceArg(scope, workspace);
       const productById = await productVisibility(scope.workspaceId);
       // Resolve products for output labels + the optional product filter.
       const prodsRaw = await db()
-        .select({ id: products.id, key: products.key })
+        .select({
+          id: products.id,
+          key: products.key,
+          groupId: products.groupId,
+        })
         .from(products)
         .where(eq(products.workspaceId, scope.workspaceId));
       const prods = prodsRaw.filter((p) =>
@@ -210,6 +222,26 @@ server.tool(
           return errorResult(new Error(`No product with key "${product}"`));
         productId = match.id;
       }
+      let groupProductIds: Set<string> | undefined;
+      if (group) {
+        const groupRows = await db()
+          .select({
+            id: productGroups.id,
+            key: productGroups.key,
+            parentId: productGroups.parentId,
+          })
+          .from(productGroups)
+          .where(eq(productGroups.workspaceId, scope.workspaceId));
+        const match = groupRows.find((g) => g.key === group);
+        if (!match)
+          return errorResult(new Error(`No product group with key "${group}"`));
+        const subtree = descendantGroupIds(groupRows, match.id);
+        groupProductIds = new Set(
+          prods
+            .filter((p) => p.groupId && subtree.has(p.groupId))
+            .map((p) => p.id),
+        );
+      }
       const rows = await db().query.features.findMany({
         where: and(
           eq(features.workspaceId, scope.workspaceId),
@@ -219,8 +251,11 @@ server.tool(
         ),
         with: { index: true },
       });
-      const visibleRows = rows.filter((row) =>
-        canReadProductId(scope.access, productById, row.productId),
+      const visibleRows = rows.filter(
+        (row) =>
+          canReadProductId(scope.access, productById, row.productId) &&
+          (!groupProductIds ||
+            (row.productId !== null && groupProductIds.has(row.productId))),
       );
       // Resolve `blocks` edges so agents can respect sequencing.
       const visibleIds = new Set(visibleRows.map((r) => r.id));
@@ -385,6 +420,11 @@ server.tool(
       const scope = await mcpScope();
       assertWorkspaceArg(scope, workspace);
       const productById = await productVisibility(scope.workspaceId);
+      const groupRows = await db()
+        .select({ id: productGroups.id, key: productGroups.key })
+        .from(productGroups)
+        .where(eq(productGroups.workspaceId, scope.workspaceId));
+      const groupKeyById = new Map(groupRows.map((g) => [g.id, g.key]));
       const rows = (
         await db()
           .select({
@@ -394,6 +434,7 @@ server.tool(
             description: products.description,
             visibility: products.visibility,
             position: products.position,
+            groupId: products.groupId,
           })
           .from(products)
           .where(eq(products.workspaceId, scope.workspaceId))
@@ -410,7 +451,60 @@ server.tool(
             name: p.name,
             description: p.description,
             visibility: p.visibility,
+            group: (p.groupId && groupKeyById.get(p.groupId)) || null,
           })),
+      );
+    } catch (err) {
+      return errorResult(err);
+    }
+  },
+);
+
+server.tool(
+  "list_product_groups",
+  "List the workspace's product groups (management roll-up nodes). Nested groups point at their parent via parentKey; productKeys are the caller-readable products directly in each group. Use a key with list_features(group).",
+  {
+    workspace: z
+      .string()
+      .describe("Workspace slug (self-host/local default: 'local')"),
+  },
+  async ({ workspace }) => {
+    try {
+      const scope = await mcpScope();
+      assertWorkspaceArg(scope, workspace);
+      const productById = await productVisibility(scope.workspaceId);
+      const [groupRows, productRows] = await Promise.all([
+        db()
+          .select({
+            id: productGroups.id,
+            key: productGroups.key,
+            name: productGroups.name,
+            description: productGroups.description,
+            parentId: productGroups.parentId,
+            position: productGroups.position,
+          })
+          .from(productGroups)
+          .where(eq(productGroups.workspaceId, scope.workspaceId))
+          .orderBy(asc(productGroups.position), asc(productGroups.name)),
+        db()
+          .select({ id: products.id, key: products.key, groupId: products.groupId })
+          .from(products)
+          .where(eq(products.workspaceId, scope.workspaceId)),
+      ]);
+      const readable = productRows.filter((p) =>
+        canReadProductId(scope.access, productById, p.id),
+      );
+      const keyById = new Map(groupRows.map((g) => [g.id, g.key]));
+      return text(
+        groupRows.map((g) => ({
+          key: g.key,
+          name: g.name,
+          description: g.description,
+          parentKey: (g.parentId && keyById.get(g.parentId)) || null,
+          productKeys: readable
+            .filter((p) => p.groupId === g.id)
+            .map((p) => p.key),
+        })),
       );
     } catch (err) {
       return errorResult(err);

@@ -12,6 +12,53 @@
   breadth or polish. Prefer a working narrow slice over a complete-but-untested
   layer. (From The Pragmatic Programmer.)
 
+## Deployment and infrastructure
+
+- **Hosting is Fly.io, data is Fly Postgres, auth is Better Auth.** There is no
+  Supabase in this project (an early plan considered it; the app moved to
+  Fly.io + Better Auth before any real auth shipped). Do not add Supabase
+  clients, dependencies, or migration paths.
+- **Two Fly apps, two configs, in the repo root:**
+  - `fly.toml` - production. Fly app `specboard`, served at
+    https://app.specboard.ai. Deploy from the repo root with `fly deploy`.
+  - `fly.test.toml` - test/staging. Fly app `specboard-test`, served at
+    https://test.specboard.ai. Deploy with `fly deploy -c fly.test.toml`.
+- **Always deploy to test first.** New code goes to `specboard-test` and is
+  verified there before production. Never deploy production from a feature
+  branch: merge to `main` first, then `fly deploy`.
+- **Databases are Fly Postgres apps:** `specboard-test-db` (test) and
+  `specboard-prod-db` (production). The app reads its connection string from the
+  `DATABASE_URL` secret. Run migrations against a cloud DB by fetching that
+  secret (`fly ssh console -a <app> -C 'printenv DATABASE_URL'`), tunnelling with
+  `fly proxy`, and running `pnpm db:migrate` against the local port.
+
+## Design system
+
+- **Gesso** is our design system, maintained in Claude Design. It is the source
+  of truth for brand, color, type, spacing, and component styling (the app's
+  brand mark and icons are generated from it). Keep new UI consistent with
+  Gesso, and reach for `/design-sync` to reconcile the app with it. The
+  code-side primitives that implement these styles live in
+  `apps/web/src/components/ui/` (Button, Card, Input, Select, and so on); build
+  new shared components from those rather than one-off markup.
+
+## UX conventions
+
+- **"Add" starts as an affordance, not an open form.** Any experience for adding
+  a new item (a team member, a product group, a custom card property, a repo
+  link, and so on) begins as a single "Add X" control. The input fields appear
+  only after the user opts in by clicking it; they expand in place (or in a
+  drawer/dialog), collect the details, and collapse back to the "Add X"
+  affordance after a successful save. Always offer a Cancel that collapses
+  without saving. Do not leave empty input fields sitting open by default: a
+  blank always-on form reads as unfinished and adds visual noise for the common
+  case where the user is not adding anything right now.
+- **Reveal organizing features only once there's something to organize.** A
+  feature whose only job is to group or arrange other items (e.g. product
+  groups) should stay hidden until there are enough items to make it useful,
+  then appear. Keep it visible once it holds data so existing configuration
+  never becomes unreachable.
+
 ## Writing style
 
 - **Never use em dashes (`—`).** This applies everywhere: code comments, docs,
