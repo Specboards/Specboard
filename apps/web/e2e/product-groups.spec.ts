@@ -49,7 +49,14 @@ test.describe("settings: product groups", () => {
       .locator('select[name="groupId"]')
       .selectOption({ label: "Payments Platform" });
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(groupRow.getByText("1 product", { exact: true })).toBeVisible();
+    // Fresh locator: groupRow above filters on "products" (plural), which no
+    // longer matches once the count reads "1 product".
+    await expect(
+      page
+        .locator("li")
+        .filter({ hasText: "Payments Platform" })
+        .getByText("1 product", { exact: true }),
+    ).toBeVisible();
 
     // The switcher now offers the group scope; selecting it lands on the
     // group-scoped backlog under the `~key` segment.
