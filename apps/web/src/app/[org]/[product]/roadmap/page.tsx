@@ -5,7 +5,7 @@ import { parentLevelKey } from "@specboard/core";
 
 import { BoardPrefsProvider } from "@/app/[org]/[product]/backlog/board-prefs";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
-import { NoSpecsEmptyState } from "@/components/empty-state";
+import { NoSpecsEmptyState } from "@/components/no-specs-empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
 import { ReleaseCreate } from "@/components/release-controls";
 import { WorkItemCreate } from "@/components/work-item-create";
