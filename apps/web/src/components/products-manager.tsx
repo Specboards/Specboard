@@ -1,7 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,6 +22,8 @@ import {
   MAX_GROUP_DEPTH,
   PRODUCT_COLORS,
   resolveProductColor,
+  wouldCreateCycle,
+  wouldExceedDepth,
   type ProductColor,
 } from "@specboard/core";
 
@@ -35,6 +50,7 @@ import {
 } from "@/lib/api-client";
 import { colorDot, productColorClasses } from "@/lib/product-color";
 import type {
+  ProductGroupPatch,
   ProductGroupRecord,
   ProductRecord,
   ProductVisibility,
@@ -129,7 +145,12 @@ export function ProductsManager({
           product to organize. Existing groups keep the card visible even if the
           product count later dips, so they never become unmanageable. */}
       {isOrgAdmin && (products.length > 1 || groups.length > 0) ? (
-        <GroupsCard groups={groups} products={products} onChanged={setGroups} />
+        <GroupsCard
+          groups={groups}
+          products={products}
+          onChanged={setGroups}
+          onProductChanged={onUpdated}
+        />
       ) : null}
 
       {isOrgAdmin ? (
@@ -196,22 +217,33 @@ function flattenGroupTree(groups: ProductGroupRecord[]): TreeRow[] {
   return out;
 }
 
+/** Split a "kind:rest" drag/drop id into its kind and payload. */
+function parseDndId(raw: string): { kind: string; rest: string } {
+  const i = raw.indexOf(":");
+  return { kind: raw.slice(0, i), rest: raw.slice(i + 1) };
+}
+
 /**
  * Manage the org's product groups (org-admin only): create (optionally under
  * a parent), rename, recolor, reparent, or delete an empty one. Rendered as
- * an indented tree; nesting is capped at MAX_GROUP_DEPTH levels (the server
- * enforces cycles/depth, this UI just narrows the choices). Products join a
- * group via each product's editor below; a group appears in the product
- * switcher and rolls its products' work up on the group dashboard.
+ * a tree of groups with their products as draggable leaves: drag a product
+ * onto a group to move it there (or onto the ungrouped zone to take it out),
+ * drag a group onto another group to nest it, or drop it on the bar between
+ * rows to reorder siblings. Nesting is capped at MAX_GROUP_DEPTH levels (the
+ * server enforces cycles/depth; this UI pre-checks and narrows the choices).
+ * A group appears in the product switcher and rolls its products' work up on
+ * the group dashboard.
  */
 function GroupsCard({
   groups,
   products,
   onChanged,
+  onProductChanged,
 }: {
   groups: ProductGroupRecord[];
   products: ProductRecord[];
   onChanged: (groups: ProductGroupRecord[]) => void;
+  onProductChanged: (product: ProductRecord) => void;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -220,15 +252,221 @@ function GroupsCard({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // What is being dragged right now (drives slot visibility and the overlay).
+  const [drag, setDrag] = useState<{
+    kind: "group" | "product";
+    label: string;
+  } | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
 
   const rows = flattenGroupTree(groups);
   const depthById = new Map(rows.map((r) => [r.group.id, r.depth]));
   // New groups land under parents that still have room below the depth cap.
   const parentOptions = rows.filter((r) => r.depth + 1 < MAX_GROUP_DEPTH);
 
+  const groupIds = new Set(groups.map((g) => g.id));
+  /** A group's effective parent; a dangling parent id renders at top level. */
+  const parentOf = (g: ProductGroupRecord) =>
+    g.parentId && groupIds.has(g.parentId) ? g.parentId : null;
+  const childGroupsOf = (parent: string | null) =>
+    groups
+      .filter((g) => parentOf(g) === parent)
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+  const productsOf = (groupId: string) =>
+    products
+      .filter((p) => p.groupId === groupId)
+      .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+  const ungrouped = products
+    .filter((p) => !p.groupId)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+
   function onAuthError() {
     window.location.href = "/sign-in";
   }
+
+  function onDragStart(event: DragStartEvent) {
+    const { kind, rest } = parseDndId(String(event.active.id));
+    if (kind !== "group" && kind !== "product") return;
+    const label =
+      kind === "group"
+        ? (groups.find((g) => g.id === rest)?.name ?? "")
+        : (products.find((p) => p.id === rest)?.name ?? "");
+    setDrag({ kind, label });
+  }
+
+  function moveProduct(product: ProductRecord, newGroupId: string | null) {
+    if ((product.groupId ?? null) === newGroupId) return;
+    const prev = product;
+    const groupName = newGroupId
+      ? (groups.find((g) => g.id === newGroupId)?.name ?? "group")
+      : null;
+    // Optimistically re-home the leaf, then persist and revalidate.
+    onProductChanged({ ...product, groupId: newGroupId });
+    updateProduct(product.id, { groupId: newGroupId })
+      .then((updated) => {
+        onProductChanged(updated);
+        toast.success(
+          groupName
+            ? `${product.name} moved to ${groupName}`
+            : `${product.name} ungrouped`,
+        );
+        router.refresh();
+      })
+      .catch((err) => {
+        onProductChanged(prev);
+        if (err instanceof AuthRequiredError) return onAuthError();
+        toast.error(err instanceof Error ? err.message : "Move failed.");
+      });
+  }
+
+  function moveGroup(
+    dragged: ProductGroupRecord,
+    newParent: string | null,
+    insertIndex: number | null,
+  ) {
+    if (newParent === dragged.id) return;
+    if (wouldCreateCycle(groups, dragged.id, newParent)) {
+      toast.error("A group can't move inside its own subtree.");
+      return;
+    }
+    if (wouldExceedDepth(groups, dragged.id, newParent)) {
+      toast.error(
+        `That nesting would exceed the ${MAX_GROUP_DEPTH}-level limit.`,
+      );
+      return;
+    }
+
+    const oldParent = parentOf(dragged);
+    // Slot indexes count the dragged row itself when it already sits among the
+    // target siblings; compensate so the drop lands where the bar showed.
+    let index = insertIndex;
+    if (index !== null && oldParent === newParent) {
+      const orig = childGroupsOf(newParent).findIndex(
+        (g) => g.id === dragged.id,
+      );
+      if (orig >= 0 && orig < index) index -= 1;
+    }
+    const siblings = childGroupsOf(newParent).filter(
+      (g) => g.id !== dragged.id,
+    );
+    const at = index === null ? siblings.length : Math.min(index, siblings.length);
+    const order = [...siblings.slice(0, at), dragged, ...siblings.slice(at)];
+
+    // Renumber the target siblings 0..n and patch only what changed (position
+    // is an integer column, so a clean insert needs its neighbors renumbered).
+    const patches: { id: string; patch: ProductGroupPatch }[] = [];
+    order.forEach((g, i) => {
+      const patch: ProductGroupPatch = {};
+      if (g.position !== i) patch.position = i;
+      if (g.id === dragged.id && oldParent !== newParent) {
+        patch.parentId = newParent;
+      }
+      if (Object.keys(patch).length > 0) patches.push({ id: g.id, patch });
+    });
+    if (patches.length === 0) return;
+
+    const prevGroups = groups;
+    const posById = new Map(order.map((g, i) => [g.id, i]));
+    onChanged(
+      groups.map((g) => ({
+        ...g,
+        position: posById.get(g.id) ?? g.position,
+        parentId: g.id === dragged.id ? newParent : g.parentId,
+      })),
+    );
+    Promise.all(patches.map(({ id, patch }) => updateProductGroup(id, patch)))
+      .then(() => {
+        toast.success("Group moved");
+        router.refresh();
+      })
+      .catch((err) => {
+        onChanged(prevGroups);
+        if (err instanceof AuthRequiredError) return onAuthError();
+        toast.error(err instanceof Error ? err.message : "Move failed.");
+      });
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    setDrag(null);
+    const { active, over } = event;
+    if (!over) return;
+    const { kind, rest: id } = parseDndId(String(active.id));
+    const target = parseDndId(String(over.id));
+
+    // Resolve the drop target to a destination parent/group (+ slot index).
+    let intoGroup: string | null;
+    let slotIndex: number | null = null;
+    if (target.kind === "into") {
+      intoGroup = target.rest;
+    } else if (target.kind === "slot") {
+      const cut = target.rest.lastIndexOf(":");
+      const parent = target.rest.slice(0, cut);
+      intoGroup = parent === "root" ? null : parent;
+      slotIndex = Number(target.rest.slice(cut + 1));
+    } else if (target.kind === "ungrouped") {
+      intoGroup = null;
+    } else {
+      return;
+    }
+
+    if (kind === "product") {
+      const product = products.find((p) => p.id === id);
+      if (product) moveProduct(product, intoGroup);
+    } else if (kind === "group") {
+      const dragged = groups.find((g) => g.id === id);
+      if (dragged) moveGroup(dragged, intoGroup, slotIndex);
+    }
+  }
+
+  /** One tree level: sibling groups (with reorder slots), then leaf products. */
+  const renderLevel = (
+    parent: string | null,
+    depth: number,
+  ): React.ReactNode => {
+    const siblings = childGroupsOf(parent);
+    return (
+      <>
+        {siblings.map((group, i) => (
+          <Fragment key={group.id}>
+            <DropSlot
+              id={`slot:${parent ?? "root"}:${i}`}
+              depth={depth}
+              active={drag !== null}
+            />
+            <GroupRow
+              group={group}
+              depth={depth}
+              groups={groups}
+              depthById={depthById}
+              productCount={productsOf(group.id).length}
+              subgroupCount={childGroupsOf(group.id).length}
+              editing={editingId === group.id}
+              onEdit={() => setEditingId(group.id)}
+              onCancel={() => setEditingId(null)}
+              onSaved={onSaved}
+              onDelete={() => onDelete(group)}
+              onAuthError={onAuthError}
+              busy={pending}
+            />
+            {renderLevel(group.id, depth + 1)}
+            {productsOf(group.id).map((p) => (
+              <ProductLeaf key={p.id} product={p} depth={depth + 1} />
+            ))}
+          </Fragment>
+        ))}
+        {siblings.length > 0 || drag !== null ? (
+          <DropSlot
+            id={`slot:${parent ?? "root"}:${siblings.length}`}
+            depth={depth}
+            active={drag !== null}
+          />
+        ) : null}
+      </>
+    );
+  };
 
   function onCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -280,36 +518,34 @@ function GroupsCard({
         <p className="text-sm font-medium">Product groups</p>
         <p className="text-xs text-muted-foreground">
           Group products into parts of your platform, nesting groups up to{" "}
-          {MAX_GROUP_DEPTH} levels. A group appears in the product switcher and
-          rolls its products&apos; work up on its dashboard.
+          {MAX_GROUP_DEPTH} levels. Drag a product onto a group to move it
+          there, or drag a group to nest or reorder it. A group appears in the
+          product switcher and rolls its products&apos; work up on its
+          dashboard.
         </p>
       </div>
-      {rows.length > 0 ? (
-        <ul className="space-y-1">
-          {rows.map(({ group, depth }) => (
-            <GroupRow
-              key={group.id}
-              group={group}
-              depth={depth}
-              groups={groups}
-              depthById={depthById}
-              productCount={
-                products.filter((p) => p.groupId === group.id).length
-              }
-              subgroupCount={
-                groups.filter((g) => g.parentId === group.id).length
-              }
-              editing={editingId === group.id}
-              onEdit={() => setEditingId(group.id)}
-              onCancel={() => setEditingId(null)}
-              onSaved={onSaved}
-              onDelete={() => onDelete(group)}
-              onAuthError={onAuthError}
-              busy={pending}
-            />
-          ))}
-        </ul>
-      ) : null}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDrag(null)}
+      >
+        {rows.length > 0 ? (
+          <ul className="space-y-0.5">{renderLevel(null, 0)}</ul>
+        ) : null}
+        <UngroupedZone
+          products={ungrouped}
+          show={groups.length > 0 && (ungrouped.length > 0 || drag?.kind === "product")}
+        />
+        <DragOverlay>
+          {drag ? (
+            <div className="w-fit rounded-md border bg-background px-2.5 py-1 text-sm shadow-md">
+              {drag.label}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
       {/* Start as an "Add group" affordance, not an always-open form: the
           fields only appear once the admin opts in (see the "add" UX rule in
           CLAUDE.md). */}
@@ -369,6 +605,111 @@ function GroupsCard({
   );
 }
 
+/**
+ * A thin insertion bar between sibling group rows. Invisible until a drag is
+ * active; dropping a group here reorders it among these siblings (dropping a
+ * product here files it into the surrounding parent).
+ */
+function DropSlot({
+  id,
+  depth,
+  active,
+}: {
+  id: string;
+  depth: number;
+  active: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !active });
+  return (
+    <li
+      ref={setNodeRef}
+      aria-hidden
+      style={{ marginLeft: `${depth * 1.25}rem` }}
+      className={cn(
+        "h-1 rounded transition-colors",
+        active && "h-2",
+        active && isOver && "bg-ring/60",
+      )}
+    />
+  );
+}
+
+/** A product leaf in the group tree: drag it onto a group (or the ungrouped
+ * zone) to re-home it. Display-only otherwise; the full editor is the product
+ * card below. */
+function ProductLeaf({
+  product,
+  depth,
+}: {
+  product: ProductRecord;
+  depth: number;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `product:${product.id}`,
+  });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ marginLeft: `${depth * 1.25}rem`, opacity: isDragging ? 0.4 : 1 }}
+      className="flex cursor-grab items-center gap-2 rounded px-1 py-0.5 text-sm active:cursor-grabbing"
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical
+        className="h-3 w-3 shrink-0 text-muted-foreground/50"
+        aria-hidden
+      />
+      <span
+        className={cn(
+          "h-2 w-2 shrink-0 rounded-full",
+          productColorClasses(product).dot,
+        )}
+        aria-hidden
+      />
+      <span>{product.name}</span>
+      <span className="text-xs text-muted-foreground">
+        {product.itemCount} {product.itemCount === 1 ? "item" : "items"}
+      </span>
+    </li>
+  );
+}
+
+/** Products outside any group, doubling as the drop target that takes a
+ * product out of its group. Hidden until it has contents or a product drag
+ * makes it a meaningful destination. */
+function UngroupedZone({
+  products,
+  show,
+}: {
+  products: ProductRecord[];
+  show: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: "ungrouped:" });
+  if (!show) return null;
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "rounded-md border border-dashed p-2 transition-colors",
+        isOver && "bg-muted",
+      )}
+    >
+      <p className="text-xs font-medium text-muted-foreground">Ungrouped</p>
+      {products.length > 0 ? (
+        <ul className="mt-1 space-y-0.5">
+          {products.map((p) => (
+            <ProductLeaf key={p.id} product={p} depth={0} />
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Drop a product here to take it out of its group.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** One group tree row: indented summary or an inline editor. */
 function GroupRow({
   group,
@@ -403,6 +744,19 @@ function GroupRow({
   const [color, setColor] = useState<string | null>(group.color);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Draggable (to nest/reorder this group) and a drop target (for products
+  // joining it or groups nesting under it). Both idle while editing.
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging,
+  } = useDraggable({ id: `group:${group.id}`, disabled: editing });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: `into:${group.id}`,
+    disabled: editing,
+  });
 
   // Legal parents exclude the group's own subtree (a cycle) and any parent
   // whose depth leaves no room for this group's subtree; the server is the
@@ -505,9 +859,22 @@ function GroupRow({
 
   return (
     <li
-      className="flex items-center gap-2 text-sm"
-      style={{ marginLeft: `${depth * 1.25}rem` }}
+      ref={(node) => {
+        setDragRef(node);
+        setDropRef(node);
+      }}
+      className={cn(
+        "flex cursor-grab items-center gap-2 rounded px-1 text-sm active:cursor-grabbing",
+        isOver && "bg-muted ring-1 ring-ring/40",
+      )}
+      style={{ marginLeft: `${depth * 1.25}rem`, opacity: isDragging ? 0.4 : 1 }}
+      {...attributes}
+      {...listeners}
     >
+      <GripVertical
+        className="h-3 w-3 shrink-0 text-muted-foreground/50"
+        aria-hidden
+      />
       {group.color ? (
         <span
           className={cn(

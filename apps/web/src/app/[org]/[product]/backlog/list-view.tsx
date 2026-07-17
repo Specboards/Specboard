@@ -1,10 +1,14 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { EmptyState } from "@/components/empty-state";
 import { NoSpecsEmptyState } from "@/components/no-specs-empty-state";
 import { WorkViewTabs } from "@/components/work-view-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Box, BoxHeader } from "@/components/ui/box";
+import { buttonVariants } from "@/components/ui/button";
 import { resolveActiveScope, scopeProductFilter } from "@/lib/active-product";
+import { LOCAL_ORG_SLUG, orgProductPath } from "@/lib/org-path";
 import { getDb } from "@/lib/db";
 import {
   applyFeatureFilters,
@@ -136,10 +140,23 @@ export async function ListView({
             canEdit={canEdit}
           />
           {rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No features match these filters. Use Clear filters above to see
-              everything.
-            </p>
+            <EmptyState
+              variant="inline"
+              title="No features match these filters"
+              description={`All ${features.length} ${features.length === 1 ? "item is" : "items are"} hidden by the current filters.`}
+              action={
+                <Link
+                  href={orgProductPath(
+                    access?.orgSlug ?? LOCAL_ORG_SLUG,
+                    productSlug,
+                    "/backlog?view=list",
+                  )}
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                >
+                  Clear filters
+                </Link>
+              }
+            />
           ) : (
             <Box>
               <BoxHeader>

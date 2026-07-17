@@ -5,6 +5,7 @@ import { parentLevelKey } from "@specboard/core";
 import { BoardClient } from "./board-client";
 import { BoardPrefsProvider } from "./board-prefs";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
+import { EmptyState } from "@/components/empty-state";
 import { NoSpecsEmptyState } from "@/components/no-specs-empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
 import { WorkItemCreate } from "@/components/work-item-create";
@@ -122,6 +123,24 @@ export async function BoardView({
     properties.map((f) => [f.key, f.label]),
   );
 
+  // The "New {level}" affordance, shared between the toolbar and the empty
+  // state so a blank board offers the next step right where the user is
+  // looking. Leaf items come from spec sync, so it only exists off-leaf.
+  const newItemButton =
+    canEdit && !activeLevel.isLeaf ? (
+      <WorkItemCreate
+        levelKey={activeLevel.key}
+        levelLabel={activeLevel.label}
+        parentLabel={parentLabel}
+        parents={parents}
+        productId={activeProduct?.id ?? null}
+        products={scopedProducts.map((p) => ({ id: p.id, name: p.name }))}
+        workflow={workflow}
+        members={members}
+        templateBody={templateBody}
+      />
+    ) : null;
+
   return (
     <BoardPrefsProvider
       initialFields={cardFields}
@@ -135,19 +154,7 @@ export async function BoardView({
             <LevelSwitcher levels={levels} active={activeLevel.key} />
           </div>
           <div className="flex items-center gap-2">
-            {canEdit && !activeLevel.isLeaf ? (
-              <WorkItemCreate
-                levelKey={activeLevel.key}
-                levelLabel={activeLevel.label}
-                parentLabel={parentLabel}
-                parents={parents}
-                productId={activeProduct?.id ?? null}
-                products={scopedProducts.map((p) => ({ id: p.id, name: p.name }))}
-                workflow={workflow}
-                members={members}
-                templateBody={templateBody}
-              />
-            ) : null}
+            {newItemButton}
             {features.length > 0 && canEdit ? (
               <CardFieldsMenu
                 catalog={catalog}
@@ -163,10 +170,16 @@ export async function BoardView({
           activeLevel.isLeaf ? (
             <NoSpecsEmptyState canConnect={canConnectRepos(access)} />
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No {activeLevel.label.toLowerCase()} items yet.
-              {canEdit ? ` Use “New ${activeLevel.label.toLowerCase()}” to add one.` : ""}
-            </p>
+            <EmptyState
+              className="mt-8"
+              title={`No ${activeLevel.label.toLowerCase()} items yet`}
+              description={
+                canEdit
+                  ? `${activeLevel.label} items collect the work one level down so this board can show progress at a higher altitude. Create the first one and it appears here, ready to move through your workflow.`
+                  : `${activeLevel.label} items collect the work one level down. Once someone with edit access creates one, it appears here.`
+              }
+              action={newItemButton}
+            />
           )
         ) : (
           <BoardClient
