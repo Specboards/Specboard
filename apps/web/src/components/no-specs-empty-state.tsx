@@ -18,13 +18,20 @@ import { currentOrgSlug } from "@/lib/workspace-access";
  */
 export async function NoSpecsEmptyState({
   canConnect = false,
+  variant = "card",
+  className = "mt-8",
 }: {
   canConnect?: boolean;
+  /** `"inline"` renders compact, for placement above an otherwise-empty
+   * board whose structure (e.g. release columns) should stay visible. */
+  variant?: "card" | "inline";
+  className?: string;
 }) {
   const reposHref = orgPath(await currentOrgSlug(), "/settings/repositories");
   return (
     <EmptyState
-      className="mt-8"
+      variant={variant}
+      className={className}
       title="No specs yet"
       description={
         canConnect

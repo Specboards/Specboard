@@ -5,6 +5,7 @@ import { parentLevelKey } from "@specboard/core";
 
 import { BoardPrefsProvider } from "@/app/[org]/[product]/backlog/board-prefs";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
+import { EmptyState } from "@/components/empty-state";
 import { NoSpecsEmptyState } from "@/components/no-specs-empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
 import { ReleaseCreate } from "@/components/release-controls";
@@ -171,6 +172,51 @@ export default async function RoadmapPage({
       : []),
   ];
 
+  // Creation affordances. When a page-level empty state is showing, it takes
+  // over the relevant button so the next step sits where the user is looking;
+  // the toolbar hides its twin so each affordance renders exactly once.
+  const itemCtaInEmptyState =
+    features.length === 0 && !activeLevel.isLeaf && !showShipped;
+  const releaseCtaInEmptyState = itemCtaInEmptyState && releases.length === 0;
+  const newReleaseButton = isAdmin && !showShipped ? <ReleaseCreate /> : null;
+  const newItemButton =
+    canEdit && !activeLevel.isLeaf ? (
+      <WorkItemCreate
+        levelKey={activeLevel.key}
+        levelLabel={activeLevel.label}
+        parentLabel={parentLabel}
+        parents={parents}
+        productId={activeProduct?.id ?? null}
+        products={products.map((p) => ({ id: p.id, name: p.name }))}
+        workflow={workflow}
+        members={members}
+        templateBody={templateBody}
+      />
+    ) : null;
+
+  const board = (
+    <RoadmapBoard
+      // Remount when the data set changes (level or product scope) so the
+      // board re-seeds its optimistic placement from the new features.
+      key={`${
+        scope.kind === "product"
+          ? scope.product.id
+          : scope.kind === "group"
+            ? `group:${scope.group.id}`
+            : ALL_PRODUCTS
+      }:${activeLevel.key}:${showShipped ? "shipped" : "active"}`}
+      columns={columns}
+      features={features}
+      workflow={workflow}
+      productsById={productsById}
+      customFieldLabels={customFieldLabels}
+      memberNames={memberNames}
+      releaseNames={releaseNames}
+      allowDrag={canEdit && !showShipped}
+      isAdmin={isAdmin}
+    />
+  );
+
   return (
     <BoardPrefsProvider
       board="roadmap"
@@ -202,20 +248,8 @@ export default async function RoadmapPage({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && !showShipped ? <ReleaseCreate /> : null}
-            {canEdit && !activeLevel.isLeaf ? (
-              <WorkItemCreate
-                levelKey={activeLevel.key}
-                levelLabel={activeLevel.label}
-                parentLabel={parentLabel}
-                parents={parents}
-                productId={activeProduct?.id ?? null}
-                products={products.map((p) => ({ id: p.id, name: p.name }))}
-                workflow={workflow}
-                members={members}
-                templateBody={templateBody}
-              />
-            ) : null}
+            {releaseCtaInEmptyState ? null : newReleaseButton}
+            {itemCtaInEmptyState ? null : newItemButton}
             {features.length > 0 && canEdit ? (
               <CardFieldsMenu
                 catalog={catalog}
@@ -228,38 +262,51 @@ export default async function RoadmapPage({
           </div>
         </div>
         {features.length === 0 && releases.length === 0 ? (
+          // Nothing at all yet: no items at this level and no releases.
           activeLevel.isLeaf ? (
             <NoSpecsEmptyState canConnect={canConnectRepos(access)} />
           ) : (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No {activeLevel.label.toLowerCase()} items yet.
-              {canEdit
-                ? ` Use “New ${activeLevel.label.toLowerCase()}” to add one.`
-                : ""}
-              {isAdmin ? " Create a release to start planning." : ""}
-            </p>
+            <EmptyState
+              className="mt-8"
+              title="Nothing on the roadmap yet"
+              description={`Releases are the ship vehicles on this roadmap, and ${activeLevel.label.toLowerCase()} items are the work you schedule into them. Create a release to plan against, add an item, then drag it into the release column.`}
+              action={
+                newReleaseButton || newItemButton ? (
+                  <div className="flex items-center justify-center gap-2">
+                    {newReleaseButton}
+                    {newItemButton}
+                  </div>
+                ) : null
+              }
+            />
           )
+        ) : features.length === 0 && !showShipped ? (
+          // Releases exist but nothing at this level is scheduled: keep the
+          // release columns visible and guide the next step above them.
+          <>
+            {activeLevel.isLeaf ? (
+              <NoSpecsEmptyState
+                variant="inline"
+                className="py-4"
+                canConnect={canConnectRepos(access)}
+              />
+            ) : (
+              <EmptyState
+                variant="inline"
+                className="py-4"
+                title={`No ${activeLevel.label.toLowerCase()} items to schedule yet`}
+                description={
+                  canEdit
+                    ? "Create one, then drag it into a release column to plan it."
+                    : "Once items exist at this level they can be scheduled into the releases below."
+                }
+                action={newItemButton}
+              />
+            )}
+            {board}
+          </>
         ) : (
-          <RoadmapBoard
-            // Remount when the data set changes (level or product scope) so the
-            // board re-seeds its optimistic placement from the new features.
-            key={`${
-              scope.kind === "product"
-                ? scope.product.id
-                : scope.kind === "group"
-                  ? `group:${scope.group.id}`
-                  : ALL_PRODUCTS
-            }:${activeLevel.key}:${showShipped ? "shipped" : "active"}`}
-            columns={columns}
-            features={features}
-            workflow={workflow}
-            productsById={productsById}
-            customFieldLabels={customFieldLabels}
-            memberNames={memberNames}
-            releaseNames={releaseNames}
-            allowDrag={canEdit && !showShipped}
-            isAdmin={isAdmin}
-          />
+          board
         )}
       </section>
     </BoardPrefsProvider>

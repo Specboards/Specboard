@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
 import { Select } from "@/components/ui/select";
@@ -35,10 +35,16 @@ export function BacklogFilters({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
   function update(next: FeatureFilters) {
-    const query = filtersToQuery(next);
+    // Rebuild the query from the filters, preserving the non-filter `view`
+    // param so clearing filters doesn't bounce the list view back to board.
+    const params = new URLSearchParams(filtersToQuery(next));
+    const view = searchParams.get("view");
+    if (view) params.set("view", view);
+    const query = params.toString();
     startTransition(() => {
       router.push(query ? `${pathname}?${query}` : pathname);
     });
