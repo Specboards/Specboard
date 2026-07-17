@@ -5,7 +5,7 @@ import { parentLevelKey } from "@specboard/core";
 import { BoardClient } from "./board-client";
 import { BoardPrefsProvider } from "./board-prefs";
 import { CardFieldsMenu } from "@/components/card-fields-menu";
-import { NoSpecsEmptyState } from "@/components/empty-state";
+import { NoSpecsEmptyState } from "@/components/no-specs-empty-state";
 import { LevelSwitcher } from "@/components/level-switcher";
 import { WorkItemCreate } from "@/components/work-item-create";
 import { WorkViewTabs } from "@/components/work-view-tabs";

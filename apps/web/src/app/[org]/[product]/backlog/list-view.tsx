@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { NoSpecsEmptyState } from "@/components/empty-state";
+import { NoSpecsEmptyState } from "@/components/no-specs-empty-state";
 import { WorkViewTabs } from "@/components/work-view-tabs";
 import { Badge } from "@/components/ui/badge";
 import { Box, BoxHeader } from "@/components/ui/box";
