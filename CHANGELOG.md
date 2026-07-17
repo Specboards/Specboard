@@ -7,6 +7,34 @@ for how and when the version is bumped.
 
 ## [Unreleased]
 
+### Added
+
+- **Product groups.** A workspace can now collect products into nested groups
+  (up to 4 levels), managed from Settings -> Products. A group appears in the
+  product switcher and scopes the Backlog, Roadmap, and Ideas to its whole
+  subtree via a `~{group}` URL segment, with per-product badges on cards. A new
+  group Dashboard rolls the subtree up for management: item counts, stacked
+  status bars, per-subgroup aggregate cards, and per-release done/total
+  progress, computed only over products the viewer can read. New tables and
+  policies land in migration 0039 (`product_groups`, `products.group_id`, RLS:
+  member read, org-admin write); the API adds `/api/v1/product-groups` (CRUD)
+  and `/:id/summary`.
+- **Product groups over MCP.** Both MCP surfaces (the `/api/mcp` endpoint and
+  the stdio server) gain `list_product_groups`, a `group` filter on item
+  listing, and a `group` key on `list_products`; the HTTP server also adds
+  `group_summary` so management roll-ups can be pulled programmatically.
+- **Explicit repo -> product links.** Repositories can now be linked to one or
+  more products (microservices feeding one product, or a monorepo feeding
+  several), with a per-repo default product that sync assigns newly discovered
+  specs to instead of the workspace default. Managed inline on each repo row
+  under Settings -> Integrations -> Repositories (chips + a star on the
+  default), backed by `PUT /api/v1/repositories/:id/products`. Migration 0040
+  adds `product_repositories` with a DB-enforced single default per repo and
+  backfills every existing repo to its workspace's default product, so sync
+  behavior is unchanged until links are edited. Deployments using the
+  `specboard_worker` role must re-run `infra/worker-role.sql` (new SELECT
+  grant) per the role-cutover runbook.
+
 ## [0.19.0] - 2026-07-16
 
 ### Added
