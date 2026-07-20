@@ -23,6 +23,7 @@ import {
 import {
   RELATION_DIRECTIONS,
   RELEASE_STATUSES,
+  RelationError,
   type CommentInput,
   type CommentRecord,
   type NotificationList,
@@ -237,6 +238,98 @@ export async function patchFeature(
   if (emit) notifyOutbox(); // nudge the relay so delivery isn't delayed a tick
 
   return updated ?? feature;
+}
+
+/** The fields a bulk edit may set. Per-item concerns (title, rank, parent,
+ * details, customFields) are deliberately excluded: they rarely make sense to
+ * apply identically across a selection and keep the batch path safe. */
+const BULK_PATCH_KEYS = ["status", "assigneeId", "tags", "releaseId"] as const;
+
+/** Cap a single batch so one request can't fan out unbounded work. */
+const BULK_MAX_ITEMS = 200;
+
+export interface BulkPatchRequest {
+  specIds: string[];
+  patch: FeaturePatch;
+}
+
+/** Outcome for one item in a bulk edit. */
+export interface BulkPatchItemResult {
+  specId: string;
+  ok: boolean;
+  /** Failure reason when `ok` is false (e.g. an illegal status transition). */
+  error?: string;
+}
+
+export interface BulkPatchResult {
+  results: BulkPatchItemResult[];
+  okCount: number;
+  failCount: number;
+}
+
+/** Parse an untrusted bulk-PATCH body: `{ specIds: string[], patch }`. The patch
+ * is validated exactly like a single edit, then restricted to the bulk-safe
+ * fields. */
+export function parseBulkPatchRequest(body: unknown): BulkPatchRequest {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  if (!Array.isArray(raw.specIds) || raw.specIds.length === 0) {
+    throw new InvalidPatchError("specIds must be a non-empty array.");
+  }
+  if (raw.specIds.some((s) => typeof s !== "string" || s === "")) {
+    throw new InvalidPatchError("specIds must be non-empty strings.");
+  }
+  const specIds = [...new Set(raw.specIds as string[])];
+  if (specIds.length > BULK_MAX_ITEMS) {
+    throw new InvalidPatchError(
+      `A bulk edit can target at most ${BULK_MAX_ITEMS} items.`,
+    );
+  }
+  const patch = parseFeaturePatch(raw.patch);
+  const disallowed = Object.keys(patch).filter(
+    (k) => !(BULK_PATCH_KEYS as readonly string[]).includes(k),
+  );
+  if (disallowed.length > 0) {
+    throw new InvalidPatchError(
+      `Bulk edits can only set ${BULK_PATCH_KEYS.join(", ")}; not ${disallowed.join(", ")}.`,
+    );
+  }
+  return { specIds, patch };
+}
+
+/**
+ * Apply the same patch to many items, each in its own transaction (via
+ * {@link patchFeature}) so a rejection on one - an illegal status transition, an
+ * unmet stage gate, a cross-product release - doesn't roll back the others.
+ * Reuses every single-item guard and outbox emission. Returns a per-item result
+ * so the caller can report exactly which items changed and which didn't.
+ */
+export async function bulkPatchFeatures(
+  specIds: string[],
+  patch: FeaturePatch,
+  scope?: WorkspaceScope,
+): Promise<BulkPatchResult> {
+  const results: BulkPatchItemResult[] = [];
+  for (const specId of specIds) {
+    try {
+      await patchFeature(specId, patch, scope);
+      results.push({ specId, ok: true });
+    } catch (err) {
+      if (
+        err instanceof InvalidPatchError ||
+        err instanceof FeatureNotFoundError ||
+        err instanceof RelationError
+      ) {
+        results.push({ specId, ok: false, error: err.message });
+      } else {
+        throw err; // unexpected: let it surface rather than swallow it per item
+      }
+    }
+  }
+  const okCount = results.filter((r) => r.ok).length;
+  return { results, okCount, failCount: results.length - okCount };
 }
 
 /**

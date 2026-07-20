@@ -169,6 +169,11 @@ export async function ListView({
                 workflow={workflow}
                 productsById={productsById}
                 releaseNames={releaseNames}
+                bulkOptions={{
+                  statuses: options.statuses,
+                  assignees: options.assignees,
+                  releases: options.releases,
+                }}
               />
             </Box>
           )}

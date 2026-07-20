@@ -164,6 +164,44 @@ export async function patchFeature(
   }
 }
 
+/** One item's outcome in a bulk edit (mirrors the server's BulkPatchItemResult). */
+export interface BulkPatchItemResult {
+  specId: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface BulkPatchResult {
+  results: BulkPatchItemResult[];
+  okCount: number;
+  failCount: number;
+}
+
+/**
+ * Apply one patch to many items via `PATCH /api/v1/features/bulk`. Only
+ * status / assigneeId / tags / releaseId are accepted. Resolves with the
+ * per-item result (some may have failed); rejects only on auth or a malformed
+ * request the server rejected outright.
+ */
+export async function bulkPatchFeatures(
+  specIds: string[],
+  patch: Pick<FeaturePatch, "status" | "assigneeId" | "tags" | "releaseId">,
+): Promise<BulkPatchResult> {
+  const res = await apiFetch(`/api/v1/features/bulk`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ specIds, patch }),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as
+    | (BulkPatchResult & { error?: string })
+    | null;
+  if (!res.ok || !body || !Array.isArray(body.results)) {
+    throw new Error(body?.error ?? `Bulk edit failed with ${res.status}`);
+  }
+  return body;
+}
+
 /** List a feature's comments (oldest first). */
 export async function listComments(specId: string): Promise<CommentRecord[]> {
   const res = await apiFetch(
