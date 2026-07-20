@@ -25,6 +25,7 @@ import {
   RELEASE_STATUSES,
   type CommentInput,
   type CommentRecord,
+  type NotificationList,
   type CreatableRelationDirection,
   type CreateFeatureInput,
   type DetailTemplate,
@@ -791,6 +792,31 @@ export async function deleteComment(
 ): Promise<void> {
   const store = await getStore();
   await store.deleteComment(commentId, scope);
+}
+
+/** The caller's notifications plus their unread total. */
+export async function listNotifications(
+  scope?: WorkspaceScope,
+): Promise<NotificationList> {
+  const store = await getStore();
+  return store.listNotifications(scope);
+}
+
+/** Mark one of the caller's notifications read. */
+export async function markNotificationRead(
+  id: string,
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const store = await getStore();
+  await store.markNotificationRead(id, scope);
+}
+
+/** Mark all of the caller's notifications read. */
+export async function markAllNotificationsRead(
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const store = await getStore();
+  await store.markAllNotificationsRead(scope);
 }
 
 /** The workspace's workflow stages, or `[]` when using the built-in default. */

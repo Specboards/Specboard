@@ -508,6 +508,32 @@ export interface CommentInput {
 /** Raised when a comment can't be created/read/deleted. */
 export class CommentError extends Error {}
 
+/** A notification as the inbox renders it, actor + target resolved. */
+export interface NotificationRecord {
+  id: string;
+  /** Kind of notification; currently only "mention". */
+  type: string;
+  actorId: string | null;
+  actorName: string | null;
+  /** Stable spec id of the item the source comment lives on (for deep-linking). */
+  specId: string;
+  /** The item's level key and product slug, to build its permalink. */
+  featureLevel: string;
+  productSlug: string;
+  featureTitle: string;
+  commentId: string;
+  snippet: string;
+  /** True once the recipient has read it. */
+  read: boolean;
+  createdAt: string;
+}
+
+/** The inbox payload: the recipient's notifications plus their unread total. */
+export interface NotificationList {
+  items: NotificationRecord[];
+  unreadCount: number;
+}
+
 /** The releases a single product's roadmap should show: that product's own
  * releases plus workspace-wide (portfolio) releases, which apply everywhere. */
 export function releasesForProduct(
@@ -894,6 +920,12 @@ export interface FeatureStore {
   ): Promise<CommentRecord>;
   /** Delete a comment; the author or the workspace owner only. */
   deleteComment(commentId: string, scope?: WorkspaceScope): Promise<void>;
+  /** The caller's notifications (newest first) plus their unread total. */
+  listNotifications(scope?: WorkspaceScope): Promise<NotificationList>;
+  /** Mark one of the caller's notifications read (no-op if already read/gone). */
+  markNotificationRead(id: string, scope?: WorkspaceScope): Promise<void>;
+  /** Mark all of the caller's notifications read. */
+  markAllNotificationsRead(scope?: WorkspaceScope): Promise<void>;
   /** The acting user's effective product access (org-admin flag + per-product
    * grants), used for read-filtering and write authorization. */
   getProductAccess(scope?: WorkspaceScope): Promise<ProductAccess>;

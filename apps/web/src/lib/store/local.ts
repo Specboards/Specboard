@@ -39,6 +39,7 @@ import {
   CommentError,
   type CommentInput,
   type CommentRecord,
+  type NotificationList,
   type BoardKey,
   type BoardPreferences,
   type CreateFeatureInput,
@@ -1522,6 +1523,19 @@ export class LocalFileStore implements FeatureStore {
       rows.filter((c) => c.id !== commentId),
     );
   }
+
+  // Notifications are a multi-user, @mention-driven concept; local file mode is
+  // a single user with no members to mention, so the inbox is always empty.
+  async listNotifications(_scope?: WorkspaceScope): Promise<NotificationList> {
+    return { items: [], unreadCount: 0 };
+  }
+
+  async markNotificationRead(
+    _id: string,
+    _scope?: WorkspaceScope,
+  ): Promise<void> {}
+
+  async markAllNotificationsRead(_scope?: WorkspaceScope): Promise<void> {}
 
   // Products. Local file mode is a single all-powerful user (see core
   // LOCAL_PRODUCT_ACCESS), so visibility/permissions aren't enforced; products

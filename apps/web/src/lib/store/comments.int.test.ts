@@ -176,4 +176,34 @@ describe.skipIf(!OWNER_URL)("comments (store + RLS)", () => {
     const own = await store.createComment(specId, { body: "mine" }, asBob);
     await store.deleteComment(own.id, asBob);
   });
+
+  it("lists a recipient's notifications, resolves the target, and marks read", async () => {
+    // Bob accumulated mention notifications from the fan-out tests above.
+    const before = await store.listNotifications(asBob);
+    expect(before.unreadCount).toBeGreaterThan(0);
+    expect(before.items.length).toBe(before.unreadCount);
+    // Each resolves to the source item + a mention type for deep-linking.
+    expect(before.items.every((n) => n.type === "mention")).toBe(true);
+    expect(before.items.every((n) => n.specId === specId)).toBe(true);
+    expect(before.items.every((n) => n.actorName === "Alice")).toBe(true);
+
+    // Marking one read drops the unread count by exactly one.
+    const first = before.items.find((n) => !n.read)!;
+    await store.markNotificationRead(first.id, asBob);
+    const mid = await store.listNotifications(asBob);
+    expect(mid.unreadCount).toBe(before.unreadCount - 1);
+
+    // Mark-all clears the badge and flags every row read.
+    await store.markAllNotificationsRead(asBob);
+    const after = await store.listNotifications(asBob);
+    expect(after.unreadCount).toBe(0);
+    expect(after.items.every((n) => n.read)).toBe(true);
+  });
+
+  it("scopes the inbox to the recipient (the author sees none of them)", async () => {
+    // Alice only ever authored the mentions, so she is never a recipient.
+    const alice = await store.listNotifications(asAlice);
+    expect(alice.items).toHaveLength(0);
+    expect(alice.unreadCount).toBe(0);
+  });
 });

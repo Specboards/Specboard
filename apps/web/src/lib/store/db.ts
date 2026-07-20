@@ -79,6 +79,7 @@ import {
   CommentError,
   type CommentInput,
   type CommentRecord,
+  type NotificationList,
   type BoardKey,
   type BoardPreferences,
   type CreateFeatureInput,
@@ -2280,6 +2281,104 @@ export class DbStore implements FeatureStore {
       await tx
         .delete(comments)
         .where(and(eq(comments.id, commentId), eq(comments.workspaceId, ws)));
+    });
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────
+
+  async listNotifications(scope?: WorkspaceScope): Promise<NotificationList> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const uid = scope!.userId;
+      const [rows, unread] = await Promise.all([
+        tx
+          .select({
+            id: notifications.id,
+            type: notifications.type,
+            actorId: notifications.actorId,
+            actorName: users.name,
+            specId: features.specId,
+            featureLevel: features.level,
+            productKey: products.key,
+            featureTitle: features.title,
+            commentId: notifications.commentId,
+            snippet: notifications.snippet,
+            readAt: notifications.readAt,
+            createdAt: notifications.createdAt,
+          })
+          .from(notifications)
+          .innerJoin(features, eq(features.id, notifications.featureId))
+          .leftJoin(products, eq(products.id, features.productId))
+          .leftJoin(users, eq(users.id, notifications.actorId))
+          .where(
+            and(
+              eq(notifications.workspaceId, ws),
+              eq(notifications.recipientId, uid),
+            ),
+          )
+          .orderBy(desc(notifications.createdAt))
+          .limit(50),
+        tx
+          .select({ n: count() })
+          .from(notifications)
+          .where(
+            and(
+              eq(notifications.workspaceId, ws),
+              eq(notifications.recipientId, uid),
+              isNull(notifications.readAt),
+            ),
+          ),
+      ]);
+      const items = rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        actorId: r.actorId,
+        actorName: r.actorName,
+        specId: r.specId,
+        featureLevel: r.featureLevel,
+        // Fall back to the all-products view when the item has no product.
+        productSlug: r.productKey ?? "all",
+        featureTitle: r.featureTitle,
+        commentId: r.commentId,
+        snippet: r.snippet,
+        read: r.readAt !== null,
+        createdAt: r.createdAt.toISOString(),
+      }));
+      return { items, unreadCount: Number(unread[0]?.n ?? 0) };
+    });
+  }
+
+  async markNotificationRead(
+    id: string,
+    scope?: WorkspaceScope,
+  ): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      await tx
+        .update(notifications)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(notifications.id, id),
+            eq(notifications.workspaceId, scope!.workspaceId),
+            eq(notifications.recipientId, scope!.userId),
+            isNull(notifications.readAt),
+          ),
+        );
+    });
+  }
+
+  async markAllNotificationsRead(scope?: WorkspaceScope): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      await tx
+        .update(notifications)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(notifications.workspaceId, scope!.workspaceId),
+            eq(notifications.recipientId, scope!.userId),
+            isNull(notifications.readAt),
+          ),
+        );
     });
   }
 
