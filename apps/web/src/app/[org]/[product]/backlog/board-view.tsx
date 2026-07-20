@@ -252,6 +252,18 @@ export async function BoardView({
             memberNames={memberNames}
             releases={releases}
             productsById={productsById}
+            bulkOptions={
+              canEdit
+                ? {
+                    statuses: allColumns,
+                    assignees: members.map((m) => ({
+                      userId: m.userId,
+                      name: m.name,
+                    })),
+                    releases: releases.map((r) => ({ id: r.id, name: r.name })),
+                  }
+                : undefined
+            }
           />
         )}
       </section>

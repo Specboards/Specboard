@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -35,8 +35,10 @@ import {
   statusOptions,
 } from "@/lib/feature-helpers";
 import type { FeatureRecord, ReleaseRecord } from "@/lib/store/types";
+import { cn } from "@/lib/utils";
 
 import { useBoardPrefs } from "./board-prefs";
+import { BulkActionBar, type BulkOptions } from "./bulk-action-bar";
 
 const COL_PREFIX = "col:";
 
@@ -54,6 +56,7 @@ export function BoardClient({
   memberNames,
   releases,
   productsById,
+  bulkOptions,
 }: {
   features: FeatureRecord[];
   columns: string[];
@@ -65,6 +68,9 @@ export function BoardClient({
   /** Product identity by id, for the per-card attribution badge in the
    * cross-product view. Omitted when the board is scoped to one product. */
   productsById?: Record<string, ProductTag>;
+  /** Option lists for the bulk action bar; enables card multi-select when
+   * provided (editors only). */
+  bulkOptions?: BulkOptions;
 }) {
   const router = useRouter();
   const { cardFields, featured } = useBoardPrefs();
@@ -76,6 +82,28 @@ export function BoardClient({
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectable = !!bulkOptions;
+
+  const toggleSelect = useCallback((specId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(specId)) next.delete(specId);
+      else next.add(specId);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  // Esc clears an active selection.
+  useEffect(() => {
+    if (!selectable || selected.size === 0) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelected(new Set());
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectable, selected.size]);
 
   // Re-seed from the server whenever the data set changes. Every mutation (a
   // field edit in the drawer, a newly created item, a drag we just persisted)
@@ -200,6 +228,9 @@ export function BoardClient({
               releaseNames={releaseNames}
               onOpen={setEditingSpecId}
               productsById={productsById}
+              selectable={selectable}
+              selected={selected}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>
@@ -226,6 +257,13 @@ export function BoardClient({
         specId={editingSpecId}
         onClose={() => setEditingSpecId(null)}
       />
+      {selectable && bulkOptions ? (
+        <BulkActionBar
+          selectedIds={[...selected]}
+          options={bulkOptions}
+          onClear={clearSelection}
+        />
+      ) : null}
     </>
   );
 }
@@ -242,6 +280,9 @@ function Column({
   releaseNames,
   onOpen,
   productsById,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   status: string;
   workflow: StatusWorkflow;
@@ -254,6 +295,9 @@ function Column({
   releaseNames: Record<string, string>;
   onOpen: (specId: string) => void;
   productsById?: Record<string, ProductTag>;
+  selectable: boolean;
+  selected: Set<string>;
+  onToggleSelect: (specId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${COL_PREFIX}${status}` });
   return (
@@ -275,18 +319,39 @@ function Column({
             if (!record) return null;
             return (
               <SortableCard key={id} id={id}>
-                <FeatureCard
-                  feature={record}
-                  fields={cardFields}
-                  featured={featured}
-                  customFieldLabels={customFieldLabels}
-                  memberNames={memberNames}
-                  releaseNames={releaseNames}
-                  onOpen={() => onOpen(id)}
-                  product={
-                    record.productId ? productsById?.[record.productId] : undefined
-                  }
-                />
+                <div
+                  className={cn(
+                    "relative rounded-md",
+                    selected.has(id) && "ring-2 ring-primary",
+                  )}
+                >
+                  {selectable ? (
+                    // stopPropagation on pointer-down keeps dnd-kit from starting
+                    // a drag when the user is aiming for the checkbox; on click it
+                    // keeps the card's edit drawer from opening.
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${record.title}`}
+                      className="absolute left-1.5 top-1.5 z-10 h-4 w-4 cursor-pointer accent-primary"
+                      checked={selected.has(id)}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => onToggleSelect(id)}
+                    />
+                  ) : null}
+                  <FeatureCard
+                    feature={record}
+                    fields={cardFields}
+                    featured={featured}
+                    customFieldLabels={customFieldLabels}
+                    memberNames={memberNames}
+                    releaseNames={releaseNames}
+                    onOpen={() => onOpen(id)}
+                    product={
+                      record.productId ? productsById?.[record.productId] : undefined
+                    }
+                  />
+                </div>
               </SortableCard>
             );
           })}

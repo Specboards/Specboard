@@ -240,17 +240,26 @@ export async function patchFeature(
   return updated ?? feature;
 }
 
-/** The fields a bulk edit may set. Per-item concerns (title, rank, parent,
- * details, customFields) are deliberately excluded: they rarely make sense to
- * apply identically across a selection and keep the batch path safe. */
-const BULK_PATCH_KEYS = ["status", "assigneeId", "tags", "releaseId"] as const;
+/** The fields a bulk edit may set directly. Tags are handled separately (add /
+ * clear) so a mixed selection isn't clobbered by a single replacement; other
+ * per-item concerns (title, rank, parent, details, customFields) are excluded. */
+const BULK_PATCH_KEYS = ["status", "assigneeId", "releaseId"] as const;
 
 /** Cap a single batch so one request can't fan out unbounded work. */
 const BULK_MAX_ITEMS = 200;
 
+/** Tag mutations applied per item as a merge (not a wholesale replace). */
+export interface BulkTagOps {
+  /** Tags to add to each item, deduped against its existing tags. */
+  addTags?: string[];
+  /** Remove every tag from each selected item. */
+  clearTags?: boolean;
+}
+
 export interface BulkPatchRequest {
   specIds: string[];
   patch: FeaturePatch;
+  tagOps: BulkTagOps;
 }
 
 /** Outcome for one item in a bulk edit. */
@@ -267,9 +276,10 @@ export interface BulkPatchResult {
   failCount: number;
 }
 
-/** Parse an untrusted bulk-PATCH body: `{ specIds: string[], patch }`. The patch
- * is validated exactly like a single edit, then restricted to the bulk-safe
- * fields. */
+/** Parse an untrusted bulk-PATCH body: `{ specIds, patch?, addTags?, clearTags? }`.
+ * The direct patch is validated like a single edit then restricted to the
+ * bulk-safe fields; tag ops are validated separately. At least one change must
+ * be requested. */
 export function parseBulkPatchRequest(body: unknown): BulkPatchRequest {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     throw new InvalidPatchError("Request body must be a JSON object.");
@@ -287,34 +297,70 @@ export function parseBulkPatchRequest(body: unknown): BulkPatchRequest {
       `A bulk edit can target at most ${BULK_MAX_ITEMS} items.`,
     );
   }
-  const patch = parseFeaturePatch(raw.patch);
-  const disallowed = Object.keys(patch).filter(
-    (k) => !(BULK_PATCH_KEYS as readonly string[]).includes(k),
-  );
-  if (disallowed.length > 0) {
+
+  // The direct patch is optional (a request may be tag-only).
+  let patch: FeaturePatch = {};
+  const rawPatch = raw.patch;
+  if (rawPatch !== undefined && !(typeof rawPatch === "object" && rawPatch !== null && Object.keys(rawPatch).length === 0)) {
+    patch = parseFeaturePatch(rawPatch);
+    const disallowed = Object.keys(patch).filter(
+      (k) => !(BULK_PATCH_KEYS as readonly string[]).includes(k),
+    );
+    if (disallowed.length > 0) {
+      throw new InvalidPatchError(
+        `Bulk edits can only set ${BULK_PATCH_KEYS.join(", ")} (or add/clear tags); not ${disallowed.join(", ")}.`,
+      );
+    }
+  }
+
+  const tagOps: BulkTagOps = {};
+  if ("addTags" in raw && raw.addTags !== undefined) {
+    if (!Array.isArray(raw.addTags) || raw.addTags.some((t) => typeof t !== "string")) {
+      throw new InvalidPatchError("addTags must be an array of strings.");
+    }
+    const cleaned = [...new Set((raw.addTags as string[]).map((t) => t.trim()).filter(Boolean))];
+    if (cleaned.length > 0) tagOps.addTags = cleaned;
+  }
+  if (raw.clearTags === true) tagOps.clearTags = true;
+
+  if (Object.keys(patch).length === 0 && !tagOps.addTags && !tagOps.clearTags) {
     throw new InvalidPatchError(
-      `Bulk edits can only set ${BULK_PATCH_KEYS.join(", ")}; not ${disallowed.join(", ")}.`,
+      "A bulk edit must change at least one of: status, assigneeId, releaseId, addTags, clearTags.",
     );
   }
-  return { specIds, patch };
+  if (tagOps.clearTags && tagOps.addTags) {
+    throw new InvalidPatchError("clearTags and addTags can't be combined.");
+  }
+  return { specIds, patch, tagOps };
 }
 
 /**
- * Apply the same patch to many items, each in its own transaction (via
+ * Apply the same change to many items, each in its own transaction (via
  * {@link patchFeature}) so a rejection on one - an illegal status transition, an
  * unmet stage gate, a cross-product release - doesn't roll back the others.
- * Reuses every single-item guard and outbox emission. Returns a per-item result
- * so the caller can report exactly which items changed and which didn't.
+ * Tag ops merge per item (add is deduped against existing tags; clear empties
+ * them). Reuses every single-item guard and outbox emission, and returns a
+ * per-item result so the caller can report exactly what changed.
  */
 export async function bulkPatchFeatures(
   specIds: string[],
   patch: FeaturePatch,
+  tagOps: BulkTagOps,
   scope?: WorkspaceScope,
 ): Promise<BulkPatchResult> {
+  const store = await getStore();
   const results: BulkPatchItemResult[] = [];
   for (const specId of specIds) {
     try {
-      await patchFeature(specId, patch, scope);
+      const itemPatch: FeaturePatch = { ...patch };
+      if (tagOps.clearTags) {
+        itemPatch.tags = [];
+      } else if (tagOps.addTags) {
+        const feature = await store.getFeature(specId, scope);
+        if (!feature) throw new FeatureNotFoundError(specId);
+        itemPatch.tags = [...new Set([...feature.tags, ...tagOps.addTags])];
+      }
+      await patchFeature(specId, itemPatch, scope);
       results.push({ specId, ok: true });
     } catch (err) {
       if (

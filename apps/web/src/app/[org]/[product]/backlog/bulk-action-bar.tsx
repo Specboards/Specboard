@@ -5,8 +5,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { AuthRequiredError, bulkPatchFeatures } from "@/lib/api-client";
+import {
+  AuthRequiredError,
+  bulkPatchFeatures,
+  type BulkTagOps,
+} from "@/lib/api-client";
 import { statusLabel } from "@/lib/feature-helpers";
 import type { FeaturePatch } from "@/lib/store/types";
 
@@ -34,17 +39,23 @@ export function BulkActionBar({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [tagInput, setTagInput] = useState("");
 
   const count = selectedIds.length;
   if (count === 0) return null;
 
   async function apply(
-    patch: Pick<FeaturePatch, "status" | "assigneeId" | "tags" | "releaseId">,
+    patch: Pick<FeaturePatch, "status" | "assigneeId" | "releaseId">,
+    tagOps: BulkTagOps,
     label: string,
   ) {
     setPending(true);
     try {
-      const { okCount, failCount } = await bulkPatchFeatures(selectedIds, patch);
+      const { okCount, failCount } = await bulkPatchFeatures(
+        selectedIds,
+        patch,
+        tagOps,
+      );
       if (okCount > 0) {
         toast.success(
           failCount > 0
@@ -85,7 +96,7 @@ export function BulkActionBar({
         value=""
         disabled={pending}
         onChange={(e) => {
-          if (e.target.value) void apply({ status: e.target.value }, "Set status");
+          if (e.target.value) void apply({ status: e.target.value }, {}, "Set status");
         }}
       >
         <option value="">Set status…</option>
@@ -104,7 +115,7 @@ export function BulkActionBar({
         onChange={(e) => {
           if (!e.target.value) return;
           const assigneeId = e.target.value === "unassigned" ? null : e.target.value;
-          void apply({ assigneeId }, "Set assignee");
+          void apply({ assigneeId }, {}, "Set assignee");
         }}
       >
         <option value="">Set assignee…</option>
@@ -125,7 +136,7 @@ export function BulkActionBar({
           onChange={(e) => {
             if (!e.target.value) return;
             const releaseId = e.target.value === "none" ? null : e.target.value;
-            void apply({ releaseId }, "Set release");
+            void apply({ releaseId }, {}, "Set release");
           }}
         >
           <option value="">Set release…</option>
@@ -138,13 +149,38 @@ export function BulkActionBar({
         </Select>
       ) : null}
 
+      <Input
+        aria-label="Add a tag to selected"
+        placeholder="Add tag…"
+        className="h-8 w-28"
+        value={tagInput}
+        disabled={pending}
+        onChange={(e) => setTagInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          const tag = tagInput.trim();
+          if (!tag) return;
+          setTagInput("");
+          void apply({}, { addTags: [tag] }, `Add tag "${tag}"`);
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => void apply({}, { clearTags: true }, "Clear tags")}
+        disabled={pending}
+        className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-50"
+      >
+        Clear tags
+      </button>
+
+      <span className="mx-1 h-4 w-px bg-border" aria-hidden />
       <Button
         size="sm"
         variant="ghost"
         onClick={onClear}
         disabled={pending}
       >
-        Clear
+        Cancel
       </Button>
     </div>
   );

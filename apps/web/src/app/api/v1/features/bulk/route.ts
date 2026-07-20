@@ -28,8 +28,13 @@ export async function PATCH(req: Request) {
   }
 
   try {
-    const { specIds, patch } = parseBulkPatchRequest(body);
-    const result = await bulkPatchFeatures(specIds, patch, authz.scope ?? undefined);
+    const { specIds, patch, tagOps } = parseBulkPatchRequest(body);
+    const result = await bulkPatchFeatures(
+      specIds,
+      patch,
+      tagOps,
+      authz.scope ?? undefined,
+    );
     for (const path of ["/[org]/[product]/backlog", "/[org]/[product]/roadmap"]) {
       revalidatePath(path, "page");
     }
