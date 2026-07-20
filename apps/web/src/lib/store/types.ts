@@ -451,6 +451,9 @@ export interface ReleaseRecord {
   startDate: string | null;
   /** Target ship date as YYYY-MM-DD, or null when undated. */
   targetDate: string | null;
+  /** The date the release actually shipped (YYYY-MM-DD), stamped when it first
+   * transitions to `shipped` and cleared on reopen. Null while unshipped. */
+  shippedDate: string | null;
   /** Free-form release notes (Markdown), or null. */
   notes: string | null;
   /** Count of items scheduled into this release. */
@@ -554,6 +557,27 @@ export function compareReleases(
     if (a.targetDate === null) return 1;
     if (b.targetDate === null) return -1;
     return a.targetDate < b.targetDate ? -1 : 1;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+/**
+ * Order shipped releases newest-first (most recently shipped on the left), the
+ * inverse of the planned ordering: the latest release users shipped is what they
+ * most want to reach, so it shouldn't sit at the far end of a long history. Sorts
+ * by the actual ship date (falling back to the planned target date for older
+ * releases with no stamp), most recent first; undated last, then by name.
+ */
+export function compareShippedReleases(
+  a: Pick<ReleaseRecord, "shippedDate" | "targetDate" | "name">,
+  b: Pick<ReleaseRecord, "shippedDate" | "targetDate" | "name">,
+): number {
+  const da = a.shippedDate ?? a.targetDate;
+  const db = b.shippedDate ?? b.targetDate;
+  if (da !== db) {
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da > db ? -1 : 1;
   }
   return a.name.localeCompare(b.name);
 }

@@ -1997,6 +1997,8 @@ export class DbStore implements FeatureStore {
         .select({
           productId: releases.productId,
           name: releases.name,
+          status: releases.status,
+          shippedDate: releases.shippedDate,
         })
         .from(releases)
         .where(and(eq(releases.id, id), eq(releases.workspaceId, ws)))
@@ -2018,7 +2020,17 @@ export class DbStore implements FeatureStore {
         set.name = name;
       }
       if (patch.status !== undefined) {
-        set.status = normalizeReleaseStatus(patch.status);
+        const nextStatus = normalizeReleaseStatus(patch.status);
+        set.status = nextStatus;
+        // Stamp the actual ship date the first time a release ships (server date,
+        // date-only), and clear it if the release is reopened, so shipped_date
+        // always reflects the current shipped state. The planned target_date is
+        // left untouched.
+        if (nextStatus === "shipped" && current[0].status !== "shipped") {
+          if (!current[0].shippedDate) set.shippedDate = todayDateOnly();
+        } else if (nextStatus !== "shipped" && current[0].status === "shipped") {
+          set.shippedDate = null;
+        }
       }
       if (patch.startDate !== undefined) set.startDate = patch.startDate;
       if (patch.targetDate !== undefined) set.targetDate = patch.targetDate;
@@ -3928,6 +3940,11 @@ function normalizeReleaseStatus(status: string | undefined): ReleaseStatus {
   return status as ReleaseStatus;
 }
 
+/** Today's date as a date-only `YYYY-MM-DD` string (UTC), for ship stamps. */
+function todayDateOnly(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function toReleaseRecord(
   row: {
     id: string;
@@ -3936,6 +3953,7 @@ function toReleaseRecord(
     status: string;
     startDate: string | null;
     targetDate: string | null;
+    shippedDate: string | null;
     notes: string | null;
   },
   itemCount: number,
@@ -3947,6 +3965,7 @@ function toReleaseRecord(
     status: row.status as ReleaseStatus,
     startDate: row.startDate,
     targetDate: row.targetDate,
+    shippedDate: row.shippedDate,
     notes: row.notes,
     itemCount,
   };

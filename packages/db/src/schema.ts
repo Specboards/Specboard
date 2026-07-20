@@ -778,6 +778,10 @@ export const releases = pgTable(
     startDate: text("start_date"),
     /** Target ship date (date-only), or null when undated. */
     targetDate: text("target_date"),
+    /** The date the release actually shipped (date-only), stamped when it first
+     * transitions to `shipped` and cleared if it's reopened. Distinct from the
+     * planned `targetDate`, which is retained. Null while unshipped. */
+    shippedDate: text("shipped_date"),
     /** Free-form release notes (Markdown), or null. Shown in the release detail
      * panel on the Roadmap. */
     notes: text("notes"),

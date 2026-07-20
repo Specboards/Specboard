@@ -125,6 +125,8 @@ interface LocalRelease {
   status: "planned" | "in_progress" | "shipped";
   startDate: string | null;
   targetDate: string | null;
+  /** Actual ship date (YYYY-MM-DD), stamped on ship and cleared on reopen. */
+  shippedDate?: string | null;
   notes?: string | null;
 }
 
@@ -1332,6 +1334,7 @@ export class LocalFileStore implements FeatureStore {
       .map((r) => ({
         ...r,
         productId: r.productId ?? null,
+        shippedDate: r.shippedDate ?? null,
         notes: r.notes ?? null,
         itemCount: counts.get(r.id) ?? 0,
       }))
@@ -1361,12 +1364,14 @@ export class LocalFileStore implements FeatureStore {
       status,
       startDate: input.startDate ?? null,
       targetDate: input.targetDate ?? null,
+      shippedDate: null,
       notes: input.notes ?? null,
     };
     await this.writeReleases([...rows, release]);
     return {
       ...release,
       productId,
+      shippedDate: release.shippedDate ?? null,
       notes: release.notes ?? null,
       itemCount: 0,
     };
@@ -1390,7 +1395,17 @@ export class LocalFileStore implements FeatureStore {
       if (!(RELEASE_STATUSES as readonly string[]).includes(patch.status)) {
         throw new ReleaseError(`Unknown release status: ${patch.status}`);
       }
+      const prevStatus = release.status;
       release.status = patch.status;
+      // Stamp the actual ship date on first ship; clear it on reopen. Planned
+      // dates are retained.
+      if (patch.status === "shipped" && prevStatus !== "shipped") {
+        if (!release.shippedDate) {
+          release.shippedDate = new Date().toISOString().slice(0, 10);
+        }
+      } else if (patch.status !== "shipped" && prevStatus === "shipped") {
+        release.shippedDate = null;
+      }
     }
     if (patch.startDate !== undefined) release.startDate = patch.startDate;
     if (patch.targetDate !== undefined) release.targetDate = patch.targetDate;
@@ -1416,6 +1431,7 @@ export class LocalFileStore implements FeatureStore {
     return {
       ...release,
       productId: release.productId ?? null,
+      shippedDate: release.shippedDate ?? null,
       notes: release.notes ?? null,
       itemCount: all.filter((f) => f.releaseId === id).length,
     };
