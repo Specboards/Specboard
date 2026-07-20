@@ -9,9 +9,13 @@ import {
   deleteComment,
   listComments,
 } from "@/lib/api-client";
+import {
+  MentionInput,
+  renderCommentBody,
+  type MentionCandidate,
+} from "@/components/mention-input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import type { CommentRecord } from "@/lib/store/types";
 
 /** Compact relative time ("just now", "5m", "3h", "2d"), else a short date. */
@@ -44,18 +48,23 @@ function initial(name: string | null): string {
 export function FeatureComments({
   specId,
   currentUserId,
+  members,
 }: {
   specId: string;
   /** The acting user's id, so only their own comments show a delete control. */
   currentUserId: string | null;
+  /** Workspace members that can be @mentioned (and used to highlight mentions). */
+  members: MentionCandidate[];
 }) {
   const router = useRouter();
   const [comments, setComments] = useState<CommentRecord[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [body, setBody] = useState("");
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const memberNames = members.map((m) => m.name);
 
   useEffect(() => {
     let active = true;
@@ -94,9 +103,13 @@ export function FeatureComments({
     startTransition(async () => {
       setActionError(null);
       try {
-        const created = await createComment(specId, { body: text });
+        const created = await createComment(specId, {
+          body: text,
+          mentionedUserIds,
+        });
         setComments((prev) => [...(prev ?? []), created]);
         setBody("");
+        setMentionedUserIds([]);
         setAdding(false);
       } catch (err) {
         if (handleAuth(err)) return;
@@ -167,7 +180,7 @@ export function FeatureComments({
                   ) : null}
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm">
-                  {c.body}
+                  {renderCommentBody(c.body, memberNames)}
                 </p>
               </div>
             </li>
@@ -178,10 +191,14 @@ export function FeatureComments({
       {/* Start as an "Add comment" affordance; reveal the composer on opt-in. */}
       {adding ? (
         <form onSubmit={onSubmit} className="space-y-2">
-          <Textarea
+          <MentionInput
+            members={members}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Write a comment…"
+            onChange={(next, ids) => {
+              setBody(next);
+              setMentionedUserIds(ids);
+            }}
+            placeholder="Write a comment… use @ to mention"
             rows={3}
             autoFocus
             disabled={pending}
@@ -197,6 +214,7 @@ export function FeatureComments({
               onClick={() => {
                 setAdding(false);
                 setBody("");
+                setMentionedUserIds([]);
                 setActionError(null);
               }}
               disabled={pending}

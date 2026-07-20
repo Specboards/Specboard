@@ -211,6 +211,9 @@ export function ItemDetailView({
         <FeatureComments
           specId={feature.specId}
           currentUserId={currentUserId}
+          members={members
+            .filter((m) => !m.deactivatedAt)
+            .map((m) => ({ userId: m.userId, name: m.name }))}
         />
       </DetailSection>
 
