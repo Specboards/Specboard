@@ -23,6 +23,8 @@ import {
 import {
   RELATION_DIRECTIONS,
   RELEASE_STATUSES,
+  type CommentInput,
+  type CommentRecord,
   type CreatableRelationDirection,
   type CreateFeatureInput,
   type DetailTemplate,
@@ -733,6 +735,58 @@ export async function listReleases(
 ): Promise<ReleaseRecord[]> {
   const store = await getStore();
   return store.listReleases(scope);
+}
+
+/** Validate and normalize a create-comment request body. */
+export function parseCommentInput(body: unknown): CommentInput {
+  if (typeof body !== "object" || body === null) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const b = body as Record<string, unknown>;
+  if (typeof b.body !== "string" || !b.body.trim()) {
+    throw new InvalidPatchError("A non-empty comment body is required.");
+  }
+  const input: CommentInput = { body: b.body };
+  if (b.mentionedUserIds !== undefined) {
+    if (
+      !Array.isArray(b.mentionedUserIds) ||
+      b.mentionedUserIds.some((id) => typeof id !== "string")
+    ) {
+      throw new InvalidPatchError(
+        "mentionedUserIds must be an array of user ids.",
+      );
+    }
+    input.mentionedUserIds = b.mentionedUserIds as string[];
+  }
+  return input;
+}
+
+/** Comments on a feature (by stable specId), oldest first. */
+export async function listComments(
+  specId: string,
+  scope?: WorkspaceScope,
+): Promise<CommentRecord[]> {
+  const store = await getStore();
+  return store.listComments(specId, scope);
+}
+
+/** Add a comment to a feature (by stable specId), authored by the caller. */
+export async function createComment(
+  specId: string,
+  input: CommentInput,
+  scope?: WorkspaceScope,
+): Promise<CommentRecord> {
+  const store = await getStore();
+  return store.createComment(specId, input, scope);
+}
+
+/** Delete a comment; author or workspace owner only. */
+export async function deleteComment(
+  commentId: string,
+  scope?: WorkspaceScope,
+): Promise<void> {
+  const store = await getStore();
+  await store.deleteComment(commentId, scope);
 }
 
 /** The workspace's workflow stages, or `[]` when using the built-in default. */

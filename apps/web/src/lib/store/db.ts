@@ -26,6 +26,7 @@ import {
   and,
   asc,
   boardPreferences,
+  comments,
   count,
   createDb,
   desc,
@@ -74,6 +75,9 @@ import {
   RelationError,
   ReleaseError,
   RELEASE_STATUSES,
+  CommentError,
+  type CommentInput,
+  type CommentRecord,
   type BoardKey,
   type BoardPreferences,
   type CreateFeatureInput,
@@ -2114,6 +2118,123 @@ export class DbStore implements FeatureStore {
     });
   }
 
+  // ── Comments ──────────────────────────────────────────────────────────
+
+  /**
+   * Resolve a feature by its stable specId to the internal id + product the
+   * comment methods key on (comments reference `features.id`, but the API and
+   * store take the stable specId). Scoped to the workspace so a specId from
+   * another tenant can't be reached.
+   */
+  private async featureForComment(
+    tx: Tx,
+    ws: string,
+    specId: string,
+  ): Promise<{ id: string; productId: string | null }> {
+    const row = await tx
+      .select({ id: features.id, productId: features.productId })
+      .from(features)
+      .where(and(eq(features.specId, specId), eq(features.workspaceId, ws)))
+      .limit(1);
+    if (!row[0]) throw new CommentError(`Unknown item: ${specId}`);
+    return row[0];
+  }
+
+  async listComments(
+    specId: string,
+    scope?: WorkspaceScope,
+  ): Promise<CommentRecord[]> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const feat = await this.featureForComment(tx, ws, specId);
+      const [access, productById] = await Promise.all([
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, ws),
+      ]);
+      if (!canReadProductId(access, productById, feat.productId)) {
+        throw new CommentError("You do not have access to this item.");
+      }
+      const rows = await tx
+        .select({
+          id: comments.id,
+          featureId: comments.featureId,
+          authorId: comments.authorId,
+          body: comments.body,
+          createdAt: comments.createdAt,
+          authorName: users.name,
+          authorImage: users.image,
+        })
+        .from(comments)
+        .leftJoin(users, eq(users.id, comments.authorId))
+        .where(and(eq(comments.workspaceId, ws), eq(comments.featureId, feat.id)))
+        .orderBy(asc(comments.createdAt));
+      return rows.map(toCommentRecord);
+    });
+  }
+
+  async createComment(
+    specId: string,
+    input: CommentInput,
+    scope?: WorkspaceScope,
+  ): Promise<CommentRecord> {
+    return this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const body = input.body.trim();
+      if (!body) throw new CommentError("Comment body is required.");
+      const feat = await this.featureForComment(tx, ws, specId);
+      const [access, productById] = await Promise.all([
+        this.accessIn(tx, scope!),
+        this.productVisibilityIn(tx, ws),
+      ]);
+      // You can comment on any item you can read. (Mention fan-out from
+      // input.mentionedUserIds is handled in a later slice.)
+      if (!canReadProductId(access, productById, feat.productId)) {
+        throw new CommentError("You do not have access to this item.");
+      }
+      const [row] = await tx
+        .insert(comments)
+        .values({
+          workspaceId: ws,
+          featureId: feat.id,
+          authorId: scope!.userId,
+          body,
+        })
+        .returning();
+      if (!row) throw new CommentError("Failed to create the comment.");
+      // The author is the acting user; resolve their display fields so the
+      // created row renders without a follow-up fetch.
+      const author = await tx.query.users.findFirst({
+        where: eq(users.id, scope!.userId),
+        columns: { name: true, image: true },
+      });
+      return toCommentRecord({
+        ...row,
+        authorName: author?.name ?? null,
+        authorImage: author?.image ?? null,
+      });
+    });
+  }
+
+  async deleteComment(commentId: string, scope?: WorkspaceScope): Promise<void> {
+    await this.scoped(scope, async (tx) => {
+      const ws = scope!.workspaceId;
+      const current = await tx
+        .select({ authorId: comments.authorId })
+        .from(comments)
+        .where(and(eq(comments.id, commentId), eq(comments.workspaceId, ws)))
+        .limit(1);
+      if (!current[0]) throw new CommentError(`Unknown comment: ${commentId}`);
+      const access = await this.accessIn(tx, scope!);
+      // The author can delete their own comment; the workspace owner any.
+      if (current[0].authorId !== scope!.userId && !access.isOrgAdmin) {
+        throw new CommentError("You can only delete your own comments.");
+      }
+      await tx
+        .delete(comments)
+        .where(and(eq(comments.id, commentId), eq(comments.workspaceId, ws)));
+    });
+  }
+
   // ── Ideas ─────────────────────────────────────────────────────────────
 
   /**
@@ -3681,6 +3802,26 @@ function toReleaseRecord(
     targetDate: row.targetDate,
     notes: row.notes,
     itemCount,
+  };
+}
+
+function toCommentRecord(row: {
+  id: string;
+  featureId: string;
+  authorId: string;
+  body: string;
+  createdAt: Date;
+  authorName: string | null;
+  authorImage: string | null;
+}): CommentRecord {
+  return {
+    id: row.id,
+    featureId: row.featureId,
+    authorId: row.authorId,
+    authorName: row.authorName,
+    authorImage: row.authorImage,
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
