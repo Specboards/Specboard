@@ -339,12 +339,20 @@ export interface ProductMemberInput {
  * capability comes from per-product grants. */
 export type OrgRole = "owner" | "member";
 
+/**
+ * A role as it can appear on a listed member. Adds `service` (a machine
+ * account) to the settable {@link OrgRole}s: service members are created via
+ * the service-account flow, never invited or assigned, so they can be shown
+ * but not chosen in the invite / role-change UI.
+ */
+export type MemberDisplayRole = OrgRole | "service";
+
 /** An org member joined to their identity, as returned to the client. */
 export interface OrgMemberRecord {
   userId: string;
   name: string;
   email: string;
-  role: OrgRole;
+  role: MemberDisplayRole;
   /** ISO timestamp when suspended, or null when active. */
   deactivatedAt: string | null;
 }

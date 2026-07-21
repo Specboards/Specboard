@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 
-import { extractApiKey, verifyApiKeyUser } from "@/lib/api-keys";
+import { extractApiKey, verifyApiKey } from "@/lib/api-keys";
+import { keyScopesSatisfy, requiredScopeFor } from "@/lib/api-scopes";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import type { WorkspaceScope } from "@/lib/store/types";
@@ -72,23 +73,55 @@ async function resolveRequestMembership(
 }
 
 /**
- * Resolve the user behind an API request from either a CLI API key
+ * A resolved API caller: the user behind the request and, when they
+ * authenticated with an API key, that key's resource scopes. `scopes` is `[]`
+ * for browser-session auth and for legacy full-access keys, both of which are
+ * unrestricted.
+ */
+interface RequestPrincipal {
+  user: SessionUser;
+  scopes: string[];
+}
+
+/**
+ * Resolve the caller behind an API request from either a CLI API key
  * (`x-api-key` / `Authorization: Bearer sb_…`, checked first) or the browser
  * session cookie. Returns `null` when neither identifies a user. Assumes auth
  * is enabled (DB present); callers handle local file mode separately.
  */
-async function resolveRequestUser(req: Request): Promise<SessionUser | null> {
+async function resolveRequestUser(req: Request): Promise<RequestPrincipal | null> {
   const auth = getAuth();
   const db = getDb();
   if (!auth || !db) return null;
 
   const rawKey = extractApiKey(req);
-  if (rawKey) return verifyApiKeyUser(db, rawKey);
+  if (rawKey) {
+    const verified = await verifyApiKey(db, rawKey);
+    return verified ? { user: verified.user, scopes: verified.scopes } : null;
+  }
 
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) return null;
   const { id, email, name } = session.user;
-  return { id, email, name };
+  return { user: { id, email, name }, scopes: [] };
+}
+
+/**
+ * Enforce a scoped API key against what the request needs. Returns a 403
+ * response when a scoped key lacks the required `<resource>:<action>` scope,
+ * else `null`. Session auth and legacy full-access keys (empty `scopes`) always
+ * pass, as do paths with no scope mapping (e.g. session-only routes).
+ */
+function enforceKeyScope(req: Request, scopes: string[]): Response | null {
+  if (scopes.length === 0) return null;
+  const required = requiredScopeFor(req.method, new URL(req.url).pathname);
+  if (!required || keyScopesSatisfy(scopes, required)) return null;
+  return Response.json(
+    {
+      error: `This API key lacks the "${required.resource}:${required.action}" scope.`,
+    },
+    { status: 403 },
+  );
 }
 
 /**
@@ -118,7 +151,8 @@ export async function getServerSessionUser(): Promise<SessionUser | null> {
 export async function getSessionUser(req: Request): Promise<SessionUser | null> {
   const auth = getAuth();
   if (!auth) return null;
-  return resolveRequestUser(req);
+  const resolved = await resolveRequestUser(req);
+  return resolved?.user ?? null;
 }
 
 /**
@@ -142,20 +176,22 @@ async function resolveScope(
   const db = getDb();
   if (!auth || !db) return { ok: true, scope: null };
 
-  const user = await resolveRequestUser(req);
-  if (!user) {
+  const principal = await resolveRequestUser(req);
+  if (!principal) {
     return {
       ok: false,
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
+  const denied = enforceKeyScope(req, principal.scopes);
+  if (denied) return { ok: false, response: denied };
 
-  const resolved = await resolveRequestMembership(req, user.id);
+  const resolved = await resolveRequestMembership(req, principal.user.id);
   if (!resolved.ok) return resolved;
 
   return {
     ok: true,
-    scope: { userId: user.id, workspaceId: resolved.membership.workspaceId },
+    scope: { userId: principal.user.id, workspaceId: resolved.membership.workspaceId },
   };
 }
 
@@ -178,19 +214,21 @@ export async function resolveReadAccess(req: Request): Promise<ReadAccessResult>
   const db = getDb();
   if (!auth || !db) return { ok: true, access: null };
 
-  const user = await resolveRequestUser(req);
-  if (!user) {
+  const principal = await resolveRequestUser(req);
+  if (!principal) {
     return {
       ok: false,
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const resolved = await resolveRequestMembership(req, user.id);
+  const denied = enforceKeyScope(req, principal.scopes);
+  if (denied) return { ok: false, response: denied };
+  const resolved = await resolveRequestMembership(req, principal.user.id);
   if (!resolved.ok) return resolved;
   return {
     ok: true,
     access: {
-      userId: user.id,
+      userId: principal.user.id,
       workspaceId: resolved.membership.workspaceId,
       role: resolved.membership.role,
     },
@@ -215,14 +253,16 @@ export async function authorizeOrgAdmin(req: Request): Promise<ScopeResult> {
   const db = getDb();
   if (!auth || !db) return { ok: true, scope: null };
 
-  const user = await resolveRequestUser(req);
-  if (!user) {
+  const principal = await resolveRequestUser(req);
+  if (!principal) {
     return {
       ok: false,
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const resolved = await resolveRequestMembership(req, user.id);
+  const denied = enforceKeyScope(req, principal.scopes);
+  if (denied) return { ok: false, response: denied };
+  const resolved = await resolveRequestMembership(req, principal.user.id);
   if (!resolved.ok) return resolved;
   if (resolved.membership.role !== "owner") {
     return {
@@ -235,6 +275,6 @@ export async function authorizeOrgAdmin(req: Request): Promise<ScopeResult> {
   }
   return {
     ok: true,
-    scope: { userId: user.id, workspaceId: resolved.membership.workspaceId },
+    scope: { userId: principal.user.id, workspaceId: resolved.membership.workspaceId },
   };
 }

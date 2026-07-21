@@ -24,7 +24,14 @@ import {
  * `workspaceId` so Postgres RLS can isolate tenants (see migrations).
  */
 
-export const memberRole = pgEnum("member_role", ["owner", "member"]);
+/**
+ * A workspace role. `owner` administers everything; `member` is the org
+ * baseline (write only via per-product grants); `service` is a non-human
+ * machine account (sync bots, CI) that behaves like a `member` for
+ * product-scoped writes but is surfaced distinctly so automated activity is
+ * clearly attributed, and can never be an org owner.
+ */
+export const memberRole = pgEnum("member_role", ["owner", "member", "service"]);
 
 /** A product's read visibility: `org` (every member can read) or `private`
  * (read requires org-admin or explicit product membership). */
@@ -1432,6 +1439,14 @@ export const apiKeys = pgTable(
     name: text("name").notNull(),
     prefix: text("prefix").notNull(),
     keyHash: text("key_hash").notNull().unique(),
+    /**
+     * Resource scopes granted to this key, each `"<resource>:<read|write>"`
+     * (or `"*"` for full access). An EMPTY array means a legacy full-user key
+     * (created before scopes existed), so back-compat is preserved: existing
+     * keys keep unrestricted access. A non-empty array restricts the key to
+     * exactly those scopes (see `api-scopes.ts`).
+     */
+    scopes: text("scopes").array().notNull().default([]),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
