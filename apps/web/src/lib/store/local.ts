@@ -290,7 +290,7 @@ function toLocalEdge(
 /**
  * Zero-setup store for local testing: specs are read straight from the
  * repository's `specs/` directory and PM metadata is persisted to
- * `.specboard/local-metadata.json`. Set `DATABASE_URL` to use Postgres
+ * `.specboards/local-metadata.json`. Set `DATABASE_URL` to use Postgres
  * instead (see ./db.ts).
  */
 export class LocalFileStore implements FeatureStore {
@@ -301,68 +301,68 @@ export class LocalFileStore implements FeatureStore {
   }
 
   private get metadataPath() {
-    return path.join(this.root, ".specboard", "local-metadata.json");
+    return path.join(this.root, ".specboards", "local-metadata.json");
   }
 
   private get viewsPath() {
-    return path.join(this.root, ".specboard", "local-views.json");
+    return path.join(this.root, ".specboards", "local-views.json");
   }
 
   private get boardPrefsPath() {
-    return path.join(this.root, ".specboard", "local-board-prefs.json");
+    return path.join(this.root, ".specboards", "local-board-prefs.json");
   }
 
   private get itemsPath() {
-    return path.join(this.root, ".specboard", "local-items.json");
+    return path.join(this.root, ".specboards", "local-items.json");
   }
 
   private get levelsPath() {
-    return path.join(this.root, ".specboard", "local-levels.json");
+    return path.join(this.root, ".specboards", "local-levels.json");
   }
 
   private get productsPath() {
-    return path.join(this.root, ".specboard", "local-products.json");
+    return path.join(this.root, ".specboards", "local-products.json");
   }
 
   private get propertiesPath() {
-    return path.join(this.root, ".specboard", "local-properties.json");
+    return path.join(this.root, ".specboards", "local-properties.json");
   }
 
   private get releasesPath() {
-    return path.join(this.root, ".specboard", "local-releases.json");
+    return path.join(this.root, ".specboards", "local-releases.json");
   }
 
   private get commentsPath() {
-    return path.join(this.root, ".specboard", "local-comments.json");
+    return path.join(this.root, ".specboards", "local-comments.json");
   }
 
   private get statusesPath() {
-    return path.join(this.root, ".specboard", "local-statuses.json");
+    return path.join(this.root, ".specboards", "local-statuses.json");
   }
 
   private get stageGatesPath() {
-    return path.join(this.root, ".specboard", "local-stage-gates.json");
+    return path.join(this.root, ".specboards", "local-stage-gates.json");
   }
 
   /** Per-item gate completions: specId -> completed gate ids. */
   private get gateCompletionsPath() {
-    return path.join(this.root, ".specboard", "local-gate-completions.json");
+    return path.join(this.root, ".specboards", "local-gate-completions.json");
   }
 
   private get ideasPath() {
-    return path.join(this.root, ".specboard", "local-ideas.json");
+    return path.join(this.root, ".specboards", "local-ideas.json");
   }
 
   private get ideaStatusesPath() {
-    return path.join(this.root, ".specboard", "local-idea-statuses.json");
+    return path.join(this.root, ".specboards", "local-idea-statuses.json");
   }
 
   private get ideaSettingsPath() {
-    return path.join(this.root, ".specboard", "local-idea-settings.json");
+    return path.join(this.root, ".specboards", "local-idea-settings.json");
   }
 
   private get templatesPath() {
-    return path.join(this.root, ".specboard", "local-detail-templates.json");
+    return path.join(this.root, ".specboards", "local-detail-templates.json");
   }
 
   /** Persisted products, seeded with the default product when none exist. */
@@ -388,7 +388,7 @@ export class LocalFileStore implements FeatureStore {
   }
 
   private get productGroupsPath() {
-    return path.join(this.root, ".specboard", "local-product-groups.json");
+    return path.join(this.root, ".specboards", "local-product-groups.json");
   }
 
   private async readGroups(): Promise<LocalProductGroup[]> {
@@ -908,7 +908,7 @@ export class LocalFileStore implements FeatureStore {
     // Nothing to remove in file mode.
   }
 
-  // Saved views persist to `.specboard/local-views.json`. There's a single
+  // Saved views persist to `.specboards/local-views.json`. There's a single
   // implicit user in local mode, so no per-user scoping.
   private async readViews(): Promise<SavedView[]> {
     try {
@@ -970,7 +970,7 @@ export class LocalFileStore implements FeatureStore {
     await this.writeViews(views.filter((v) => v.id !== id));
   }
 
-  // Board preferences persist to `.specboard/local-board-prefs.json` as a map
+  // Board preferences persist to `.specboards/local-board-prefs.json` as a map
   // keyed by board ("backlog"/"roadmap"). Single implicit user in local mode,
   // so no per-user scoping. A legacy flat file (pre per-board prefs) is read as
   // the Backlog's prefs and rewritten into the map on the next save.
@@ -1013,7 +1013,7 @@ export class LocalFileStore implements FeatureStore {
     );
   }
 
-  // Custom properties persist to `.specboard/local-properties.json`.
+  // Custom properties persist to `.specboards/local-properties.json`.
   private async readProperties(): Promise<PropertyDef[]> {
     try {
       return JSON.parse(
@@ -1090,7 +1090,7 @@ export class LocalFileStore implements FeatureStore {
     await this.writeProperties(rows.filter((p) => p.id !== id));
   }
 
-  // Detail templates persist to `.specboard/local-detail-templates.json`.
+  // Detail templates persist to `.specboards/local-detail-templates.json`.
   private async readTemplates(): Promise<DetailTemplate[]> {
     try {
       return JSON.parse(
@@ -1201,7 +1201,7 @@ export class LocalFileStore implements FeatureStore {
     return updated;
   }
 
-  // Releases persist to `.specboard/local-releases.json`.
+  // Releases persist to `.specboards/local-releases.json`.
   async listStatuses(_scope?: WorkspaceScope): Promise<WorkspaceStatus[]> {
     try {
       const rows = JSON.parse(
@@ -1245,8 +1245,8 @@ export class LocalFileStore implements FeatureStore {
     return rows;
   }
 
-  // Stage gates persist to `.specboard/local-stage-gates.json`; per-item
-  // completions to `.specboard/local-gate-completions.json`.
+  // Stage gates persist to `.specboards/local-stage-gates.json`; per-item
+  // completions to `.specboards/local-gate-completions.json`.
   async listStageGates(_scope?: WorkspaceScope): Promise<StageGate[]> {
     try {
       const rows = JSON.parse(
@@ -1516,7 +1516,7 @@ export class LocalFileStore implements FeatureStore {
   }
 
   // ── Comments ──────────────────────────────────────────────────────────
-  // Persisted to `.specboard/local-comments.json`. File mode has no user
+  // Persisted to `.specboards/local-comments.json`. File mode has no user
   // records, so every comment is authored by LOCAL_USER with a null name.
 
   private async readComments(): Promise<LocalComment[]> {
@@ -1607,7 +1607,7 @@ export class LocalFileStore implements FeatureStore {
 
   // Products. Local file mode is a single all-powerful user (see core
   // LOCAL_PRODUCT_ACCESS), so visibility/permissions aren't enforced; products
-  // persist to `.specboard/local-products.json` for switcher parity.
+  // persist to `.specboards/local-products.json` for switcher parity.
   async getProductAccess(_scope?: WorkspaceScope): Promise<ProductAccess> {
     return LOCAL_PRODUCT_ACCESS;
   }
@@ -1909,7 +1909,7 @@ export class LocalFileStore implements FeatureStore {
     // Nothing to remove in file mode.
   }
 
-  // Ideas persist to `.specboard/local-ideas.json` (+ statuses/settings files).
+  // Ideas persist to `.specboards/local-ideas.json` (+ statuses/settings files).
   private async readIdeas(): Promise<LocalIdea[]> {
     try {
       return JSON.parse(
@@ -2174,14 +2174,14 @@ export class LocalFileStore implements FeatureStore {
   }
 
   // ── Docs (Plan-section areas) ───────────────────────────────────────────
-  // Doc spaces + pages persist to `.specboard/local-doc-*.json`.
+  // Doc spaces + pages persist to `.specboards/local-doc-*.json`.
 
   private get docSpacesPath() {
-    return path.join(this.root, ".specboard", "local-doc-spaces.json");
+    return path.join(this.root, ".specboards", "local-doc-spaces.json");
   }
 
   private get docPagesPath() {
-    return path.join(this.root, ".specboard", "local-doc-pages.json");
+    return path.join(this.root, ".specboards", "local-doc-pages.json");
   }
 
   private async readJsonFile<T>(file: string): Promise<T[]> {
@@ -2376,7 +2376,7 @@ function localNormalizeOptions(
 
 /** Walk upward from cwd to find the repo root (the dir holding `specs/`). */
 export async function findRepoRoot(start = process.cwd()): Promise<string> {
-  if (process.env.SPECBOARD_ROOT) return process.env.SPECBOARD_ROOT;
+  if (process.env.SPECBOARDS_ROOT) return process.env.SPECBOARDS_ROOT;
   let dir = start;
   for (;;) {
     try {

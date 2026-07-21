@@ -1,6 +1,6 @@
 /**
  * The default workflow a feature moves through. Teams can override the vocabulary
- * and transitions via `.specboard/config.yml` (see {@link ./config}), but this is
+ * and transitions via `.specboards/config.yml` (see {@link ./config}), but this is
  * the out-of-the-box state machine.
  */
 export const DEFAULT_STATUSES = [
@@ -118,7 +118,7 @@ export function transitionErrorMessage(
 
 /**
  * Resolve the active {@link StatusWorkflow} from a repo config. A team
- * customizes its statuses/transitions in `.specboard/config.yml`; when that's
+ * customizes its statuses/transitions in `.specboards/config.yml`; when that's
  * absent (or under-specified) the {@link defaultWorkflow} applies, so existing
  * data keeps working unchanged. When `statuses` are given but `transitions`
  * are omitted, any status may move to any other (the config's documented

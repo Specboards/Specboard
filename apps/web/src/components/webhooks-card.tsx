@@ -243,7 +243,7 @@ export function WebhooksCard({
           Register HTTPS endpoints that receive a signed POST when items and
           releases change. Each delivery is signed with the endpoint&rsquo;s
           secret (HMAC-SHA256 over <code>{"{timestamp}.{body}"}</code>, sent as
-          the <code>X-Specboard-Signature</code> header). The secret is shown
+          the <code>X-Specboards-Signature</code> header). The secret is shown
           once, at creation.
         </CardDescription>
       </CardHeader>

@@ -44,9 +44,9 @@ The response returns the `sb_…` key once. (A personal full-access key under
 
 In the GitHub repo settings, add:
 
-- `SPECBOARD_URL` - the deployment, e.g. `https://app.specboards.ai` (use
+- `SPECBOARDS_URL` - the deployment, e.g. `https://app.specboards.ai` (use
   `https://test.specboards.ai` while validating).
-- `SPECBOARD_TOKEN` - the `sb_…` API key.
+- `SPECBOARDS_TOKEN` - the `sb_…` API key.
 
 Without both, `specboard-sync.yml` no-ops, so forks and outside contributors are
 unaffected.
@@ -61,7 +61,7 @@ scripts/specboard/install-hooks.sh            # sets core.hooksPath=.githooks
 ```
 
 The `pre-push` hook is non-blocking: it only acts when `specboard` is installed
-and logged in, and never fails a push. Skip it once with `SPECBOARD_SKIP_HOOK=1
+and logged in, and never fails a push. Skip it once with `SPECBOARDS_SKIP_HOOK=1
 git push`.
 
 ## Files

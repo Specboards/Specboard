@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
  * Stripe-style webhook signing. We HMAC-SHA256 over `"{timestamp}.{rawBody}"`
- * with the endpoint's secret and ship the result as an `X-Specboard-Signature:
+ * with the endpoint's secret and ship the result as an `X-Specboards-Signature:
  * t=<unix>,v1=<hex>` header. Binding the timestamp into the signed string lets
  * consumers reject replays outside a short window, and signing the *raw* body
  * (not a re-serialization) means verification is byte-exact.
@@ -19,7 +19,7 @@ export function signPayload(
     .digest("hex");
 }
 
-/** The full `X-Specboard-Signature` header value for a delivery. */
+/** The full `X-Specboards-Signature` header value for a delivery. */
 export function signatureHeader(
   secret: string,
   rawBody: string,

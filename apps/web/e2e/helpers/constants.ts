@@ -8,8 +8,8 @@ import { resolve } from "node:path";
  */
 process.env.DATABASE_URL ??= "postgres://postgres:postgres@localhost:5432/specboard_e2e";
 process.env.BETTER_AUTH_SECRET ??= "e2e-only-better-auth-secret-0123456789abcdef";
-process.env.SPECBOARD_E2E_GITHUB_FIXTURE ??= resolve(process.cwd(), "e2e/.tmp/github.json");
-process.env.SPECBOARD_E2E ??= "1";
+process.env.SPECBOARDS_E2E_GITHUB_FIXTURE ??= resolve(process.cwd(), "e2e/.tmp/github.json");
+process.env.SPECBOARDS_E2E ??= "1";
 
 /** Where the app server listens during E2E (distinct from `next dev` on 3000). */
 export const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3100";

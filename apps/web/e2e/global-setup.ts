@@ -8,7 +8,7 @@ import { resetFixture } from "./helpers/github";
  * Global setup: start from a clean database, provision the first user (who
  * becomes the workspace admin) through the real sign-up -> sign-in -> setup UI,
  * and save the authenticated browser state for every test to reuse. Under
- * SPECBOARD_E2E the email-verification gate is off, so sign-in works without a
+ * SPECBOARDS_E2E the email-verification gate is off, so sign-in works without a
  * mailbox. See docs/archive/PLAN-e2e-playwright.md.
  */
 export default async function globalSetup() {

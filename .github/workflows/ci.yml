@@ -45,7 +45,7 @@ jobs:
       - run: pnpm -w test
 
       # E2E: apply migrations, install the browser, run the onboarding suite
-      # (SPECBOARD_E2E seams let it run hermetically with a faked GitHub).
+      # (SPECBOARDS_E2E seams let it run hermetically with a faked GitHub).
       - run: pnpm --filter @specboard/db migrate
 
       # Two-tenant RLS isolation suite: connects as a non-owner role and

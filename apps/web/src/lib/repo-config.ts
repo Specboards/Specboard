@@ -18,7 +18,7 @@ import type { WorkspaceScope } from "@/lib/store/types";
 /**
  * Resolve the active {@link RepoConfig} for a content page or request. In DB
  * mode it comes from the workspace's connected repo (synced from
- * `.specboard/config.yml`); in local file mode it's read straight off disk.
+ * `.specboards/config.yml`); in local file mode it's read straight off disk.
  * `null` when there's no config — config-driven UI (custom fields) then simply
  * renders nothing. Accepts any tenant-scoped value (PageAccess or
  * WorkspaceScope); only `workspaceId` is used.
@@ -32,7 +32,7 @@ export async function resolveRepoConfig(
   }
   try {
     const root = await findRepoRoot();
-    const raw = await fs.readFile(path.join(root, ".specboard", "config.yml"), "utf8");
+    const raw = await fs.readFile(path.join(root, ".specboards", "config.yml"), "utf8");
     return parseRepoConfigYaml(raw);
   } catch {
     return null;

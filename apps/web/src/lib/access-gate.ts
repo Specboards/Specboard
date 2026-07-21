@@ -6,12 +6,12 @@ import { and, eq, invitations, sql, type Database } from "@specboard/db";
  * enforces that at the auth layer so someone can't bypass the marketing site's
  * "Request access" flow by navigating straight to /sign-up.
  *
- * Enabled on the hosted SaaS via `SPECBOARD_INVITE_ONLY`; off by default so
+ * Enabled on the hosted SaaS via `SPECBOARDS_INVITE_ONLY`; off by default so
  * self-host deployments keep open sign-up. Independent of
- * `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS` (which only restricts *which* domains).
+ * `SPECBOARDS_BLOCK_PUBLIC_EMAIL_DOMAINS` (which only restricts *which* domains).
  */
 export function inviteOnlyEnabled(): boolean {
-  const value = process.env.SPECBOARD_INVITE_ONLY?.trim().toLowerCase();
+  const value = process.env.SPECBOARDS_INVITE_ONLY?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
 }
 

@@ -46,7 +46,7 @@ permalinks are type-segmented by level: `/{org}/{product}/backlog/{levelKey}/{sp
 ## Components
 
 ```
-GitHub repo (specs/**, .specboard/config.yml)
+GitHub repo (specs/**, .specboards/config.yml)
    ▲ commits/PRs        │ webhooks + reads
    │                    ▼
 Git Integration Service (GitHub App)  ── packages/git
@@ -64,7 +64,7 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
 ```
 
 - **`packages/core`** holds framework-agnostic domain logic: spec frontmatter + markdown
-  parser (`parseSpec`), status state machine (`canTransition`), `.specboard/config.yml`
+  parser (`parseSpec`), status state machine (`canTransition`), `.specboards/config.yml`
   schema (`parseRepoConfig`), and the configurable work-tracking **levels** model
   (`resolveLevels`/`leafLevel`/`parentLevelKey`/`resolveLevelUpdate`, covering depth, the
   spec-backed leaf, and parent/child level rules). Unit-tested.
@@ -96,7 +96,7 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
 - **`apps/web`**: Next.js App Router UI; left sidebar nav with light/dark theme;
   in-app auth via Better Auth (`/api/auth/*`: sign-up/in, email verification,
   password reset), with an optional invite-only sign-up gate
-  (`SPECBOARD_INVITE_ONLY`) and a public `POST /api/access-request` intake for
+  (`SPECBOARDS_INVITE_ONLY`) and a public `POST /api/access-request` intake for
   the pre-release request-access flow; routes for Board + Backlog (two views of
   one nav entry, with a
   per-hierarchy-level switcher), Roadmap (grouped by release), Feature detail
@@ -110,7 +110,7 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
 1. **Connect repo**: an admin creates the deployment's GitHub App in one click
    (GitHub App *manifest* flow; credentials stored encrypted in `github_app`),
    installs it and picks repos, then connects one → scan `specs/**` per
-   `.specboard/config.yml` → create `features` + `spec_index`, injecting missing `id`s.
+   `.specboards/config.yml` → create `features` + `spec_index`, injecting missing `id`s.
    Each spec's work item is homed under a Feature grouping, found or created by a
    stable key (the spec's `feature:` frontmatter, else its folder), so the hierarchy
    fills in on import without overriding any parent set later in the app (ADR 0002).
@@ -171,7 +171,7 @@ Postgres (RLS multi-tenancy) · Better Auth · `@modelcontextprotocol/sdk` ·
 When `DATABASE_URL` is unset, `apps/web` swaps its store implementation
 (`apps/web/src/lib/store`) for a filesystem-backed one: specs are read directly
 from this repo's `specs/` directory and metadata persists to
-`.specboard/local-metadata.json`. Same UI, zero infrastructure, useful for UI
+`.specboards/local-metadata.json`. Same UI, zero infrastructure, useful for UI
 testing and for dogfooding Specboards on its own specs. Postgres mode is the
 deployment shape.
 

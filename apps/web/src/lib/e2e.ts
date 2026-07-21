@@ -1,5 +1,5 @@
 /**
- * E2E test-mode flag. Set to a truthy value (`SPECBOARD_E2E=1`) only by the
+ * E2E test-mode flag. Set to a truthy value (`SPECBOARDS_E2E=1`) only by the
  * Playwright harness; never present in the deployed test/prod environments. When
  * on, a few narrow seams relax production gates so tests can run hermetically:
  *   - auth drops the email-verification requirement (see `auth.ts`), and
@@ -8,10 +8,10 @@
  * With the flag off, every one of those paths behaves exactly as in production.
  */
 export function isE2E(): boolean {
-  const value = process.env.SPECBOARD_E2E?.trim().toLowerCase();
+  const value = process.env.SPECBOARDS_E2E?.trim().toLowerCase();
   if (value !== "1" && value !== "true" && value !== "yes") return false;
   // Belt and suspenders: only honor the flag when the app is configured to
-  // serve localhost, so a stray or injected SPECBOARD_E2E can't disable email
+  // serve localhost, so a stray or injected SPECBOARDS_E2E can't disable email
   // verification or swap in the fake GitHub client on a deployed environment
   // (which always serves a public origin). A NODE_ENV check would not work
   // here: the Playwright harness runs `next start`, which is a production
@@ -33,5 +33,5 @@ export function isE2E(): boolean {
  * OS temp dir when unset.
  */
 export function e2eGithubFixturePath(): string {
-  return process.env.SPECBOARD_E2E_GITHUB_FIXTURE?.trim() || "/tmp/specboard-e2e-github.json";
+  return process.env.SPECBOARDS_E2E_GITHUB_FIXTURE?.trim() || "/tmp/specboard-e2e-github.json";
 }

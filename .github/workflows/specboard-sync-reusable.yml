@@ -16,8 +16,8 @@
 #     sync:
 #       uses: Specboards/Specboard/.github/workflows/specboard-sync-reusable.yml@main
 #       secrets:
-#         SPECBOARD_URL: ${{ secrets.SPECBOARD_URL }}
-#         SPECBOARD_TOKEN: ${{ secrets.SPECBOARD_TOKEN }}
+#         SPECBOARDS_URL: ${{ secrets.SPECBOARDS_URL }}
+#         SPECBOARDS_TOKEN: ${{ secrets.SPECBOARDS_TOKEN }}
 name: Specboard Sync (reusable)
 
 on:
@@ -28,9 +28,9 @@ on:
         type: string
         default: "latest"
     secrets:
-      SPECBOARD_URL:
+      SPECBOARDS_URL:
         required: true
-      SPECBOARD_TOKEN:
+      SPECBOARDS_TOKEN:
         required: true
 
 jobs:
@@ -46,8 +46,8 @@ jobs:
           node-version: 22
       - name: Sync work items from the PR
         env:
-          SPECBOARD_URL: ${{ secrets.SPECBOARD_URL }}
-          SPECBOARD_TOKEN: ${{ secrets.SPECBOARD_TOKEN }}
+          SPECBOARDS_URL: ${{ secrets.SPECBOARDS_URL }}
+          SPECBOARDS_TOKEN: ${{ secrets.SPECBOARDS_TOKEN }}
           CLI_VERSION: ${{ inputs.cli_version }}
           PR_BODY: ${{ github.event.pull_request.body }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -57,7 +57,7 @@ jobs:
           MERGED: ${{ github.event.pull_request.merged }}
         run: |
           set -uo pipefail
-          if [ -z "${SPECBOARD_URL:-}" ] || [ -z "${SPECBOARD_TOKEN:-}" ]; then
+          if [ -z "${SPECBOARDS_URL:-}" ] || [ -z "${SPECBOARDS_TOKEN:-}" ]; then
             echo "Specboard secrets not set; skipping sync."
             exit 0
           fi

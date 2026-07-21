@@ -7,7 +7,7 @@ kind: feature
 # Repo Spec Import
 
 Connect a GitHub repository and import every spec matched by
-`.specboard/config.yml` into the board, injecting stable `id` frontmatter
+`.specboards/config.yml` into the board, injecting stable `id` frontmatter
 where it is missing.
 
 ## Problem

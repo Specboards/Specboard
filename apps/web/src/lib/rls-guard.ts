@@ -27,7 +27,7 @@ export async function assertTenantIsolation(): Promise<void> {
   if (!appUrl) {
     if (isMultiTenant()) {
       throw new Error(
-        "[security] Refusing to start: SPECBOARD_MULTI_TENANT is set but DATABASE_URL_APP " +
+        "[security] Refusing to start: SPECBOARDS_MULTI_TENANT is set but DATABASE_URL_APP " +
           "is not. Tenant data would be served over the owner connection, which bypasses " +
           "row-level security. Provision the non-owner role (infra/rls-role.sql) and set " +
           "DATABASE_URL_APP.",

@@ -7,11 +7,11 @@ the board in sync on every push.
 
 A GitHub App registration hard-codes one webhook URL and one OAuth callback URL,
 so a single App can only ever serve one Specboards instance. That splits setup
-into two paths, keyed off `SPECBOARD_MULTI_TENANT`:
+into two paths, keyed off `SPECBOARDS_MULTI_TENANT`:
 
 | Model | Flag | GitHub App | How tenants connect |
 | --- | --- | --- | --- |
-| **Hosted** (test, prod) | `SPECBOARD_MULTI_TENANT=true` | One **shared** App Specboards owns under `@specboard`, configured via env | Click **Install**, never create |
+| **Hosted** (test, prod) | `SPECBOARDS_MULTI_TENANT=true` | One **shared** App Specboards owns under `@specboard`, configured via env | Click **Install**, never create |
 | **Self-host** | unset (default) | Each install creates its **own** App via the one-click manifest flow | One-click setup, then install |
 
 On the hosted deployment the in-app "create App" flow is **disabled**: it would
@@ -57,7 +57,7 @@ its own App because a GitHub App binds to a single host's webhook/callback URLs
 
    ```sh
    fly secrets set -a specboard-test \
-     SPECBOARD_MULTI_TENANT=true \
+     SPECBOARDS_MULTI_TENANT=true \
      GITHUB_APP_ID=123456 \
      GITHUB_WEBHOOK_SECRET=<hex> \
      GITHUB_APP_PRIVATE_KEY="$(cat ~/Downloads/app.private-key.pem)" \
@@ -69,7 +69,7 @@ its own App because a GitHub App binds to a single host's webhook/callback URLs
    connect (same as self-host step 2 below). Each install is a distinct
    `installation_id` scoped to that tenant: one App, many installations.
 
-> Without `SPECBOARD_MULTI_TENANT=true` the deployment behaves as self-host and
+> Without `SPECBOARDS_MULTI_TENANT=true` the deployment behaves as self-host and
 > exposes the per-tenant create flow. On a shared deployment that lets one
 > tenant's "create App" overwrite another's stored credentials. Always set the
 > flag on hosted.

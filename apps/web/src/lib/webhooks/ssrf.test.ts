@@ -10,7 +10,7 @@ import { isBlockedIp, resolveValidatedTarget } from "./ssrf";
 
 afterEach(() => {
   lookupMock.mockReset();
-  delete process.env.SPECBOARD_WEBHOOK_ALLOW_PRIVATE;
+  delete process.env.SPECBOARDS_WEBHOOK_ALLOW_PRIVATE;
 });
 
 describe("isBlockedIp", () => {
@@ -129,7 +129,7 @@ describe("resolveValidatedTarget", () => {
   });
 
   it("allow-private mode skips checks (self-host / e2e) and pins nothing", async () => {
-    process.env.SPECBOARD_WEBHOOK_ALLOW_PRIVATE = "1";
+    process.env.SPECBOARDS_WEBHOOK_ALLOW_PRIVATE = "1";
     const r = await resolveValidatedTarget("http://localhost:9000/hook");
     expect(r.ok).toBe(true);
     expect(r.ok && r.addresses).toEqual([]);

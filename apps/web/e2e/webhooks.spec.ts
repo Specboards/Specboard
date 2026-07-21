@@ -14,7 +14,7 @@ import {
  * Outbound webhooks, end to end: register an endpoint, cause a real event
  * (`release.shipped`), and assert the outbox drainer delivered a correctly
  * signed POST to a local receiver. The app server runs with
- * `SPECBOARD_WEBHOOK_ALLOW_PRIVATE=1` (see playwright.config) so the SSRF guard,
+ * `SPECBOARDS_WEBHOOK_ALLOW_PRIVATE=1` (see playwright.config) so the SSRF guard,
  * which blocks loopback by default, lets it reach the in-test receiver.
  */
 
@@ -92,8 +92,8 @@ test.describe("webhooks: outbound delivery", () => {
         .toBeGreaterThan(0);
 
       const delivery = receiver.received[0]!;
-      expect(header(delivery.headers, "x-specboard-event")).toBe("release.shipped");
-      expect(header(delivery.headers, "x-specboard-delivery")).toMatch(/^evt_/);
+      expect(header(delivery.headers, "x-specboards-event")).toBe("release.shipped");
+      expect(header(delivery.headers, "x-specboards-delivery")).toMatch(/^evt_/);
 
       const envelope = JSON.parse(delivery.body) as {
         type: string;
@@ -105,7 +105,7 @@ test.describe("webhooks: outbound delivery", () => {
       expect(envelope.data.actor?.name).toBeTruthy();
 
       // The signature verifies against the secret shown once at creation.
-      const sig = header(delivery.headers, "x-specboard-signature");
+      const sig = header(delivery.headers, "x-specboards-signature");
       const t = sig.match(/t=(\d+)/)?.[1];
       const v1 = sig.match(/v1=([a-f0-9]+)/)?.[1];
       expect(t).toBeTruthy();
@@ -147,8 +147,8 @@ test.describe("webhooks: outbound delivery", () => {
 
       // Same delivery id / signature on the resend so consumers can dedupe.
       const resent = receiver.received[receiver.received.length - 1]!;
-      expect(header(resent.headers, "x-specboard-delivery")).toBe(
-        header(delivery.headers, "x-specboard-delivery"),
+      expect(header(resent.headers, "x-specboards-delivery")).toBe(
+        header(delivery.headers, "x-specboards-delivery"),
       );
     } finally {
       await receiver.close();

@@ -39,7 +39,7 @@ Other
 
 Statuses: backlog, defining, ready, in_progress, in_review, done, archived
 
-Config lives at ~/.specboard/config.json. Env SPECBOARD_URL / SPECBOARD_TOKEN
+Config lives at ~/.specboards/config.json. Env SPECBOARDS_URL / SPECBOARDS_TOKEN
 override it.`;
 
 function fail(message: string): never {
@@ -87,12 +87,12 @@ async function cmdLogin(argv: string[]): Promise<void> {
   });
   const existing = loadFileConfig();
   const baseUrl =
-    values.url ?? process.env.SPECBOARD_URL ?? existing.baseUrl ??
+    values.url ?? process.env.SPECBOARDS_URL ?? existing.baseUrl ??
     (await ask("Deployment URL (e.g. https://app.specboards.ai): "));
   const apiKey =
-    values.key ?? process.env.SPECBOARD_TOKEN ??
+    values.key ?? process.env.SPECBOARDS_TOKEN ??
     (await ask("API key (sb_…): ", { secret: true }));
-  const orgSlug = values.org ?? process.env.SPECBOARD_ORG ?? existing.orgSlug;
+  const orgSlug = values.org ?? process.env.SPECBOARDS_ORG ?? existing.orgSlug;
   if (!baseUrl || !apiKey) fail("a URL and an API key are required.");
 
   // Verify before saving so a bad key fails loudly here, not on first use.
