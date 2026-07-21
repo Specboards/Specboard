@@ -953,6 +953,27 @@ export async function saveView(input: SavedViewInput): Promise<SavedView> {
   return body.view;
 }
 
+/** Rename or re-filter a saved view; returns the updated record. */
+export async function updateView(
+  id: string,
+  patch: Partial<Pick<SavedViewInput, "name" | "filters">>,
+): Promise<SavedView> {
+  const res = await apiFetch(`/api/v1/views/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as {
+    view?: SavedView;
+    error?: string;
+  } | null;
+  if (!res.ok || !body?.view) {
+    throw new Error(body?.error ?? `Update view failed with ${res.status}`);
+  }
+  return body.view;
+}
+
 /** Delete a saved view by id. */
 export async function deleteView(id: string): Promise<void> {
   const res = await apiFetch(`/api/v1/views/${encodeURIComponent(id)}`, {
@@ -1151,6 +1172,54 @@ export async function importWorkspaceSpecs(): Promise<ImportResult> {
   };
 }
 
+/** A connected repository as the API returns it (subset of the DB row). */
+export interface ConnectedRepository {
+  id: string;
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  config: { version: number; specGlobs?: string[] } | null;
+  githubInstallationId: string;
+}
+
+/** Fetch one connected repo in the caller's workspace; throws if not found. */
+export async function getRepository(id: string): Promise<ConnectedRepository> {
+  const res = await apiFetch(`/api/v1/repositories/${encodeURIComponent(id)}`);
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as {
+    repository?: ConnectedRepository;
+    error?: string;
+  } | null;
+  if (!res.ok || !body?.repository) {
+    throw new Error(body?.error ?? `Failed to load repository (${res.status}).`);
+  }
+  return body.repository;
+}
+
+/**
+ * Update a connected repo's default branch and/or spec-import globs. Admin-only
+ * on the server; returns the updated record.
+ */
+export async function updateRepository(
+  id: string,
+  patch: { defaultBranch?: string; specGlobs?: string[] },
+): Promise<ConnectedRepository> {
+  const res = await apiFetch(`/api/v1/repositories/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as {
+    repository?: ConnectedRepository;
+    error?: string;
+  } | null;
+  if (!res.ok || !body?.repository) {
+    throw new Error(body?.error ?? `Update repository failed with ${res.status}`);
+  }
+  return body.repository;
+}
+
 /**
  * Disconnect a connected repository. Imported board items are kept (detached);
  * only the sync connection and its GitHub links are removed. Admin-only.
@@ -1266,6 +1335,20 @@ export async function listProducts(): Promise<ProductRecord[]> {
   if (!res.ok)
     throw new Error(body?.error ?? `Failed to load products (${res.status}).`);
   return body?.products ?? [];
+}
+
+/** Fetch one product the caller can see; throws if it is unknown/not visible. */
+export async function getProduct(id: string): Promise<ProductRecord> {
+  const res = await apiFetch(`/api/v1/products/${encodeURIComponent(id)}`);
+  if (res.status === 401) throw new AuthRequiredError();
+  const body = (await res.json().catch(() => null)) as {
+    product?: ProductRecord;
+    error?: string;
+  } | null;
+  if (!res.ok || !body?.product) {
+    throw new Error(body?.error ?? `Failed to load product (${res.status}).`);
+  }
+  return body.product;
 }
 
 /** Create a product (org-admin only on the server); returns the new record. */

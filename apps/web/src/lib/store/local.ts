@@ -95,6 +95,7 @@ import {
   type RelationInput,
   type SavedView,
   type SavedViewInput,
+  type SavedViewPatch,
   type OutboxEmit,
   type WorkspaceScope,
 } from "./types";
@@ -945,6 +946,23 @@ export class LocalFileStore implements FeatureStore {
     };
     await this.writeViews([view, ...views]); // newest first, matching db order
     return view;
+  }
+
+  async updateSavedView(
+    id: string,
+    patch: SavedViewPatch,
+    _scope?: WorkspaceScope,
+  ): Promise<SavedView | null> {
+    const views = await this.readViews();
+    const existing = views.find((v) => v.id === id);
+    if (!existing) return null;
+    const updated: SavedView = {
+      ...existing,
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.filters !== undefined ? { filters: patch.filters } : {}),
+    };
+    await this.writeViews(views.map((v) => (v.id === id ? updated : v)));
+    return updated;
   }
 
   async deleteSavedView(id: string, _scope?: WorkspaceScope): Promise<void> {

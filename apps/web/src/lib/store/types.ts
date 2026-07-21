@@ -787,6 +787,12 @@ export interface SavedViewInput {
   filters: SavedViewFilters;
 }
 
+/** Editable fields on an existing saved view (its `view` list is immutable). */
+export interface SavedViewPatch {
+  name?: string;
+  filters?: SavedViewFilters;
+}
+
 /**
  * A user's personal board display preferences: which field keys render on a
  * card (ordered) and which custom field is featured. `cardFields: null` means
@@ -1077,6 +1083,16 @@ export interface FeatureStore {
     input: SavedViewInput,
     scope?: WorkspaceScope,
   ): Promise<SavedView>;
+  /**
+   * Update one of the acting user's saved views (name and/or filters).
+   * Returns the updated view, or null when no view with that id is owned by
+   * the acting user.
+   */
+  updateSavedView(
+    id: string,
+    patch: SavedViewPatch,
+    scope?: WorkspaceScope,
+  ): Promise<SavedView | null>;
   /** Delete one of the acting user's saved views by id. */
   deleteSavedView(id: string, scope?: WorkspaceScope): Promise<void>;
   /**

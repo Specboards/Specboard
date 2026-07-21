@@ -141,6 +141,7 @@ import {
   type SavedView,
   type SavedViewFilters,
   type SavedViewInput,
+  type SavedViewPatch,
   type WorkspaceScope,
 } from "./types";
 
@@ -1446,6 +1447,56 @@ export class DbStore implements FeatureStore {
         view: row.view,
         filters: toSavedViewFilters(row.filters),
       };
+    });
+  }
+
+  async updateSavedView(
+    id: string,
+    patch: SavedViewPatch,
+    scope?: WorkspaceScope,
+  ): Promise<SavedView | null> {
+    return this.scoped(scope, async (tx) => {
+      const set: Partial<typeof savedViews.$inferInsert> = {};
+      if (patch.name !== undefined) set.name = patch.name;
+      if (patch.filters !== undefined) set.filters = patch.filters;
+      // Nothing to change: return the current row (or null if not owned).
+      if (Object.keys(set).length === 0) {
+        const [current] = await tx
+          .select({
+            id: savedViews.id,
+            name: savedViews.name,
+            view: savedViews.view,
+            filters: savedViews.filters,
+          })
+          .from(savedViews)
+          .where(
+            and(
+              eq(savedViews.id, id),
+              eq(savedViews.workspaceId, scope!.workspaceId),
+              eq(savedViews.userId, scope!.userId),
+            ),
+          );
+        return current
+          ? { ...current, filters: toSavedViewFilters(current.filters) }
+          : null;
+      }
+      const [row] = await tx
+        .update(savedViews)
+        .set(set)
+        .where(
+          and(
+            eq(savedViews.id, id),
+            eq(savedViews.workspaceId, scope!.workspaceId),
+            eq(savedViews.userId, scope!.userId),
+          ),
+        )
+        .returning({
+          id: savedViews.id,
+          name: savedViews.name,
+          view: savedViews.view,
+          filters: savedViews.filters,
+        });
+      return row ? { ...row, filters: toSavedViewFilters(row.filters) } : null;
     });
   }
 
