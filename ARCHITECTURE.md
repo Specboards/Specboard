@@ -132,7 +132,7 @@ Next.js web app  ── apps/web           MCP server ── apps/mcp
 ## Multi-tenancy
 
 `workspace` is the tenant root; every tenant row carries `workspace_id` and Postgres
-**RLS** isolates tenants (`specboard_is_member(workspace_id)` via the
+**RLS** isolates tenants (`specboards_is_member(workspace_id)` via the
 `app.user_id` transaction-local session variable set by the app).
 SaaS = many workspaces on shared infra; self-host = a single workspace.
 

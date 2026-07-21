@@ -362,7 +362,7 @@ export async function resolveRepositories(
  * touching one spec doesn't rewrite the rest.
  *
  * Writes use whichever connection the caller passes. The GitHub webhook sink
- * passes the dedicated `specboard_worker` connection (`getWorkerDb()`), a narrow
+ * passes the dedicated `specboards_worker` connection (`getWorkerDb()`), a narrow
  * non-owner role scoped to just the ingestion tables with role-targeted RLS
  * policies for cross-workspace access; other callers may pass the owner
  * connection. Either way this is cross-workspace ingestion, not a per-user
