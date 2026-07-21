@@ -1,6 +1,6 @@
 # Versioning
 
-Specboard ships from a single monorepo and carries **one version number** for
+Specboards ships from a single monorepo and carries **one version number** for
 the whole product. Every workspace package (`specboards`, `@specboards/web`,
 `@specboards/cli`, `@specboards/db`, `@specboards/core`, `@specboards/git`,
 `@specboards/ui`, `@specboards/mcp`) moves in lockstep: they always share the same
