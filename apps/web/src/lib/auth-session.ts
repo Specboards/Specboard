@@ -4,6 +4,8 @@ import { extractApiKey, verifyApiKey } from "@/lib/api-keys";
 import { keyScopesSatisfy, requiredScopeFor } from "@/lib/api-scopes";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { QUOTAS, enforceQuota } from "@/lib/rate-limit";
+import type { Database } from "@specboard/db";
 import type { WorkspaceScope } from "@/lib/store/types";
 import {
   resolveApiMembership,
@@ -81,6 +83,8 @@ async function resolveRequestMembership(
 interface RequestPrincipal {
   user: SessionUser;
   scopes: string[];
+  /** True when the caller authenticated with an API key (vs a browser session). */
+  viaKey: boolean;
 }
 
 /**
@@ -97,13 +101,15 @@ async function resolveRequestUser(req: Request): Promise<RequestPrincipal | null
   const rawKey = extractApiKey(req);
   if (rawKey) {
     const verified = await verifyApiKey(db, rawKey);
-    return verified ? { user: verified.user, scopes: verified.scopes } : null;
+    return verified
+      ? { user: verified.user, scopes: verified.scopes, viaKey: true }
+      : null;
   }
 
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) return null;
   const { id, email, name } = session.user;
-  return { user: { id, email, name }, scopes: [] };
+  return { user: { id, email, name }, scopes: [], viaKey: false };
 }
 
 /**
@@ -122,6 +128,23 @@ function enforceKeyScope(req: Request, scopes: string[]): Response | null {
     },
     { status: 403 },
   );
+}
+
+/**
+ * Enforce API-key policies (scope + per-key rate limit) for a resolved
+ * principal. No-op for browser sessions. Returns a ready-to-return error
+ * response (403 for a missing scope, 429 when the key's request quota is
+ * exhausted), or `null` when the request may proceed.
+ */
+async function enforceKeyPolicies(
+  req: Request,
+  principal: RequestPrincipal,
+  db: Database,
+): Promise<Response | null> {
+  if (!principal.viaKey) return null;
+  const scopeDenied = enforceKeyScope(req, principal.scopes);
+  if (scopeDenied) return scopeDenied;
+  return enforceQuota(db, QUOTAS.apiRequest, `key:${principal.user.id}`);
 }
 
 /**
@@ -183,7 +206,7 @@ async function resolveScope(
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const denied = enforceKeyScope(req, principal.scopes);
+  const denied = await enforceKeyPolicies(req, principal, db);
   if (denied) return { ok: false, response: denied };
 
   const resolved = await resolveRequestMembership(req, principal.user.id);
@@ -221,7 +244,7 @@ export async function resolveReadAccess(req: Request): Promise<ReadAccessResult>
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const denied = enforceKeyScope(req, principal.scopes);
+  const denied = await enforceKeyPolicies(req, principal, db);
   if (denied) return { ok: false, response: denied };
   const resolved = await resolveRequestMembership(req, principal.user.id);
   if (!resolved.ok) return resolved;
@@ -260,7 +283,7 @@ export async function authorizeOrgAdmin(req: Request): Promise<ScopeResult> {
       response: Response.json({ error: "Authentication required." }, { status: 401 }),
     };
   }
-  const denied = enforceKeyScope(req, principal.scopes);
+  const denied = await enforceKeyPolicies(req, principal, db);
   if (denied) return { ok: false, response: denied };
   const resolved = await resolveRequestMembership(req, principal.user.id);
   if (!resolved.ok) return resolved;

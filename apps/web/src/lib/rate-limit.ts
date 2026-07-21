@@ -100,4 +100,11 @@ export const QUOTAS = {
   starterSpec: { op: "starter-spec", limit: 20, windowSec: 3600 },
   connectRepo: { op: "connect-repo", limit: 30, windowSec: 3600 },
   webhookTest: { op: "webhook-test", limit: 30, windowSec: 3600 },
+  /**
+   * Blanket throttle on `/api/v1` requests made with an API key (per key). The
+   * CLI and sync loop burst but stay well under this; it caps a leaked or
+   * runaway key. Browser-session traffic is not counted here (it is human-paced
+   * and Better Auth already limits the auth routes).
+   */
+  apiRequest: { op: "api-request", limit: 600, windowSec: 60 },
 } as const satisfies Record<string, Quota>;
