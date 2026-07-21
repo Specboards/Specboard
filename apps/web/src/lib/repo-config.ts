@@ -7,7 +7,7 @@ import {
   workflowFromStages,
   type RepoConfig,
   type StatusWorkflow,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { getDb } from "@/lib/db";
 import { getWorkspaceRepoConfig } from "@/lib/github-sync";

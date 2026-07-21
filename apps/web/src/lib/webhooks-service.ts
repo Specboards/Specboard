@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { and, eq, type Database, products, workspaces } from "@specboard/db";
+import { and, eq, type Database, products, workspaces } from "@specboards/db";
 
 import { decryptSecret } from "@/lib/crypto";
 import { drainSoon } from "@/lib/webhooks/drainer";

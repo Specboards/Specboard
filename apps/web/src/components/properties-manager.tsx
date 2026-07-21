@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import type { PropertyDef, PropertyType } from "@specboard/core";
-import { PROPERTY_TYPES } from "@specboard/core";
+import type { PropertyDef, PropertyType } from "@specboards/core";
+import { PROPERTY_TYPES } from "@specboards/core";
 
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";

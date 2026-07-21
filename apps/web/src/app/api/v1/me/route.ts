@@ -1,4 +1,4 @@
-import { eq, users, workspaces } from "@specboard/db";
+import { eq, users, workspaces } from "@specboards/db";
 
 import { resolveReadAccess } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/v1/me — identity of the caller (session cookie or API key), the
  * workspace they act in, and their role. Lets the CLI confirm a key works
- * (`specboard whoami`) and resolve "my work" by user id. In local file mode
+ * (`specboards whoami`) and resolve "my work" by user id. In local file mode
  * (no accounts) it reports `mode: "local"` with null identity.
  */
 export async function GET(req: Request) {

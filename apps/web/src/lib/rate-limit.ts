@@ -1,4 +1,4 @@
-import { operationLimits, sql, type Database } from "@specboard/db";
+import { operationLimits, sql, type Database } from "@specboards/db";
 
 import { logSecurityEvent } from "@/lib/security-log";
 

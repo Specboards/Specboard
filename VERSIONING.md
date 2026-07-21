@@ -1,10 +1,10 @@
 # Versioning
 
 Specboards ships from a single monorepo and carries **one version number** for
-the whole product. Every workspace package (`specboard`, `@specboard/web`,
-`@specboard/cli`, `@specboard/db`, `@specboard/core`, `@specboard/git`,
-`@specboard/ui`, `@specboard/mcp`) moves in lockstep: they always share the same
-`version` field. The CLI reports it via `specboard --version`.
+the whole product. Every workspace package (`specboards`, `@specboards/web`,
+`@specboards/cli`, `@specboards/db`, `@specboards/core`, `@specboards/git`,
+`@specboards/ui`, `@specboards/mcp`) moves in lockstep: they always share the same
+`version` field. The CLI reports it via `specboards --version`.
 
 ## Scheme
 
@@ -45,7 +45,7 @@ identical for a given release.
 
 ## Publishing the CLI to npm
 
-`@specboard/cli` shares the single monorepo version but publishes to npm on its
+`@specboards/cli` shares the single monorepo version but publishes to npm on its
 own trigger: pushing a `cli-v<version>` tag (e.g. `cli-v0.21.0`) runs
 `.github/workflows/cli-release.yml`, which verifies the tag matches
 `apps/cli/package.json`, builds, tests, and `pnpm publish`es. Publishing is

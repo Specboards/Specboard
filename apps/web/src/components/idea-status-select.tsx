@@ -2,7 +2,7 @@
 
 import { ChevronDown } from "lucide-react";
 
-import { ideaStatusLabel, type IdeaStage } from "@specboard/core";
+import { ideaStatusLabel, type IdeaStage } from "@specboards/core";
 
 import { cn } from "@/lib/utils";
 

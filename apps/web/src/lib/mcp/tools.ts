@@ -1,5 +1,5 @@
-import { descendantGroupIds } from "@specboard/core";
-import { eq, users, workspaces } from "@specboard/db";
+import { descendantGroupIds } from "@specboards/core";
+import { eq, users, workspaces } from "@specboards/db";
 
 import { getDb } from "@/lib/db";
 import { resolveWorkflowFor } from "@/lib/repo-config";

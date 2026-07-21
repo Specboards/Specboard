@@ -10,7 +10,7 @@ import type {
   PropertyType,
   SpecSection,
   WorkspaceLevel,
-} from "@specboard/core";
+} from "@specboards/core";
 
 export type {
   DetailTemplate,

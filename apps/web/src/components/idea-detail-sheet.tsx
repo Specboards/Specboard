@@ -7,7 +7,7 @@ import { ChevronUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 
-import type { IdeaStage } from "@specboard/core";
+import type { IdeaStage } from "@specboards/core";
 
 import { IdeaStatusSelect } from "@/components/idea-status-select";
 import { Badge } from "@/components/ui/badge";

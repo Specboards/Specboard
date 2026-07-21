@@ -65,7 +65,7 @@ Requires **Node 22+** and **pnpm 10+**. No database needed to try it locally:
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @specboard/web dev   # http://localhost:3000
+pnpm --filter @specboards/web dev   # http://localhost:3000
 ```
 
 Without `DATABASE_URL`, the app runs in **local file mode**: it reads
@@ -81,7 +81,7 @@ pnpm db:up        # docker compose Postgres on :5432 (or bring your own)
 export DATABASE_URL=postgres://postgres:postgres@localhost:5432/specboard
 pnpm db:migrate   # apply infra/migrations
 pnpm db:seed      # import specs/** into features + spec_index
-pnpm --filter @specboard/web dev
+pnpm --filter @specboards/web dev
 ```
 
 The UI is identical; metadata now lives in `features` rows, matching the
@@ -148,7 +148,7 @@ Tools: `whoami`, `list_products`, `list_items`, `read_item`, `get_relations`,
 **Local stdio server (self-host / offline).**
 
 ```bash
-pnpm --filter @specboard/mcp build
+pnpm --filter @specboards/mcp build
 DATABASE_URL=postgres://... node apps/mcp/dist/server.js
 ```
 
@@ -157,23 +157,23 @@ the seeded Postgres above.
 
 ## CLI
 
-`specboard` manages work items (status, assignment, GitHub links) from the
+`specboards` manages work items (status, assignment, GitHub links) from the
 terminal over the same `/api/v1` surface, authenticating with a personal API
 key. Great for git hooks and CI.
 
 ```bash
-pnpm --filter @specboard/cli build
+pnpm --filter @specboards/cli build
 node apps/cli/dist/index.js help
 
-specboard auth login --url https://app.specboards.ai   # paste an sb_… key
-specboard whoami
-specboard features --mine --status in_progress
-specboard status <specId> in_review --advance         # walk intermediate stages
-specboard link <specId> --pr 42
+specboards auth login --url https://app.specboards.ai   # paste an sb_… key
+specboards whoami
+specboards features --mine --status in_progress
+specboards status <specId> in_review --advance         # walk intermediate stages
+specboards link <specId> --pr 42
 ```
 
-Once published, the CLI installs without the monorepo via `npx @specboard/cli`,
-`npm i -g @specboard/cli`, or `brew install specboard/tap/specboard`. The full
+Once published, the CLI installs without the monorepo via `npx @specboards/cli`,
+`npm i -g @specboards/cli`, or `brew install specboards/tap/specboards`. The full
 REST surface it drives is described by an OpenAPI document at
 `/api/v1/openapi.json`, and API keys can be scoped (`<resource>:read` /
 `<resource>:write`).
@@ -186,7 +186,7 @@ See [`apps/cli/README.md`](./apps/cli/README.md) for the full command list.
 apps/
   web/        Next.js App Router UI + the hosted MCP endpoint (/api/mcp, OAuth 2.1)
   mcp/        Standalone stdio MCP server (self-host / offline agent access)
-  cli/        `specboard` CLI over the /api/v1 surface (API-key auth)
+  cli/        `specboards` CLI over the /api/v1 surface (API-key auth)
 packages/
   core/       Spec parsing, status state machine, .specboards/config.yml schema
   db/         Drizzle schema + Postgres client (metadata + spec index)
@@ -213,7 +213,7 @@ pnpm typecheck
 ### Database
 
 ```bash
-pnpm --filter @specboard/db generate   # emit table migrations into infra/migrations
+pnpm --filter @specboards/db generate   # emit table migrations into infra/migrations
 pnpm db:migrate                         # apply against $DATABASE_URL (incl. RLS policies)
 ```
 

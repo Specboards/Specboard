@@ -6,7 +6,7 @@ import {
   members,
   productMembers,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import { listWorkspaceMembers, type MemberRole, type WorkspaceMember } from "@/lib/workspace";
 

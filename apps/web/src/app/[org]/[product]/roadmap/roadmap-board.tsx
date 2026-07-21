@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { toast } from "sonner";
 
-import type { StatusWorkflow } from "@specboard/core";
+import type { StatusWorkflow } from "@specboards/core";
 
 import { useBoardPrefs } from "@/app/[org]/[product]/backlog/board-prefs";
 import {

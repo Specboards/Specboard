@@ -1,4 +1,4 @@
-import { descendantGroupIds } from "@specboard/core";
+import { descendantGroupIds } from "@specboards/core";
 
 import type { ProductGroupRecord, ProductRecord } from "@/lib/store";
 

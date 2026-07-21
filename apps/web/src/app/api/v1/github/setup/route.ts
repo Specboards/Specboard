@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import { getInstallationAccount } from "@specboard/git";
+import { getInstallationAccount } from "@specboards/git";
 
 import { getSessionUser } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";

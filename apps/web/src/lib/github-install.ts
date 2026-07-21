@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { and, eq, githubInstallStates, lt, sql, type Database } from "@specboard/db";
+import { and, eq, githubInstallStates, lt, sql, type Database } from "@specboards/db";
 
 /**
  * GitHub App installation flow helpers.

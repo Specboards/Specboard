@@ -16,7 +16,7 @@ const { version: VERSION } = createRequire(import.meta.url)("../package.json") a
 
 const HELP = `Specboards CLI
 
-Usage: specboard <command> [options]
+Usage: specboards <command> [options]
 
 Auth
   auth login [--url <url>] [--key <key>]   Save the deployment URL + API key
@@ -51,7 +51,7 @@ function fail(message: string): never {
 function client(): SpecboardsClient {
   const { baseUrl, apiKey, orgSlug } = resolveConfig();
   if (!baseUrl || !apiKey) {
-    fail("not logged in. Run `specboard auth login` first.");
+    fail("not logged in. Run `specboards auth login` first.");
   }
   return new SpecboardsClient(baseUrl, apiKey, orgSlug);
 }
@@ -292,7 +292,7 @@ async function main(): Promise<void> {
     case "version":
     case "--version":
     case "-v":
-      process.stdout.write(`specboard ${VERSION}\n`);
+      process.stdout.write(`specboards ${VERSION}\n`);
       return;
     case "auth": {
       const sub = rest[0];
@@ -302,7 +302,7 @@ async function main(): Promise<void> {
         process.stdout.write("Logged out.\n");
         return;
       }
-      fail("usage: specboard auth <login|logout>");
+      fail("usage: specboards auth <login|logout>");
       break;
     }
     case "whoami":
@@ -310,21 +310,21 @@ async function main(): Promise<void> {
     case "features":
       return cmdFeatures(rest);
     case "show":
-      if (!rest[0]) fail("usage: specboard show <specId>");
+      if (!rest[0]) fail("usage: specboards show <specId>");
       return cmdShow(rest[0]);
     case "status":
-      if (!rest[0] || !rest[1]) fail("usage: specboard status <specId> <status> [--advance]");
+      if (!rest[0] || !rest[1]) fail("usage: specboards status <specId> <status> [--advance]");
       return cmdStatus(rest[0], rest[1], rest.slice(2));
     case "assign":
-      if (!rest[0] || !rest[1]) fail("usage: specboard assign <specId> <me|none|userId>");
+      if (!rest[0] || !rest[1]) fail("usage: specboards assign <specId> <me|none|userId>");
       return cmdAssign(rest[0], rest[1]);
     case "link":
-      if (!rest[0]) fail("usage: specboard link <specId> (--pr <n> | --issue <n> | --branch <name>)");
+      if (!rest[0]) fail("usage: specboards link <specId> (--pr <n> | --issue <n> | --branch <name>)");
       return cmdLink(rest[0], rest.slice(1));
     case "products":
       return cmdProducts();
     default:
-      fail(`unknown command "${command}". Run \`specboard help\`.`);
+      fail(`unknown command "${command}". Run \`specboards help\`.`);
   }
 }
 

@@ -1,4 +1,4 @@
-import { and, eq, invitations, sql, type Database } from "@specboard/db";
+import { and, eq, invitations, sql, type Database } from "@specboards/db";
 
 /**
  * Pre-v1 the hosted service is invite-only: public sign-up is closed and access

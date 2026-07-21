@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Specboard pre-push hook (installed via scripts/specboard/install-hooks.sh).
+# Specboard pre-push hook (installed via scripts/specboards/install-hooks.sh).
 # When you push a feature branch, mark the specs it changed as in_progress.
 #
-# Strictly non-blocking: it no-ops unless the `specboard` CLI is installed and
+# Strictly non-blocking: it no-ops unless the `specboards` CLI is installed and
 # logged in, swallows every error, and always exits 0 so it can never block a
 # push. Disable for one push with SPECBOARDS_SKIP_HOOK=1.
 set -uo pipefail
 
 [ "${SPECBOARDS_SKIP_HOOK:-}" = "1" ] && exit 0
-command -v specboard >/dev/null 2>&1 || exit 0
+command -v specboards >/dev/null 2>&1 || exit 0
 
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
 [ -n "$branch" ] && [ "$branch" != "main" ] || exit 0
@@ -19,13 +19,13 @@ root="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
 base="$(git merge-base origin/main HEAD 2>/dev/null || echo "")"
 [ -n "$base" ] || exit 0
 
-ids="$(bash "$root/scripts/specboard/resolve-spec-ids.sh" "$base" HEAD 2>/dev/null || true)"
+ids="$(bash "$root/scripts/specboards/resolve-spec-ids.sh" "$base" HEAD 2>/dev/null || true)"
 [ -n "$ids" ] || exit 0
 
-echo "specboard: marking changed specs in_progress (SPECBOARDS_SKIP_HOOK=1 to skip)"
+echo "specboards: marking changed specs in_progress (SPECBOARDS_SKIP_HOOK=1 to skip)"
 while IFS= read -r id; do
   [ -n "$id" ] || continue
-  if specboard status "$id" in_progress >/dev/null 2>&1; then
+  if specboards status "$id" in_progress >/dev/null 2>&1; then
     echo "  $id -> in_progress"
   fi
 done <<EOF

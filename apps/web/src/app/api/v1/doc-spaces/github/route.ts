@@ -1,10 +1,10 @@
-import { repositories } from "@specboard/db";
+import { repositories } from "@specboards/db";
 import {
   createInstallationOrgRepository,
   getInstallationAccount,
   listInstallationRepositories,
   type CreatedRepo,
-} from "@specboard/git";
+} from "@specboards/git";
 
 import { authorizeOrgAdmin } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";

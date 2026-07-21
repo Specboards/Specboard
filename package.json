@@ -1,5 +1,5 @@
 {
-  "name": "specboard",
+  "name": "specboards",
   "version": "0.21.0",
   "private": true,
   "description": "Lightweight, spec-based product management layer over git-native specs. Open-core self-host + hosted SaaS.",
@@ -15,8 +15,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "db:up": "docker compose -f infra/docker-compose.yml up -d db",
-    "db:migrate": "pnpm --filter @specboard/db migrate",
-    "db:seed": "pnpm --filter @specboard/db seed",
+    "db:migrate": "pnpm --filter @specboards/db migrate",
+    "db:seed": "pnpm --filter @specboards/db seed",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml}\""
   },
   "devDependencies": {

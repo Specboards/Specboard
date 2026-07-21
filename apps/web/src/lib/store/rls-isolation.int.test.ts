@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { probeTenantConnection, tenantIsolationViolations } from "@specboard/db";
+import { probeTenantConnection, tenantIsolationViolations } from "@specboards/db";
 
 import { DbStore } from "./db";
 

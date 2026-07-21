@@ -1,4 +1,4 @@
-import { eq, users } from "@specboard/db";
+import { eq, users } from "@specboards/db";
 
 import { getServerSessionUser } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";

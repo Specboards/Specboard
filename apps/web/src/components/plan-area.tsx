@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { eq, githubInstallations } from "@specboard/db";
+import { eq, githubInstallations } from "@specboards/db";
 
 import { DocAreaBody, type GithubDocsData } from "@/components/doc-area-body";
 import type { GithubSetupState } from "@/components/doc-space-setup";

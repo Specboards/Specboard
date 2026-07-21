@@ -16,7 +16,7 @@ import {
   workflowFromStages,
   type ProductAccess,
   type StatusWorkflow,
-} from "@specboard/core";
+} from "@specboards/core";
 import {
   createDb,
   featureGateCompletions,
@@ -31,7 +31,7 @@ import {
   workspaceStageGates,
   workspaceStatuses,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 /**
  * Specboards MCP server. Gives coding agents a status-aware view of specs:
@@ -48,7 +48,7 @@ function db(): Database {
     const url = process.env.DATABASE_URL;
     if (!url) {
       throw new Error(
-        "DATABASE_URL is not set. Point it at the Specboards Postgres (e.g. postgres://postgres:postgres@localhost:5432/specboard) and seed it with `pnpm --filter @specboard/db seed`.",
+        "DATABASE_URL is not set. Point it at the Specboards Postgres (e.g. postgres://postgres:postgres@localhost:5432/specboard) and seed it with `pnpm --filter @specboards/db seed`.",
       );
     }
     dbInstance = createDb(url);

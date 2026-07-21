@@ -1,6 +1,6 @@
 import { generateKeyBetween } from "fractional-indexing";
 
-import { defaultWorkflow, type StatusWorkflow } from "@specboard/core";
+import { defaultWorkflow, type StatusWorkflow } from "@specboards/core";
 
 import type { FeatureRecord } from "./store/types";
 

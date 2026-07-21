@@ -3,7 +3,7 @@
  * workspace + repository, then a feature + spec_index row per
  * `specs/<slug>/spec.md`. Re-runnable (upserts on the stable spec id).
  *
- *   DATABASE_URL=postgres://... pnpm --filter @specboard/db seed
+ *   DATABASE_URL=postgres://... pnpm --filter @specboards/db seed
  */
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -17,7 +17,7 @@ import {
   DEFAULT_PRODUCT_KEY,
   leafLevel,
   parseSpec,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { createDb } from "./client.js";
 import {

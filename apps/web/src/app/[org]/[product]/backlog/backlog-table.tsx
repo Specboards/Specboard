@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { StatusWorkflow } from "@specboard/core";
+import type { StatusWorkflow } from "@specboards/core";
 
 import { type ProductTag } from "@/components/feature-card";
 import { StatusDot } from "@/components/status-dot";

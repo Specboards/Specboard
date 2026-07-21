@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { descendantGroupIds, resolveProductColor } from "@specboard/core";
+import { descendantGroupIds, resolveProductColor } from "@specboards/core";
 
 import { EmptyState } from "@/components/empty-state";
 import { StatusDot } from "@/components/status-dot";

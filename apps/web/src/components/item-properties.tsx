@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { PropertyDef, PropertyType, StatusWorkflow } from "@specboard/core";
+import type { PropertyDef, PropertyType, StatusWorkflow } from "@specboards/core";
 
 import { AuthRequiredError, patchFeature } from "@/lib/api-client";
 import { StatusDot } from "@/components/status-dot";

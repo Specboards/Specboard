@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { eq, schema } from "@specboard/db";
+import { eq, schema } from "@specboards/db";
 
 import { NoWorkspaceNotice, OAuthConsentForm } from "@/components/oauth-consent-form";
 import { getServerSessionUser } from "@/lib/auth-session";

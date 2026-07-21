@@ -8,7 +8,7 @@ import {
   type InstallationRepo,
   type SpecFile,
   type WriteFileInput,
-} from "@specboard/git";
+} from "@specboards/git";
 
 import { e2eGithubFixturePath } from "@/lib/e2e";
 import type { RepoRecord } from "@/lib/github-sync";

@@ -6,7 +6,7 @@ import {
   propertyAppliesToLevel,
   type PropertyDef,
   type StatusWorkflow,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { ALL_PRODUCTS } from "@/lib/active-product";
 import { getDb } from "@/lib/db";

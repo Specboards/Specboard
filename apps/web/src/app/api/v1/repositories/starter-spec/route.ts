@@ -1,4 +1,4 @@
-import { and, eq, repositories } from "@specboard/db";
+import { and, eq, repositories } from "@specboards/db";
 
 import { getDb } from "@/lib/db";
 import { authorizeOrgAdmin } from "@/lib/auth-session";

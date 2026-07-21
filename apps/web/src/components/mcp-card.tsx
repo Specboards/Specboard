@@ -47,14 +47,14 @@ function CopyBlock({ value, label }: { value: string; label: string }) {
  * e.g. for CI. Either way the agent inherits the user's workspace role.
  */
 export function McpCard({ endpoint }: { endpoint: string }) {
-  const claudeCodeCmd = `claude mcp add --transport http specboard ${endpoint}`;
+  const claudeCodeCmd = `claude mcp add --transport http specboards ${endpoint}`;
   const claudeCodeKeyCmd =
-    `claude mcp add --transport http specboard ${endpoint} \\\n` +
+    `claude mcp add --transport http specboards ${endpoint} \\\n` +
     `  --header "Authorization: Bearer sb_YOUR_KEY"`;
   const desktopConfig = JSON.stringify(
     {
       mcpServers: {
-        specboard: {
+        specboards: {
           type: "http",
           url: endpoint,
         },

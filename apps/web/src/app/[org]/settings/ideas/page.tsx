@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { resolveIdeaStages } from "@specboard/core";
+import { resolveIdeaStages } from "@specboards/core";
 
 import { IdeaPortalSettings } from "@/components/idea-portal-settings";
 import { IdeaStagesEditor } from "@/components/idea-stages-editor";

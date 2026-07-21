@@ -22,7 +22,7 @@ import {
   webhookEndpoints,
   workspaceProperties,
   workspaces,
-} from "@specboard/db";
+} from "@specboards/db";
 
 /**
  * Direct database access for E2E setup/teardown. The Playwright test process and

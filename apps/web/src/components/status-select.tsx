@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
-import type { StatusWorkflow } from "@specboard/core";
+import type { StatusWorkflow } from "@specboards/core";
 
 import { AuthRequiredError, patchFeature } from "@/lib/api-client";
 import { Select } from "@/components/ui/select";

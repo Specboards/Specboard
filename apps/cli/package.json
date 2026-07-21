@@ -1,5 +1,5 @@
 {
-  "name": "@specboard/cli",
+  "name": "@specboards/cli",
   "version": "0.21.0",
   "type": "module",
   "description": "Command-line interface for Specboard (manage specs, status, and GitHub links from the terminal).",
@@ -7,14 +7,14 @@
   "homepage": "https://specboards.ai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Specboards/Specboard.git",
+    "url": "git+https://github.com/Specboards/Specboards.git",
     "directory": "apps/cli"
   },
   "bugs": {
-    "url": "https://github.com/Specboards/Specboard/issues"
+    "url": "https://github.com/Specboards/Specboards/issues"
   },
   "keywords": [
-    "specboard",
+    "specboards",
     "cli",
     "product-management",
     "backlog",
@@ -22,7 +22,7 @@
     "roadmap"
   ],
   "bin": {
-    "specboard": "./dist/index.js"
+    "specboards": "./dist/index.js"
   },
   "files": [
     "dist",

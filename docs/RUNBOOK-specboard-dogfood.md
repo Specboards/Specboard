@@ -15,7 +15,7 @@ follows the actual work instead of being updated by hand.
 `id:`), plus any `Spec: <id>` line in the PR body. Use the trailer for code-only
 PRs that don't edit a spec file.
 
-The sync uses `specboard status ... --advance`, which walks a spec through the
+The sync uses `specboards status ... --advance`, which walks a spec through the
 intermediate statuses, so `in_progress` straight from `backlog` now advances
 through `defining` and `ready` automatically instead of being skipped. It stays
 best-effort: if no legal path to the target exists the step is logged and
@@ -54,26 +54,26 @@ unaffected.
 ### 3. Local hooks (per clone, optional)
 
 ```bash
-pnpm --filter @specboard/cli build
-pnpm --filter @specboard/cli exec npm link    # puts `specboard` on PATH
-specboard auth login --url https://app.specboards.ai
-scripts/specboard/install-hooks.sh            # sets core.hooksPath=.githooks
+pnpm --filter @specboards/cli build
+pnpm --filter @specboards/cli exec npm link    # puts `specboards` on PATH
+specboards auth login --url https://app.specboards.ai
+scripts/specboards/install-hooks.sh            # sets core.hooksPath=.githooks
 ```
 
-The `pre-push` hook is non-blocking: it only acts when `specboard` is installed
+The `pre-push` hook is non-blocking: it only acts when `specboards` is installed
 and logged in, and never fails a push. Skip it once with `SPECBOARDS_SKIP_HOOK=1
 git push`.
 
 ## Files
 
-- `apps/cli/` - the `specboard` CLI.
-- `scripts/specboard/resolve-spec-ids.sh` - maps a diff / PR body to spec ids.
-- `scripts/specboard/sync-pr.sh` - the CI sync logic (in_progress/link/done).
+- `apps/cli/` - the `specboards` CLI.
+- `scripts/specboards/resolve-spec-ids.sh` - maps a diff / PR body to spec ids.
+- `scripts/specboards/sync-pr.sh` - the CI sync logic (in_progress/link/done).
 - `.github/workflows/specboard-sync.yml` - runs sync-pr.sh on PR events.
 - `.github/workflows/specboard-sync-reusable.yml` - the reusable (`workflow_call`)
   version other repos enable with a ~5-line caller (runs the published CLI via
   `npx`); see `apps/cli/README.md`.
-- `.githooks/pre-push` + `scripts/specboard/install-hooks.sh` - the local hook.
+- `.githooks/pre-push` + `scripts/specboards/install-hooks.sh` - the local hook.
 
 ## Verify
 

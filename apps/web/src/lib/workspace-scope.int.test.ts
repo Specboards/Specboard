@@ -27,12 +27,12 @@ const loner = randomUUID();
 describe.skipIf(!DB_URL)("resolveApiMembership (multi-org)", () => {
   let sql: postgres.Sql;
   let savedMultiTenant: string | undefined;
-  let db: import("@specboard/db").Database;
+  let db: import("@specboards/db").Database;
 
   beforeAll(async () => {
     savedMultiTenant = process.env.SPECBOARDS_MULTI_TENANT;
     process.env.SPECBOARDS_MULTI_TENANT = "true";
-    const { createDb } = await import("@specboard/db");
+    const { createDb } = await import("@specboards/db");
     db = createDb(DB_URL!);
 
     sql = postgres(DB_URL!, { prepare: false, max: 2 });

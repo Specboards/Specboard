@@ -1,4 +1,4 @@
-import { and, eq, repositories, type Database } from "@specboard/db";
+import { and, eq, repositories, type Database } from "@specboards/db";
 
 import { resolveRepoClient, type RepoRecord } from "@/lib/github-sync";
 import { DocError, type DocSpace } from "@/lib/store/types";
