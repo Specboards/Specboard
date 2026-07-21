@@ -1,5 +1,5 @@
 {
-  "name": "@specboard/web",
+  "name": "@specboards/web",
   "version": "0.21.0",
   "private": true,
   "scripts": {
@@ -18,10 +18,10 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@radix-ui/react-dialog": "^1.1.18",
-    "@specboard/core": "workspace:*",
-    "@specboard/db": "workspace:*",
-    "@specboard/git": "workspace:*",
-    "@specboard/ui": "workspace:*",
+    "@specboards/core": "workspace:*",
+    "@specboards/db": "workspace:*",
+    "@specboards/git": "workspace:*",
+    "@specboards/ui": "workspace:*",
     "@tailwindcss/postcss": "^4.3.2",
     "@tiptap/pm": "^3.27.1",
     "@tiptap/react": "^3.27.1",

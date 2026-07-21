@@ -1,5 +1,5 @@
-import { and, eq, repositories } from "@specboard/db";
-import { listInstallationRepositories } from "@specboard/git";
+import { and, eq, repositories } from "@specboards/db";
+import { listInstallationRepositories } from "@specboards/git";
 
 import { getDb } from "@/lib/db";
 import { authorizeOrgAdmin, resolveReadScope } from "@/lib/auth-session";

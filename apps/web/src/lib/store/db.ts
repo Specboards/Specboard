@@ -21,7 +21,7 @@ import {
   type IdeaStage,
   type PropertyDef,
   type WorkspaceLevel,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { riceFields } from "@/lib/feature-helpers";
 import {
@@ -65,7 +65,7 @@ import {
   workspaceStatuses,
   featureGateCompletions,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import {
   compareReleases,

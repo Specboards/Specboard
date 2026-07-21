@@ -41,10 +41,10 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
-      '@specboard/core':
+      '@specboards/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@specboard/db':
+      '@specboards/db':
         specifier: workspace:*
         version: link:../../packages/db
       drizzle-orm:
@@ -72,16 +72,16 @@ importers:
       '@radix-ui/react-dialog':
         specifier: ^1.1.18
         version: 1.1.18(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@specboard/core':
+      '@specboards/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@specboard/db':
+      '@specboards/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@specboard/git':
+      '@specboards/git':
         specifier: workspace:*
         version: link:../../packages/git
-      '@specboard/ui':
+      '@specboards/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tailwindcss/postcss':
@@ -188,7 +188,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@specboard/core':
+      '@specboards/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
@@ -210,7 +210,7 @@ importers:
 
   packages/git:
     dependencies:
-      '@specboard/core':
+      '@specboards/core':
         specifier: workspace:*
         version: link:../core
       octokit:

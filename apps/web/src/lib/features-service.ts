@@ -6,7 +6,7 @@ import {
   isValidParentLevel,
   propertyKeyFromLabel,
   type PropertyDef,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { RICE_IMPACT_VALUES } from "@/lib/feature-helpers";
 import { resolveWorkflowFor } from "@/lib/repo-config";
@@ -52,7 +52,7 @@ import {
   type StatusStageInput,
   type WorkspaceStatus,
 } from "@/lib/store/types";
-import type { IdeaStage } from "@specboard/core";
+import type { IdeaStage } from "@specboards/core";
 
 /**
  * Domain operations behind the public /api/v1 surface. Route handlers stay

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { and, eq, members, users, type Database } from "@specboard/db";
+import { and, eq, members, users, type Database } from "@specboards/db";
 
 import { createApiKey, type GeneratedApiKey } from "@/lib/api-keys";
 import { parseApiScopes } from "@/lib/api-scopes";

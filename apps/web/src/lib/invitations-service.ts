@@ -13,7 +13,7 @@ import {
   sql,
   users,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import type { SessionUser } from "@/lib/auth-session";
 import { renderActionEmail, sendEmail } from "@/lib/email";

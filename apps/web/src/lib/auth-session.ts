@@ -5,7 +5,7 @@ import { keyScopesSatisfy, requiredScopeFor } from "@/lib/api-scopes";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { QUOTAS, enforceQuota } from "@/lib/rate-limit";
-import type { Database } from "@specboard/db";
+import type { Database } from "@specboards/db";
 import type { WorkspaceScope } from "@/lib/store/types";
 import {
   resolveApiMembership,

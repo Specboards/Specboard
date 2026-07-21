@@ -5,8 +5,8 @@ import {
   parsePushEvent,
   verifyWebhookSignature,
   type GithubEntityEvent,
-} from "@specboard/git";
-import { and, eq, featureGithubLinks, githubInstallations, type Database } from "@specboard/db";
+} from "@specboards/git";
+import { and, eq, featureGithubLinks, githubInstallations, type Database } from "@specboards/db";
 
 import { getWorkerDb } from "@/lib/db";
 import { getWebhookSecret } from "@/lib/github-app";

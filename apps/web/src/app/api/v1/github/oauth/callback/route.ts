@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
-import { and, eq, githubInstallations, ne, sql } from "@specboard/db";
-import { exchangeGithubUserCode, verifyInstallationOwnership } from "@specboard/git";
+import { and, eq, githubInstallations, ne, sql } from "@specboards/db";
+import { exchangeGithubUserCode, verifyInstallationOwnership } from "@specboards/git";
 
 import { getSessionUser } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";

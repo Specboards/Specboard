@@ -1,4 +1,4 @@
-import { eq, repositories } from "@specboard/db";
+import { eq, repositories } from "@specboards/db";
 import { headers } from "next/headers";
 
 import { ApiKeysCard } from "@/components/api-keys-card";

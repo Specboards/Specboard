@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { canWriteProduct, rewriteSpecBody } from "@specboard/core";
+import { canWriteProduct, rewriteSpecBody } from "@specboards/core";
 import {
   and,
   eq,
@@ -8,7 +8,7 @@ import {
   repositories,
   specIndex,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import {
   featureSlug,

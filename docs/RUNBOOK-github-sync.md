@@ -123,7 +123,7 @@ Nothing to copy by hand.
   stable key: its `feature:` frontmatter when set, else its folder path (so specs
   in the same directory share a Feature). Sync only assigns a Feature when the work
   item has none, so re-syncs never override a parent you set in the app.
-- **Stable ids:** specs that lacked an `id` get a `chore(specboard): assign
+- **Stable ids:** specs that lacked an `id` get a `chore(specboards): assign
   stable id …` commit on `main`.
 - **Live sync:** push a change to any `specs/**/spec.md`; GitHub App → Advanced →
   **Recent Deliveries** should show the push delivery returning **200**, and the

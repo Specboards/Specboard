@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { and, apiKeys, eq, isNull, sql, users, type Database } from "@specboard/db";
+import { and, apiKeys, eq, isNull, sql, users, type Database } from "@specboards/db";
 
 import type { SessionUser } from "@/lib/auth-session";
 

@@ -22,7 +22,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ListChecks } from "lucide-react";
 import { toast } from "sonner";
 
-import type { StatusWorkflow } from "@specboard/core";
+import type { StatusWorkflow } from "@specboards/core";
 
 import { FeatureCard, type ProductTag } from "@/components/feature-card";
 import { FeatureEditSheet } from "@/components/feature-edit-sheet";

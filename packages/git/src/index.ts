@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type ParsedSpec, hasSpecId, parseSpec } from "@specboard/core";
+import { type ParsedSpec, hasSpecId, parseSpec } from "@specboards/core";
 
 /** A spec file discovered in a repo, with its git pointers. */
 export interface SpecFile {
@@ -89,7 +89,7 @@ export async function reconcileSpecs(
       const written = await client.writeFile({
         path: file.path,
         content: raw,
-        message: `chore(specboard): assign stable id to ${file.path}`,
+        message: `chore(specboards): assign stable id to ${file.path}`,
         mode: "direct",
       });
       // Track the new blob sha so a later tree walk sees this file as unchanged.
@@ -105,7 +105,7 @@ export async function reconcileSpecs(
       spec = parseSpec(raw, file.path);
     } catch (err) {
       console.warn(
-        `[specboard] skipping unparseable spec ${file.path}:`,
+        `[specboards] skipping unparseable spec ${file.path}:`,
         err instanceof Error ? err.message : err,
       );
       continue;

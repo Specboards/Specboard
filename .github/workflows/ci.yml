@@ -46,11 +46,11 @@ jobs:
 
       # E2E: apply migrations, install the browser, run the onboarding suite
       # (SPECBOARDS_E2E seams let it run hermetically with a faked GitHub).
-      - run: pnpm --filter @specboard/db migrate
+      - run: pnpm --filter @specboards/db migrate
 
       # Two-tenant RLS isolation suite: connects as a non-owner role and
       # proves tenant data cannot cross the workspace boundary (fails closed).
-      - run: pnpm --filter @specboard/web test:int
+      - run: pnpm --filter @specboards/web test:int
 
-      - run: pnpm --filter @specboard/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @specboard/web test:e2e
+      - run: pnpm --filter @specboards/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @specboards/web test:e2e

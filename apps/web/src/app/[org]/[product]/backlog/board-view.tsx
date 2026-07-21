@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { parentLevelKey } from "@specboard/core";
+import { parentLevelKey } from "@specboards/core";
 
 import { BoardClient } from "./board-client";
 import { BoardPrefsProvider } from "./board-prefs";

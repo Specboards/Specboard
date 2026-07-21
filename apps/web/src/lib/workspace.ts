@@ -9,8 +9,8 @@ import {
   workspaceLevels,
   workspaces,
   type Database,
-} from "@specboard/db";
-import { DEFAULT_LEVELS, DEFAULT_PRODUCT_KEY } from "@specboard/core";
+} from "@specboards/db";
+import { DEFAULT_LEVELS, DEFAULT_PRODUCT_KEY } from "@specboards/core";
 
 import {
   isReservedOrgSlug,

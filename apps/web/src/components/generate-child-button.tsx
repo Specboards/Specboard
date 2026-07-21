@@ -5,7 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import type { StatusWorkflow } from "@specboard/core";
+import type { StatusWorkflow } from "@specboards/core";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

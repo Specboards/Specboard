@@ -1,4 +1,4 @@
-import { canManageProduct, PRODUCT_COLORS, type ProductAccess } from "@specboard/core";
+import { canManageProduct, PRODUCT_COLORS, type ProductAccess } from "@specboards/core";
 
 import { InvalidPatchError } from "@/lib/features-service";
 import {

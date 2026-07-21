@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { EXAMPLE_DETAIL_TEMPLATES, type DetailTemplate } from "@specboard/core";
+import { EXAMPLE_DETAIL_TEMPLATES, type DetailTemplate } from "@specboards/core";
 
 import { EmptyState } from "@/components/empty-state";
 import { MarkdownEditor } from "@/components/markdown-editor";

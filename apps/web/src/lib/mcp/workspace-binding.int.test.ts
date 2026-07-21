@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { createDb, type Database } from "@specboard/db";
+import { createDb, type Database } from "@specboards/db";
 
 import {
   boundWorkspaceSlug,

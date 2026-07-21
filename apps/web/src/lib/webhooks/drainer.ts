@@ -1,4 +1,4 @@
-import { type Database } from "@specboard/db";
+import { type Database } from "@specboards/db";
 
 import { decryptSecret } from "@/lib/crypto";
 import { getWorkerDb } from "@/lib/db";

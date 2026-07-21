@@ -1,4 +1,4 @@
-import { defaultBrowseLevel, type WorkspaceLevel } from "@specboard/core";
+import { defaultBrowseLevel, type WorkspaceLevel } from "@specboards/core";
 
 /**
  * Resolve the active hierarchy level for a list view from the `?level=` query

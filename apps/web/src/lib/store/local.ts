@@ -23,7 +23,7 @@ import {
   type IdeaStage,
   type PropertyDef,
   type WorkspaceLevel,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { riceFields } from "@/lib/feature-helpers";
 import {

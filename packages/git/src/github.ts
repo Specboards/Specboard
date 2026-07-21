@@ -394,7 +394,7 @@ export class GitHubRepoClient implements GitRepoClient {
     });
     const baseSha = base.data.object.sha;
     const slug = path.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-    const branch = `specboard/${slug}-${baseSha.slice(0, 8)}`;
+    const branch = `specboards/${slug}-${baseSha.slice(0, 8)}`;
     await this.octokit.rest.git.createRef({
       owner: this.owner,
       repo: this.repo,

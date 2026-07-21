@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
-import { type IdeaStage } from "@specboard/core";
+import { type IdeaStage } from "@specboards/core";
 
 import { EmptyState } from "@/components/empty-state";
 import { IdeaDetailSheet } from "@/components/idea-detail-sheet";

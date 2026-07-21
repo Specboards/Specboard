@@ -25,7 +25,7 @@ import {
   wouldCreateCycle,
   wouldExceedDepth,
   type ProductColor,
-} from "@specboard/core";
+} from "@specboards/core";
 
 import { ProductMembers } from "@/components/product-members";
 import { Badge } from "@/components/ui/badge";

@@ -6,7 +6,7 @@ import {
   products,
   repositories,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import { InvalidPatchError } from "@/lib/features-service";
 

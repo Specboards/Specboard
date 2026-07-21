@@ -7,7 +7,7 @@ import {
   previewSpec,
   safeParseRepoConfig,
   type RepoConfig,
-} from "@specboard/core";
+} from "@specboards/core";
 import {
   and,
   eq,
@@ -17,12 +17,12 @@ import {
   specIndex,
   workspaceLevels,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 import {
   createGitHubRepoClient,
   reconcileSpecs,
   type GitRepoClient,
-} from "@specboard/git";
+} from "@specboards/git";
 
 import { isE2E } from "@/lib/e2e";
 import { getGithubApp } from "@/lib/github-app";

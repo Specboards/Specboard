@@ -1,5 +1,5 @@
-import { desc, githubApp, type Database } from "@specboard/db";
-import { githubAppFrom, githubAppFromEnv } from "@specboard/git";
+import { desc, githubApp, type Database } from "@specboards/db";
+import { githubAppFrom, githubAppFromEnv } from "@specboards/git";
 
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { isE2E } from "@/lib/e2e";

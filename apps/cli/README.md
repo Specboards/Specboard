@@ -1,6 +1,6 @@
 # Specboard CLI
 
-`specboard` manages your Specboard work items (status, assignment, and GitHub
+`specboards` manages your Specboard work items (status, assignment, and GitHub
 links) from the terminal. It talks to the same `/api/v1` surface the web app
 uses, authenticating with a personal API key.
 
@@ -10,24 +10,24 @@ Once the package is published to npm (and the Homebrew tap is set up):
 
 ```bash
 # npm (run without installing)
-npx @specboard/cli whoami
+npx @specboards/cli whoami
 
 # npm (global)
-npm install -g @specboard/cli
+npm install -g @specboards/cli
 specboard help
 
 # Homebrew
-brew install specboard/tap/specboard
+brew install specboards/tap/specboards
 ```
 
 ### From the monorepo (development, works today)
 
 ```bash
-pnpm --filter @specboard/cli build
+pnpm --filter @specboards/cli build
 # then run the built binary
 node apps/cli/dist/index.js help
 # or link it onto your PATH
-pnpm --filter @specboard/cli exec npm link
+pnpm --filter @specboards/cli exec npm link
 specboard help
 ```
 
@@ -36,9 +36,9 @@ specboard help
 Create a key in the web app under **Settings → API keys**, then:
 
 ```bash
-specboard auth login --url https://app.specboards.ai
+specboards auth login --url https://app.specboards.ai
 # paste the sb_… key when prompted (input is hidden)
-specboard whoami
+specboards whoami
 ```
 
 Config is written to `~/.specboards/config.json` (mode 0600). The environment
@@ -70,15 +70,15 @@ The default workflow only allows single-step moves (e.g. `backlog` reaches only
 statuses automatically:
 
 ```bash
-specboard status "$SPEC_ID" in_progress --advance   # backlog -> defining -> ready -> in_progress
+specboards status "$SPEC_ID" in_progress --advance   # backlog -> defining -> ready -> in_progress
 ```
 
 ## Example: a Git hook that advances a spec on PR open
 
 ```bash
 # .git/hooks or CI: when a PR opens, mark its spec in_progress and link the PR.
-specboard status "$SPEC_ID" in_progress --advance
-specboard link "$SPEC_ID" --pr "$PR_NUMBER"
+specboards status "$SPEC_ID" in_progress --advance
+specboards link "$SPEC_ID" --pr "$PR_NUMBER"
 ```
 
 ## CI: sync PRs to Specboard automatically
@@ -94,7 +94,7 @@ on:
     types: [opened, reopened, synchronize, closed]
 jobs:
   sync:
-    uses: Specboards/Specboard/.github/workflows/specboard-sync-reusable.yml@main
+    uses: Specboards/Specboards/.github/workflows/specboard-sync-reusable.yml@main
     secrets:
       SPECBOARDS_URL: ${{ secrets.SPECBOARDS_URL }}
       SPECBOARDS_TOKEN: ${{ secrets.SPECBOARDS_TOKEN }}

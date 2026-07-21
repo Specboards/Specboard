@@ -3,8 +3,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { mcp } from "better-auth/plugins";
 
-import { isBlockedEmailDomain } from "@specboard/core";
-import { createDb, schema } from "@specboard/db";
+import { isBlockedEmailDomain } from "@specboards/core";
+import { createDb, schema } from "@specboards/db";
 
 import { hasValidPendingInvitation, inviteOnlyEnabled } from "@/lib/access-gate";
 import { getDb } from "@/lib/db";

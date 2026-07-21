@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 
-import { descendantGroupIds } from "@specboard/core";
+import { descendantGroupIds } from "@specboards/core";
 
 import { Select } from "@/components/ui/select";
 import { ALL_PRODUCTS, GROUP_SLUG_PREFIX } from "@/lib/active-product";

@@ -14,7 +14,7 @@ import {
   webhookEndpoints,
   workspaces,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import { getWorkerDb } from "@/lib/db";
 import type { WebhookEnvelope, WebhookEventType } from "@/lib/webhooks/types";

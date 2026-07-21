@@ -1,5 +1,5 @@
-import { canWriteProduct } from "@specboard/core";
-import { GitWriteConflictError } from "@specboard/git";
+import { canWriteProduct } from "@specboards/core";
+import { GitWriteConflictError } from "@specboards/git";
 
 import { authorizeWrite } from "@/lib/auth-session";
 import { getDb } from "@/lib/db";

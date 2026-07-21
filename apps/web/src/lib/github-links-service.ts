@@ -1,8 +1,8 @@
-import { and, eq, features, repositories } from "@specboard/db";
+import { and, eq, features, repositories } from "@specboards/db";
 import {
   createGitHubRepoClient,
   type GithubArtifactMeta,
-} from "@specboard/git";
+} from "@specboards/git";
 
 import { getDb } from "@/lib/db";
 import { getGithubApp } from "@/lib/github-app";

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { parentLevelKey } from "@specboard/core";
+import { parentLevelKey } from "@specboards/core";
 
 import { BoardPrefsProvider } from "@/app/[org]/[product]/backlog/board-prefs";
 import { CardFieldsMenu } from "@/components/card-fields-menu";

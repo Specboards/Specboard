@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { resolveIdeaStages } from "@specboard/core";
+import { resolveIdeaStages } from "@specboards/core";
 
 import { IdeasBoard } from "@/components/ideas-board";
 import { resolveActiveScope, scopeProductFilter } from "@/lib/active-product";

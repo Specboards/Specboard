@@ -1,4 +1,4 @@
-import { PRODUCT_COLORS } from "@specboard/core";
+import { PRODUCT_COLORS } from "@specboards/core";
 
 import { InvalidPatchError } from "@/lib/features-service";
 import {

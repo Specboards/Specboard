@@ -14,11 +14,11 @@ const DB_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 
 describe.skipIf(!DB_URL)("consumeQuota", () => {
   let sql: postgres.Sql;
-  let db: import("@specboard/db").Database;
+  let db: import("@specboards/db").Database;
   const key = `test-quota-${randomUUID().slice(0, 8)}`;
 
   beforeAll(async () => {
-    const { createDb } = await import("@specboard/db");
+    const { createDb } = await import("@specboards/db");
     db = createDb(DB_URL!);
     sql = postgres(DB_URL!, { prepare: false, max: 1 });
   });

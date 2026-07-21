@@ -1,5 +1,5 @@
 {
-  "name": "@specboard/git",
+  "name": "@specboards/git",
   "version": "0.21.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@specboard/core": "workspace:*",
+    "@specboards/core": "workspace:*",
     "octokit": "^4.0.2",
     "picomatch": "^4.0.2"
   },

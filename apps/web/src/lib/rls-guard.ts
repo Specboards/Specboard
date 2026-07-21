@@ -1,4 +1,4 @@
-import { probeTenantConnection, tenantIsolationViolations } from "@specboard/db";
+import { probeTenantConnection, tenantIsolationViolations } from "@specboards/db";
 
 import { isMultiTenant } from "@/lib/tenancy";
 

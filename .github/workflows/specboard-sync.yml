@@ -6,7 +6,7 @@
 # SPECBOARDS_TOKEN (an API key for a dedicated bot user); without them it no-ops.
 #
 # This is the monorepo-native version (builds the CLI from source). Once
-# @specboard/cli is published to npm, switch this to a thin caller of
+# @specboards/cli is published to npm, switch this to a thin caller of
 # .github/workflows/specboard-sync-reusable.yml (which runs the published CLI
 # via npx), to dogfood the same reusable workflow customers use.
 name: Specboard Sync
@@ -33,7 +33,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @specboard/cli build
+      - run: pnpm --filter @specboards/cli build
       - name: Sync work items from the PR
         env:
           SPECBOARDS_URL: ${{ secrets.SPECBOARDS_URL }}
@@ -44,4 +44,4 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ACTION: ${{ github.event.action }}
           MERGED: ${{ github.event.pull_request.merged }}
-        run: bash scripts/specboard/sync-pr.sh
+        run: bash scripts/specboards/sync-pr.sh

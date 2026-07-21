@@ -1,5 +1,5 @@
-import { eq, githubInstallations, type Database } from "@specboard/db";
-import { listInstallationRepositories, type InstallationRepo } from "@specboard/git";
+import { eq, githubInstallations, type Database } from "@specboards/db";
+import { listInstallationRepositories, type InstallationRepo } from "@specboards/git";
 
 import { isE2E } from "@/lib/e2e";
 import { getGithubApp } from "@/lib/github-app";

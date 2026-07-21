@@ -6,7 +6,7 @@ import {
   type Database,
   webhookDeliveries,
   webhookEndpoints,
-} from "@specboard/db";
+} from "@specboards/db";
 
 import { encryptSecret } from "@/lib/crypto";
 import {

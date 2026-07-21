@@ -1,4 +1,4 @@
-import { resolveProductColor, type ProductColor } from "@specboard/core";
+import { resolveProductColor, type ProductColor } from "@specboards/core";
 
 /**
  * Tailwind classes for each product accent color. Written as full literal

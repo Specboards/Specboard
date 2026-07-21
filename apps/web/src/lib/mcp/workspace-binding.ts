@@ -6,7 +6,7 @@ import {
   members,
   workspaces,
   type Database,
-} from "@specboard/db";
+} from "@specboards/db";
 
 /**
  * The workspace an MCP OAuth connection targets, chosen once on the consent

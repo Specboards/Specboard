@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
-import type { IdeaStage } from "@specboard/core";
+import type { IdeaStage } from "@specboards/core";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

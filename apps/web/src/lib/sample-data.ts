@@ -1,5 +1,5 @@
-import { extractSections } from "@specboard/core";
-import { features, repositories, specIndex, type Database } from "@specboard/db";
+import { extractSections } from "@specboards/core";
+import { features, repositories, specIndex, type Database } from "@specboards/db";
 
 import { ensureDefaultProduct } from "@/lib/workspace";
 

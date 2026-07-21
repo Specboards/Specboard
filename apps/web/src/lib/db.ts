@@ -1,4 +1,4 @@
-import { createDb, type Database } from "@specboard/db";
+import { createDb, type Database } from "@specboards/db";
 
 let db: Database | null | undefined;
 
