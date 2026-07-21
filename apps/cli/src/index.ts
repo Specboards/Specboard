@@ -88,7 +88,7 @@ async function cmdLogin(argv: string[]): Promise<void> {
   const existing = loadFileConfig();
   const baseUrl =
     values.url ?? process.env.SPECBOARD_URL ?? existing.baseUrl ??
-    (await ask("Deployment URL (e.g. https://app.specboard.ai): "));
+    (await ask("Deployment URL (e.g. https://app.specboards.ai): "));
   const apiKey =
     values.key ?? process.env.SPECBOARD_TOKEN ??
     (await ask("API key (sb_…): ", { secret: true }));

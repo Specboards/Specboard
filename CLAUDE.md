@@ -20,9 +20,9 @@
   clients, dependencies, or migration paths.
 - **Two Fly apps, two configs, in the repo root:**
   - `fly.toml` - production. Fly app `specboard`, served at
-    https://app.specboard.ai. Deploy from the repo root with `fly deploy`.
+    https://app.specboards.ai. Deploy from the repo root with `fly deploy`.
   - `fly.test.toml` - test/staging. Fly app `specboard-test`, served at
-    https://test.specboard.ai. Deploy with `fly deploy -c fly.test.toml`.
+    https://test.specboards.ai. Deploy with `fly deploy -c fly.test.toml`.
 - **Always deploy to test first.** New code goes to `specboard-test` and is
   verified there before production. Never deploy production from a feature
   branch: merge to `main` first, then `fly deploy`.

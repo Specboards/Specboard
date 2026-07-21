@@ -266,7 +266,7 @@ function createAuth(url: string) {
           if (!invited) {
             throw new APIError("FORBIDDEN", {
               message:
-                "Specboards is invite-only during the pre-release. Request access at https://www.specboard.ai/request-access and we'll be in touch.",
+                "Specboards is invite-only during the pre-release. Request access at https://www.specboards.ai/request-access and we'll be in touch.",
             });
           }
         }

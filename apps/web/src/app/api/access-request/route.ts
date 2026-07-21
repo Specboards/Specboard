@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Public "Request access" intake for the pre-v1 invite-only beta. The marketing
- * site (www.specboard.ai) posts here cross-origin; we email the review inbox
+ * site (www.specboards.ai) posts here cross-origin; we email the review inbox
  * (contact@specboard.net) and send the requester a confirmation, both via the
  * app's existing Postmark service (from no-reply@specboard.ai). No account or
  * DB row is created: the team approves by sending an org invitation, which is
@@ -19,6 +19,11 @@ function allowedOrigins(): string[] {
   const fromEnv = process.env.ACCESS_REQUEST_ALLOWED_ORIGINS?.trim();
   if (fromEnv) return fromEnv.split(",").map((o) => o.trim()).filter(Boolean);
   return [
+    "https://www.specboards.ai",
+    "https://specboards.ai",
+    // Kept during the domain transition: the marketing site posts here
+    // cross-origin and may still be served from the old domain until its own
+    // DNS moves. Drop these once specboard.ai is fully retired.
     "https://www.specboard.ai",
     "https://specboard.ai",
     "http://localhost:3001",
@@ -29,7 +34,7 @@ function allowedOrigins(): string[] {
 function corsHeaders(origin: string | null): Record<string, string> {
   const allow = origin && allowedOrigins().includes(origin) ? origin : "";
   return {
-    "Access-Control-Allow-Origin": allow || "https://www.specboard.ai",
+    "Access-Control-Allow-Origin": allow || "https://www.specboards.ai",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "content-type",
     "Access-Control-Max-Age": "86400",
@@ -129,7 +134,7 @@ export async function POST(req: Request) {
       "Thanks for requesting access to Specboards. We've received your request and our team will review it shortly.",
       "We'll follow up at this address. If you have any questions in the meantime, just reply to contact@specboard.net.",
     ],
-    footer: "You're receiving this because you requested access at specboard.ai.",
+    footer: "You're receiving this because you requested access at specboards.ai.",
   });
 
   try {

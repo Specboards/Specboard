@@ -1,8 +1,8 @@
 # Cloud deploy pipeline:
-#   - every push to main deploys the app to test (https://test.specboard.ai)
-#   - production (https://app.specboard.ai) deploys via manual dispatch, once a
+#   - every push to main deploys the app to test (https://test.specboards.ai)
+#   - production (https://app.specboards.ai) deploys via manual dispatch, once a
 #     build has been verified on test
-# The marketing site (https://www.specboard.ai) lives in the separate Website
+# The marketing site (https://www.specboards.ai) lives in the separate Website
 # repo and deploys from there.
 name: Fly Deploy
 

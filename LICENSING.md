@@ -36,7 +36,7 @@ directory; otherwise it ships only in the hosted product.
 - **Audit logs**: tamper-evident, exportable activity history.
 
 These features power the hosted service at
-[specboard.ai](https://specboard.ai). For a commercial or self-managed
+[specboards.ai](https://specboards.ai). For a commercial or self-managed
 enterprise license, contact **contact@specboard.net**.
 
 ## Contributing
@@ -55,7 +55,7 @@ look and feel), and the marketing content are proprietary to Studio Palouse and
 are **not** covered by the Apache-2.0 grant. The Apache-2.0 license explicitly
 does not grant trademark rights; see section 6 of the [LICENSE](./LICENSE).
 
-The public marketing site (`www.specboard.ai`) and the brand assets live in a
+The public marketing site (`www.specboards.ai`) and the brand assets live in a
 separate repository ([Specboards/Website](https://github.com/Specboards/Website))
 under a proprietary license, not in this repository.
 

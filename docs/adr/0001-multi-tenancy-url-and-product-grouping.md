@@ -69,7 +69,7 @@ re-checked server-side (`session.user ∈ members(orgSlug)`), else a deliberate
 404. `workspaces.slug` already exists (`notNull`, `unique`). Self-host has one
 fixed slug and redirects `/` → `/{theOrg}/…`; the org switcher is hidden.
 
-Subdomain isolation (`{org}.specboard.ai`) is a deferred option for hard
+Subdomain isolation (`{org}.specboards.ai`) is a deferred option for hard
 isolation later.
 
 ### D4. Separate identity from context in URLs

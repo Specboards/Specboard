@@ -23,7 +23,7 @@ While we are pre-1.0 (`0.x.y`):
 ## The increment rule (do this for every production release)
 
 Production deploys are deliberate (`workflow_dispatch` -> `production`), so each
-one gets its own version. Before shipping to `app.specboard.ai`:
+one gets its own version. Before shipping to `app.specboards.ai`:
 
 1. **Pick the bump.** Fix-only since the last release -> patch. New feature ->
    minor. (When in doubt, patch.)
@@ -33,7 +33,7 @@ one gets its own version. Before shipping to `app.specboard.ai`:
    what changed, grouped under Added / Changed / Fixed.
 4. **Verify green.** `pnpm -w build`, `pnpm -w typecheck`, `pnpm -w test` must
    all pass before the branch is pushed.
-5. **Merge to `main`.** This auto-deploys to test (`test.specboard.ai`). Smoke
+5. **Merge to `main`.** This auto-deploys to test (`test.specboards.ai`). Smoke
    test there.
 6. **Tag the release** on the merged `main` commit and push the tag:
    `git tag -a v0.1.3 -m "v0.1.3" && git push origin v0.1.3`.

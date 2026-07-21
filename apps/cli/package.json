@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Command-line interface for Specboard (manage specs, status, and GitHub links from the terminal).",
   "license": "Apache-2.0",
-  "homepage": "https://specboard.ai",
+  "homepage": "https://specboards.ai",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Specboards/Specboard.git",
