@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ListChecks } from "lucide-react";
 import { toast } from "sonner";
 
 import type { StatusWorkflow } from "@specboard/core";
@@ -27,6 +28,7 @@ import { FeatureCard, type ProductTag } from "@/components/feature-card";
 import { FeatureEditSheet } from "@/components/feature-edit-sheet";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { AuthRequiredError, patchFeature } from "@/lib/api-client";
 import {
   compareByRiceScore,
@@ -88,7 +90,10 @@ export function BoardClient({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [editingSpecId, setEditingSpecId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const selectable = !!bulkOptions;
+  // Multi-select is opt-in: checkboxes only appear once the user turns it on, so
+  // they never crowd a card's product tag or title in normal use.
+  const [selectMode, setSelectMode] = useState(false);
+  const canSelect = !!bulkOptions;
 
   const toggleSelect = useCallback((specId: string) => {
     setSelected((prev) => {
@@ -99,16 +104,20 @@ export function BoardClient({
     });
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
+  const exitSelect = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+  }, []);
 
-  // Esc clears an active selection.
+  // Esc leaves multi-select entirely.
   useEffect(() => {
-    if (!selectable || selected.size === 0) return;
+    if (!selectMode) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelected(new Set());
+      if (e.key === "Escape") exitSelect();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectable, selected.size]);
+  }, [selectMode, exitSelect]);
 
   // Re-seed from the server whenever the data set changes. Every mutation (a
   // field edit in the drawer, a newly created item, a drag we just persisted)
@@ -212,6 +221,20 @@ export function BoardClient({
 
   return (
     <>
+      {canSelect ? (
+        <div className="mb-2 flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant={selectMode ? "secondary" : "outline"}
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            className="h-8 gap-1.5"
+          >
+            <ListChecks className="h-4 w-4" />
+            {selectMode ? "Done" : "Select"}
+          </Button>
+        </div>
+      ) : null}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -233,7 +256,7 @@ export function BoardClient({
               releaseNames={releaseNames}
               onOpen={setEditingSpecId}
               productsById={productsById}
-              selectable={selectable}
+              selectMode={selectMode}
               selected={selected}
               onToggleSelect={toggleSelect}
             />
@@ -262,11 +285,12 @@ export function BoardClient({
         specId={editingSpecId}
         onClose={() => setEditingSpecId(null)}
       />
-      {selectable && bulkOptions ? (
+      {selectMode && bulkOptions ? (
         <BulkActionBar
           selectedIds={[...selected]}
           options={bulkOptions}
           onClear={clearSelection}
+          onExit={exitSelect}
         />
       ) : null}
     </>
@@ -285,7 +309,7 @@ function Column({
   releaseNames,
   onOpen,
   productsById,
-  selectable,
+  selectMode,
   selected,
   onToggleSelect,
 }: {
@@ -300,7 +324,7 @@ function Column({
   releaseNames: Record<string, string>;
   onOpen: (specId: string) => void;
   productsById?: Record<string, ProductTag>;
-  selectable: boolean;
+  selectMode: boolean;
   selected: Set<string>;
   onToggleSelect: (specId: string) => void;
 }) {
@@ -324,38 +348,41 @@ function Column({
             if (!record) return null;
             return (
               <SortableCard key={id} id={id}>
-                <div
-                  className={cn(
-                    "relative rounded-md",
-                    selected.has(id) && "ring-2 ring-primary",
-                  )}
-                >
-                  {selectable ? (
-                    // stopPropagation on pointer-down keeps dnd-kit from starting
-                    // a drag when the user is aiming for the checkbox; on click it
-                    // keeps the card's edit drawer from opening.
+                {/* In select mode the checkbox sits in a left gutter beside the
+                    card (not over it), so it never overlaps the product tag or
+                    title. stopPropagation keeps a checkbox click from starting a
+                    drag or opening the card. */}
+                <div className="flex items-start gap-1.5">
+                  {selectMode ? (
                     <input
                       type="checkbox"
                       aria-label={`Select ${record.title}`}
-                      className="absolute left-1.5 top-1.5 z-10 h-4 w-4 cursor-pointer accent-primary"
+                      className="mt-3 h-4 w-4 shrink-0 cursor-pointer accent-primary"
                       checked={selected.has(id)}
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => onToggleSelect(id)}
                     />
                   ) : null}
-                  <FeatureCard
-                    feature={record}
-                    fields={cardFields}
-                    featured={featured}
-                    customFieldLabels={customFieldLabels}
-                    memberNames={memberNames}
-                    releaseNames={releaseNames}
-                    onOpen={() => onOpen(id)}
-                    product={
-                      record.productId ? productsById?.[record.productId] : undefined
-                    }
-                  />
+                  <div
+                    className={cn(
+                      "min-w-0 flex-1 rounded-md",
+                      selected.has(id) && "ring-2 ring-primary",
+                    )}
+                  >
+                    <FeatureCard
+                      feature={record}
+                      fields={cardFields}
+                      featured={featured}
+                      customFieldLabels={customFieldLabels}
+                      memberNames={memberNames}
+                      releaseNames={releaseNames}
+                      onOpen={() => onOpen(id)}
+                      product={
+                        record.productId ? productsById?.[record.productId] : undefined
+                      }
+                    />
+                  </div>
                 </div>
               </SortableCard>
             );

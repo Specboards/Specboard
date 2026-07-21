@@ -32,10 +32,14 @@ export function BulkActionBar({
   selectedIds,
   options,
   onClear,
+  onExit,
 }: {
   selectedIds: string[];
   options: BulkOptions;
+  /** Clear the selection but stay in multi-select mode (used after an apply). */
   onClear: () => void;
+  /** Leave multi-select entirely (the Cancel button). */
+  onExit: () => void;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -80,15 +84,15 @@ export function BulkActionBar({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
+      className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2.5 rounded-lg border bg-background/95 px-4 py-2.5 shadow-lg backdrop-blur"
       role="toolbar"
       aria-label="Bulk actions"
       data-pending={pending}
     >
-      <span className="text-sm font-medium">
+      <span className="whitespace-nowrap text-sm font-medium">
         {count} selected
       </span>
-      <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+      <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
 
       <Select
         aria-label="Set status for selected"
@@ -173,11 +177,11 @@ export function BulkActionBar({
         Clear tags
       </button>
 
-      <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+      <span className="mx-0.5 h-5 w-px bg-border" aria-hidden />
       <Button
         size="sm"
         variant="ghost"
-        onClick={onClear}
+        onClick={onExit}
         disabled={pending}
       >
         Cancel

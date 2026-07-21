@@ -1,9 +1,11 @@
 "use client";
 
+import { ListChecks } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -58,8 +60,10 @@ export function BacklogTable({
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Multi-select is opt-in: the checkbox column appears only once turned on.
+  const [selectMode, setSelectMode] = useState(false);
   const orgHref = useOrgProductPath();
-  const selectable = canEdit && !!bulkOptions;
+  const canSelect = canEdit && !!bulkOptions;
 
   // Hydrate persisted collapsed set after mount (avoids SSR/client mismatch).
   useEffect(() => {
@@ -99,6 +103,10 @@ export function BacklogTable({
     });
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
+  const exitSelect = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+  }, []);
 
   // Select-all toggles just the currently visible rows (collapsed epics' hidden
   // children are left alone, matching what the user can see).
@@ -122,22 +130,36 @@ export function BacklogTable({
     });
   }, [visibleIds]);
 
-  // Esc clears an active selection (a common "never mind" gesture).
+  // Esc leaves multi-select entirely.
   useEffect(() => {
-    if (!selectable || selected.size === 0) return;
+    if (!selectMode) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelected(new Set());
+      if (e.key === "Escape") exitSelect();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectable, selected.size]);
+  }, [selectMode, exitSelect]);
 
   return (
     <>
+    {canSelect ? (
+      <div className="mb-2 flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant={selectMode ? "secondary" : "outline"}
+          onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+          className="h-8 gap-1.5"
+        >
+          <ListChecks className="h-4 w-4" />
+          {selectMode ? "Done" : "Select"}
+        </Button>
+      </div>
+    ) : null}
     <Table>
       <TableHeader>
         <TableRow>
-          {selectable ? (
+          {selectMode ? (
             <TableHead className="w-8">
               <input
                 type="checkbox"
@@ -166,7 +188,7 @@ export function BacklogTable({
           const isCollapsed = collapsed.has(f.specId);
           return (
             <TableRow key={f.specId} data-selected={selected.has(f.specId)}>
-              {selectable ? (
+              {selectMode ? (
                 <TableCell className="w-8">
                   <input
                     type="checkbox"
@@ -270,11 +292,12 @@ export function BacklogTable({
         })}
       </TableBody>
     </Table>
-    {selectable && bulkOptions ? (
+    {selectMode && bulkOptions ? (
       <BulkActionBar
         selectedIds={[...selected]}
         options={bulkOptions}
         onClear={clearSelection}
+        onExit={exitSelect}
       />
     ) : null}
     </>
