@@ -78,7 +78,7 @@ export async function loadGithubDocs(
 
 /**
  * Validate a repo-relative Markdown path from the client. Rejects traversal,
- * dotfile segments (protects .specboard/ and .github/), and non-.md targets;
+ * dotfile segments (protects .specboards/ and .github/), and non-.md targets;
  * the commit surface stays "Markdown docs" only.
  */
 export function validateDocPath(raw: unknown): string {

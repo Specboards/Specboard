@@ -13,11 +13,11 @@ import { renderActionEmail, sendEmail } from "@/lib/email";
 
 /**
  * Reject sign-ups from consumer email providers (gmail.com, outlook.com, …)
- * when `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS` is truthy. On for the hosted
+ * when `SPECBOARDS_BLOCK_PUBLIC_EMAIL_DOMAINS` is truthy. On for the hosted
  * SaaS; off by default so self-host admins can test with personal addresses.
  */
 function blockPublicEmailDomains(): boolean {
-  const value = process.env.SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS?.trim().toLowerCase();
+  const value = process.env.SPECBOARDS_BLOCK_PUBLIC_EMAIL_DOMAINS?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
 }
 
@@ -131,7 +131,7 @@ function createAuth(url: string) {
       // Block sign-in until the address is confirmed. Combined with
       // `sendOnSignUp` below this closes the gap where a fresh deployment's
       // first-user admin slot could be claimed without mailbox control.
-      // Relaxed only under SPECBOARD_E2E so tests can sign in without a mailbox.
+      // Relaxed only under SPECBOARDS_E2E so tests can sign in without a mailbox.
       requireEmailVerification: !isE2E(),
       // With requireEmailVerification on, Better Auth answers sign-up attempts
       // for an existing email with a generic success (enumeration protection),
@@ -216,7 +216,7 @@ function createAuth(url: string) {
       // Delivered via Postmark when POSTMARK_SERVER_TOKEN is set. Sign-in is
       // gated on verification (see requireEmailVerification above); a failed
       // sign-in by an unverified user re-sends this email automatically.
-      // Suppressed under SPECBOARD_E2E (no mailbox in tests).
+      // Suppressed under SPECBOARDS_E2E (no mailbox in tests).
       sendOnSignUp: !isE2E(),
       // Land verified users back in the app rather than on a bare API 200.
       autoSignInAfterVerification: true,

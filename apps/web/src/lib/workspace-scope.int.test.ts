@@ -12,7 +12,7 @@ import { resolveApiMembership } from "./workspace";
  * to the wrong org: naming an org pins to THAT org, naming none is rejected as
  * ambiguous, and naming an org they don't belong to is refused.
  *
- * Runs against DATABASE_URL in multi-tenant mode (SPECBOARD_MULTI_TENANT=true,
+ * Runs against DATABASE_URL in multi-tenant mode (SPECBOARDS_MULTI_TENANT=true,
  * set in beforeAll). Skips when no database is configured.
  */
 
@@ -30,8 +30,8 @@ describe.skipIf(!DB_URL)("resolveApiMembership (multi-org)", () => {
   let db: import("@specboard/db").Database;
 
   beforeAll(async () => {
-    savedMultiTenant = process.env.SPECBOARD_MULTI_TENANT;
-    process.env.SPECBOARD_MULTI_TENANT = "true";
+    savedMultiTenant = process.env.SPECBOARDS_MULTI_TENANT;
+    process.env.SPECBOARDS_MULTI_TENANT = "true";
     const { createDb } = await import("@specboard/db");
     db = createDb(DB_URL!);
 
@@ -54,8 +54,8 @@ describe.skipIf(!DB_URL)("resolveApiMembership (multi-org)", () => {
     await sql`delete from workspaces where id in (${orgA.id}, ${orgB.id}, ${orgC.id})`;
     await sql`delete from users where id in (${user}, ${loner})`;
     await sql.end({ timeout: 5 });
-    if (savedMultiTenant === undefined) delete process.env.SPECBOARD_MULTI_TENANT;
-    else process.env.SPECBOARD_MULTI_TENANT = savedMultiTenant;
+    if (savedMultiTenant === undefined) delete process.env.SPECBOARDS_MULTI_TENANT;
+    else process.env.SPECBOARDS_MULTI_TENANT = savedMultiTenant;
   });
 
   it("pins to org A when the caller names A (owner role preserved)", async () => {

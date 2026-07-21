@@ -5,13 +5,13 @@ import { dirname } from "node:path";
  * Seed the fixture file that the app's fake GitHub client reads (see
  * apps/web/src/lib/github-e2e.ts). Tests set a repo's spec files here, then the
  * server's scan/import sees them. Same file path on both sides via
- * SPECBOARD_E2E_GITHUB_FIXTURE.
+ * SPECBOARDS_E2E_GITHUB_FIXTURE.
  */
 type Fixture = Record<string, Record<string, string>>;
 
 function fixturePath(): string {
-  const path = process.env.SPECBOARD_E2E_GITHUB_FIXTURE;
-  if (!path) throw new Error("SPECBOARD_E2E_GITHUB_FIXTURE must be set for E2E runs.");
+  const path = process.env.SPECBOARDS_E2E_GITHUB_FIXTURE;
+  if (!path) throw new Error("SPECBOARDS_E2E_GITHUB_FIXTURE must be set for E2E runs.");
   return path;
 }
 

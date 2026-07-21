@@ -76,11 +76,11 @@ function isBlockedIpv4Range(addr: ipaddr.IPv4): boolean {
  * single private answer fails the whole set). Returns the validated addresses
  * so the caller can pin the connection to exactly what was checked.
  *
- * In `SPECBOARD_WEBHOOK_ALLOW_PRIVATE` mode (self-host / e2e) all checks are
+ * In `SPECBOARDS_WEBHOOK_ALLOW_PRIVATE` mode (self-host / e2e) all checks are
  * skipped and no addresses are returned, so the sender connects normally.
  */
 export async function resolveValidatedTarget(raw: string): Promise<TargetResolution> {
-  const allowPrivate = process.env.SPECBOARD_WEBHOOK_ALLOW_PRIVATE === "1";
+  const allowPrivate = process.env.SPECBOARDS_WEBHOOK_ALLOW_PRIVATE === "1";
 
   let url: URL;
   try {

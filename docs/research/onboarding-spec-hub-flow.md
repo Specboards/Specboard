@@ -103,7 +103,7 @@ artifacts using the **existing** `GitHubRepoClient.writeFile` (`packages/git/src
 honoring the repo's `writeMode` (so a `pr`-mode repo gets a PR, a `direct`-mode repo gets a
 commit on the default branch):
 
-1. **`.specboard/config.yml`**: extend the existing config with `isSpecHub: true` (see §5):
+1. **`.specboards/config.yml`**: extend the existing config with `isSpecHub: true` (see §5):
    ```yaml
    version: 1
    isSpecHub: true
@@ -111,7 +111,7 @@ commit on the default branch):
      - "specs/**/spec.md"
    writeMode: pr
    ```
-2. **`.specboard/manifest.yml`**: the service list with pinned references:
+2. **`.specboards/manifest.yml`**: the service list with pinned references:
    ```yaml
    version: 1
    services:
@@ -141,10 +141,10 @@ Extend `repoConfigSchema` in `packages/core/src/config.ts`:
 ```ts
 // added fields (illustrative)
 isSpecHub: z.boolean().default(false),
-// manifest lives in its own .specboard/manifest.yml; config just flags the hub
+// manifest lives in its own .specboards/manifest.yml; config just flags the hub
 ```
 
-A separate `manifestSchema` for `.specboard/manifest.yml`:
+A separate `manifestSchema` for `.specboards/manifest.yml`:
 
 ```ts
 const manifestSchema = z.object({
@@ -160,14 +160,14 @@ const manifestSchema = z.object({
 ```
 
 **Storage: reuse `repositories.config` JSONB, no migration.** That column already caches
-the parsed `.specboard/config.yml` (`packages/db/src/schema.ts`,
+the parsed `.specboards/config.yml` (`packages/db/src/schema.ts`,
 `apps/web/src/lib/github-sync.ts`), so `isSpecHub` rides along for free, and a hub query is
 just a JSONB filter. The manifest's service list is read from git (and can be cached the
 same way the config is).
 
 *Alternative considered:* explicit `is_spec_hub boolean` + `manifest jsonb` columns on
 `repositories`. Cleaner to query, but needs a migration and duplicates state that already
-lives in the versioned `.specboard/` files. Prefer JSONB; revisit if hub queries get hot.
+lives in the versioned `.specboards/` files. Prefer JSONB; revisit if hub queries get hot.
 
 ---
 
@@ -238,4 +238,4 @@ this is out of scope here. See the memo's "recommendation" and "open questions" 
    `onboarding_state`.
 
 Each phase is independently shippable; the model works end-to-end after Phase 3 (a power
-user could hand-edit `.specboard/config.yml`), with Phase 4 making it self-serve.
+user could hand-edit `.specboards/config.yml`), with Phase 4 making it self-serve.

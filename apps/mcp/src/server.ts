@@ -67,13 +67,13 @@ let scopeInstance: McpScope | undefined;
 
 async function mcpScope(): Promise<McpScope> {
   if (scopeInstance) return scopeInstance;
-  const userId = process.env.SPECBOARD_MCP_USER_ID;
+  const userId = process.env.SPECBOARDS_MCP_USER_ID;
   if (!userId) {
     throw new Error(
-      "SPECBOARD_MCP_USER_ID is required. Use a real Specboard user id so MCP access is scoped to that user's workspace and product roles.",
+      "SPECBOARDS_MCP_USER_ID is required. Use a real Specboard user id so MCP access is scoped to that user's workspace and product roles.",
     );
   }
-  const requestedWorkspace = process.env.SPECBOARD_MCP_WORKSPACE?.trim();
+  const requestedWorkspace = process.env.SPECBOARDS_MCP_WORKSPACE?.trim();
   const memberships = await db()
     .select({
       workspaceId: members.workspaceId,
@@ -96,7 +96,7 @@ async function mcpScope(): Promise<McpScope> {
     throw new Error(
       requestedWorkspace
         ? `User ${userId} is not a member of workspace ${requestedWorkspace}.`
-        : "SPECBOARD_MCP_WORKSPACE is required when the MCP user belongs to zero or multiple workspaces.",
+        : "SPECBOARDS_MCP_WORKSPACE is required when the MCP user belongs to zero or multiple workspaces.",
     );
   }
   const grants = await db()

@@ -41,8 +41,8 @@ Specboard currently uses a **per-repo, co-located spec** model:
   decouples metadata from file path, so renames/moves never orphan a spec.
   (`packages/db/src/schema.ts`)
 - Specs live **inside each connected repo** at `specs/<feature>/spec.md` (configurable
-  via `specGlobs` in `.specboard/config.yml`). Content is cached in the `spec_index`
-  table and synced on push. (`apps/web/src/lib/github-sync.ts`, `.specboard/config.yml`)
+  via `specGlobs` in `.specboards/config.yml`). Content is cached in the `spec_index`
+  table and synced on push. (`apps/web/src/lib/github-sync.ts`, `.specboards/config.yml`)
 - Agents consume specs over MCP (`list_features`, `read_spec`, `update_status`), which
   read from the cached index rather than scanning git live. (`apps/mcp/src/server.ts`)
 
@@ -171,7 +171,7 @@ migration. Keep co-located specs as the zero-config on-ramp.
 - **Keep "attach":** connecting an existing repo with in-repo `specs/` stays the
   simplest path and the default for single-repo teams.
 - **Add "Spec Hub":** let a repo be designated a *spec hub* that holds `specs/` plus a
-  **service manifest** (e.g. `.specboard/manifest.yml`) listing target service repos
+  **service manifest** (e.g. `.specboards/manifest.yml`) listing target service repos
   with **pinned references**. This directly serves the customer workflow and matches the
   industry meta-repo/manifest pattern.
 - **Decouple "where the spec lives" from "where code executes":** a feature in the hub
@@ -209,8 +209,8 @@ migration. Keep co-located specs as the zero-config on-ramp.
 - **Spec drift / staleness:** the central model's main weakness. What's our detection
   and reconciliation story (pinned-ref checks, "living spec" validation, push webhooks
   on referenced repos)?
-- **Manifest schema:** what does `.specboard/manifest.yml` contain (service name →
-  repo, pinned ref, ownership, links)? Reuse/extend `.specboard/config.yml` or separate?
+- **Manifest schema:** what does `.specboards/manifest.yml` contain (service name →
+  repo, pinned ref, ownership, links)? Reuse/extend `.specboards/config.yml` or separate?
 - **Agent execution model:** how does an agent reading a hub spec get pointed at, and
   authorized for, the correct *other* repo for code work? (GitHub App install scope.)
 - **Data model:** is a "target repo" a new relation on `feature`, or a richer
@@ -247,4 +247,4 @@ migration. Keep co-located specs as the zero-config on-ramp.
 
 **Specboard internal references**
 - `packages/db/src/schema.ts` · `apps/mcp/src/server.ts` ·
-  `apps/web/src/lib/github-sync.ts` · `.specboard/config.yml` · `ARCHITECTURE.md`
+  `apps/web/src/lib/github-sync.ts` · `.specboards/config.yml` · `ARCHITECTURE.md`

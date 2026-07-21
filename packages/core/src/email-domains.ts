@@ -4,7 +4,7 @@
  * The hosted SaaS wants workspaces anchored to work email addresses, so
  * sign-ups from generic consumer providers can be rejected. Self-host
  * installs leave this off by default (an admin opts in via the
- * `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS` setting), so testing with a
+ * `SPECBOARDS_BLOCK_PUBLIC_EMAIL_DOMAINS` setting), so testing with a
  * personal Outlook/Gmail address still works out of the box.
  */
 

@@ -25,10 +25,10 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@db:5432/specboard
       # Single-workspace self-host: auth/SSO are commercial add-ons.
-      SPECBOARD_SELF_HOST: "true"
+      SPECBOARDS_SELF_HOST: "true"
       # Set to "true" to reject sign-ups from consumer email providers
       # (gmail.com, outlook.com, ...). Off by default for self-host.
-      SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS: "false"
+      SPECBOARDS_BLOCK_PUBLIC_EMAIL_DOMAINS: "false"
       # Optional outbound email (verification / password reset) via Postmark.
       # Unset = emails are skipped with a logged warning.
       # POSTMARK_SERVER_TOKEN: ""

@@ -476,7 +476,7 @@ export const repositories = pgTable(
      * one-click onboarding flow). Spec-seeding flows target it by default.
      */
     isSpecRepo: boolean("is_spec_repo").notNull().default(false),
-    /** Parsed `.specboard/config.yml`, refreshed on sync. */
+    /** Parsed `.specboards/config.yml`, refreshed on sync. */
     config: jsonb("config"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -1521,7 +1521,7 @@ export const webhookDeliveries = pgTable(
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    /** The envelope id (also the `X-Specboard-Delivery` header), for consumer dedupe. */
+    /** The envelope id (also the `X-Specboards-Delivery` header), for consumer dedupe. */
     eventId: text("event_id").notNull(),
     eventType: text("event_type").notNull(),
     payload: jsonb("payload").notNull(),

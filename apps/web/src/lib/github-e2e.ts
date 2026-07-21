@@ -15,7 +15,7 @@ import type { RepoRecord } from "@/lib/github-sync";
 
 /**
  * In-memory (file-backed) fake of the GitHub repo client for E2E runs. It stands
- * in for `createGitHubRepoClient` when `SPECBOARD_E2E` is set, so the onboarding
+ * in for `createGitHubRepoClient` when `SPECBOARDS_E2E` is set, so the onboarding
  * flow (scan -> import -> starter spec) runs hermetically with no network and no
  * real GitHub App. Repo contents live in a JSON fixture the Playwright harness
  * seeds; writes (id injection, starter specs) persist back to that file so a

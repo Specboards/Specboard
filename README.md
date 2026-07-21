@@ -48,7 +48,7 @@ You already write specs. What you're missing is the layer on top of them.
   backlog. Drag to reorder, save custom views, filter by product/status/owner.
 - **Kanban board.** A status board with a validated workflow (backlog →
   defining → ready → in progress → in review → done, plus archived). Each repo
-  can customize the stages in `.specboard/config.yml`.
+  can customize the stages in `.specboards/config.yml`.
 - **Roadmap & releases.** Group work into initiatives and epics, lay it out by
   release and quarter, and track what ships when.
 - **One-click GitHub sync.** Connect a repo with a GitHub App (no secrets to
@@ -70,9 +70,9 @@ pnpm --filter @specboard/web dev   # http://localhost:3000
 
 Without `DATABASE_URL`, the app runs in **local file mode**: it reads
 `specs/**/spec.md` straight from this repo and persists product metadata
-(status, assignee, tags, release, details) to `.specboard/local-metadata.json`.
+(status, assignee, tags, release, details) to `.specboards/local-metadata.json`.
 The committed file pre-populates the boards with this repo's own specs; edit
-freely and `git checkout .specboard/local-metadata.json` to reset.
+freely and `git checkout .specboards/local-metadata.json` to reset.
 
 ### With Postgres (the real deployment shape)
 
@@ -95,9 +95,9 @@ docker compose -f infra/docker-compose.yml up   # web + Postgres
 
 Optional environment flags for a hosted deployment:
 
-- `SPECBOARD_BLOCK_PUBLIC_EMAIL_DOMAINS` - reject sign-ups from consumer email
+- `SPECBOARDS_BLOCK_PUBLIC_EMAIL_DOMAINS` - reject sign-ups from consumer email
   providers (gmail.com, outlook.com, ...).
-- `SPECBOARD_INVITE_ONLY` - close public sign-up; only addresses with a pending
+- `SPECBOARDS_INVITE_ONLY` - close public sign-up; only addresses with a pending
   org invitation can create an account (used for the pre-release beta).
 - `ACCESS_REQUEST_NOTIFY_EMAIL` - where `POST /api/access-request` submissions
   are sent for review (default `contact@specboard.net`).
@@ -126,7 +126,7 @@ value when set, otherwise by its folder. The hierarchy above the leaf (Feature �
 Epic → Initiative) is managed in the app, not git.
 
 Per-repo config (which globs are specs, the status workflow, write mode) lives
-in [`.specboard/config.yml`](./.specboard/config.yml). Custom card properties
+in [`.specboards/config.yml`](./.specboards/config.yml). Custom card properties
 are admin-defined in the app (Settings → Cards), not in the repo config.
 
 ## MCP for AI agents
@@ -188,7 +188,7 @@ apps/
   mcp/        Standalone stdio MCP server (self-host / offline agent access)
   cli/        `specboard` CLI over the /api/v1 surface (API-key auth)
 packages/
-  core/       Spec parsing, status state machine, .specboard/config.yml schema
+  core/       Spec parsing, status state machine, .specboards/config.yml schema
   db/         Drizzle schema + Postgres client (metadata + spec index)
   git/        GitHub App client, spec reader/writer, webhook reconciler
   ui/         Shared design tokens / components

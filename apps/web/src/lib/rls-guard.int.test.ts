@@ -23,7 +23,7 @@ function appUrl(): string {
   return url.toString();
 }
 
-const ENV_KEYS = ["DATABASE_URL", "DATABASE_URL_APP", "SPECBOARD_MULTI_TENANT"] as const;
+const ENV_KEYS = ["DATABASE_URL", "DATABASE_URL_APP", "SPECBOARDS_MULTI_TENANT"] as const;
 const saved: Record<string, string | undefined> = {};
 
 describe.skipIf(!OWNER_URL)("assertTenantIsolation boot guard", () => {
@@ -58,28 +58,28 @@ describe.skipIf(!OWNER_URL)("assertTenantIsolation boot guard", () => {
   it("refuses multi-tenant boot without DATABASE_URL_APP", async () => {
     process.env.DATABASE_URL = OWNER_URL;
     delete process.env.DATABASE_URL_APP;
-    process.env.SPECBOARD_MULTI_TENANT = "true";
+    process.env.SPECBOARDS_MULTI_TENANT = "true";
     await expect(assertTenantIsolation()).rejects.toThrow(/DATABASE_URL_APP is required|Refusing to start/);
   });
 
   it("refuses multi-tenant boot when DATABASE_URL_APP points at the owner", async () => {
     process.env.DATABASE_URL = OWNER_URL;
     process.env.DATABASE_URL_APP = OWNER_URL;
-    process.env.SPECBOARD_MULTI_TENANT = "true";
+    process.env.SPECBOARDS_MULTI_TENANT = "true";
     await expect(assertTenantIsolation()).rejects.toThrow(/bypasses row-level security/);
   });
 
   it("accepts multi-tenant boot with the non-owner role", async () => {
     process.env.DATABASE_URL = OWNER_URL;
     process.env.DATABASE_URL_APP = appUrl();
-    process.env.SPECBOARD_MULTI_TENANT = "true";
+    process.env.SPECBOARDS_MULTI_TENANT = "true";
     await expect(assertTenantIsolation()).resolves.toBeUndefined();
   });
 
   it("only warns for single-tenant self-host on one owner connection", async () => {
     process.env.DATABASE_URL = OWNER_URL;
     delete process.env.DATABASE_URL_APP;
-    delete process.env.SPECBOARD_MULTI_TENANT;
+    delete process.env.SPECBOARDS_MULTI_TENANT;
     await expect(assertTenantIsolation()).resolves.toBeUndefined();
   });
 });

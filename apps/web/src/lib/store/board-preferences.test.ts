@@ -83,7 +83,7 @@ describe("LocalFileStore board preferences (per board)", () => {
 
   it("reads a legacy flat file as the Backlog's prefs", async () => {
     // Pre per-board format: a bare BoardPreferences object on disk.
-    const prefsPath = path.join(root, ".specboard", "local-board-prefs.json");
+    const prefsPath = path.join(root, ".specboards", "local-board-prefs.json");
     await fs.mkdir(path.dirname(prefsPath), { recursive: true });
     await fs.writeFile(
       prefsPath,

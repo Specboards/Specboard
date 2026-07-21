@@ -7,13 +7,13 @@
  * serves many orgs (hosted) or exactly one (self-host).
  *
  * Default is **single-tenant** so the OSS / self-host path is the simple one;
- * hosted opts in with `SPECBOARD_MULTI_TENANT=true`. Single-tenant is just the
+ * hosted opts in with `SPECBOARDS_MULTI_TENANT=true`. Single-tenant is just the
  * N=1 case of the same code path — never a fork.
  *
  * See docs/adr/0001-multi-tenancy-url-and-product-grouping.md (D1).
  */
 export function isMultiTenant(): boolean {
-  return process.env.SPECBOARD_MULTI_TENANT === "true";
+  return process.env.SPECBOARDS_MULTI_TENANT === "true";
 }
 
 /** Convenience inverse of {@link isMultiTenant}. */

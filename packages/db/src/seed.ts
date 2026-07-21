@@ -37,7 +37,7 @@ const repoRoot = path.resolve(
 /** Sample metadata applied on first insert so boards aren't empty. */
 const SAMPLE_METADATA = JSON.parse(
   await fs
-    .readFile(path.join(repoRoot, ".specboard", "local-metadata.json"), "utf8")
+    .readFile(path.join(repoRoot, ".specboards", "local-metadata.json"), "utf8")
     .catch(() => "{}"),
 ) as Record<
   string,

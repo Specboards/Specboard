@@ -57,7 +57,7 @@ export async function resolveRepoDefaultProduct(
 
 /**
  * Resolve the git client for a connected repo. Normally this mints an
- * installation-scoped GitHub client via the App. Under `SPECBOARD_E2E` it
+ * installation-scoped GitHub client via the App. Under `SPECBOARDS_E2E` it
  * returns the in-memory fake (see github-e2e.ts) so tests run with no network.
  * The single choke point for every GitHub read/write in this module (and for
  * the GitHub-backed doc spaces in github-docs.ts).
@@ -80,9 +80,9 @@ export async function resolveRepoClient(
 }
 
 /** Path of the per-repo config file, relative to the repo root. */
-const CONFIG_PATH = ".specboard/config.yml";
+const CONFIG_PATH = ".specboards/config.yml";
 
-/** Default when a repo has no `.specboard/config.yml` glob override yet. */
+/** Default when a repo has no `.specboards/config.yml` glob override yet. */
 const DEFAULT_SPEC_GLOBS = ["specs/**/spec.md"];
 
 /** Outcome of syncing one repository. */
@@ -132,7 +132,7 @@ export function repoGlobs(repo: RepoRecord): string[] {
 }
 
 /**
- * Read and validate `.specboard/config.yml` from the repo, or `null` if it's
+ * Read and validate `.specboards/config.yml` from the repo, or `null` if it's
  * absent/unreadable (a repo without one falls back to defaults).
  */
 async function readRepoConfigFromGit(client: GitRepoClient): Promise<RepoConfig | null> {

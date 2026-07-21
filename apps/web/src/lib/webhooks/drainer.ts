@@ -43,7 +43,7 @@ const PRUNE_BATCH = 500;
 const PRUNE_MAX_PER_SWEEP = 50_000; // bound a single sweep's work
 
 function readRetentionDays(): number {
-  const raw = process.env.SPECBOARD_OUTBOX_RETENTION_DAYS;
+  const raw = process.env.SPECBOARDS_OUTBOX_RETENTION_DAYS;
   if (raw === undefined || raw === "") return 7;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : 7;

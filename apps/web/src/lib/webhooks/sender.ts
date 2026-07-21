@@ -70,10 +70,10 @@ export async function postSignedEnvelope(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "Specboard-Webhooks/1.0",
-        "X-Specboard-Event": envelope.type,
-        "X-Specboard-Delivery": envelope.id,
-        "X-Specboard-Signature": signatureHeader(secret, rawBody, t),
+        "User-Agent": "Specboards-Webhooks/1.0",
+        "X-Specboards-Event": envelope.type,
+        "X-Specboards-Delivery": envelope.id,
+        "X-Specboards-Signature": signatureHeader(secret, rawBody, t),
       },
       body: rawBody,
       redirect: "manual", // never follow a 30x to a possibly-private target

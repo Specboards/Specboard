@@ -41,8 +41,8 @@ specboard auth login --url https://app.specboards.ai
 specboard whoami
 ```
 
-Config is written to `~/.specboard/config.json` (mode 0600). The environment
-variables `SPECBOARD_URL` and `SPECBOARD_TOKEN` override the file, which is handy
+Config is written to `~/.specboards/config.json` (mode 0600). The environment
+variables `SPECBOARDS_URL` and `SPECBOARDS_TOKEN` override the file, which is handy
 in CI and Git hooks.
 
 ## Commands
@@ -96,12 +96,12 @@ jobs:
   sync:
     uses: Specboards/Specboard/.github/workflows/specboard-sync-reusable.yml@main
     secrets:
-      SPECBOARD_URL: ${{ secrets.SPECBOARD_URL }}
-      SPECBOARD_TOKEN: ${{ secrets.SPECBOARD_TOKEN }}
+      SPECBOARDS_URL: ${{ secrets.SPECBOARDS_URL }}
+      SPECBOARDS_TOKEN: ${{ secrets.SPECBOARDS_TOKEN }}
 ```
 
-Set the two repo secrets: `SPECBOARD_URL` (e.g. `https://app.specboards.ai`) and
-`SPECBOARD_TOKEN` (an API key, ideally a `service`-account key scoped to
+Set the two repo secrets: `SPECBOARDS_URL` (e.g. `https://app.specboards.ai`) and
+`SPECBOARDS_TOKEN` (an API key, ideally a `service`-account key scoped to
 `features:write` and `statuses:read`).
 
 One hard rule: the repo running this workflow must be the same repo whose specs

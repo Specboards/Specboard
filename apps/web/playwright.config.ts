@@ -23,21 +23,21 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // Assumes the app is already built (pnpm -w build). `next start` serves the
-    // production build with the E2E seams enabled via SPECBOARD_E2E.
+    // production build with the E2E seams enabled via SPECBOARDS_E2E.
     command: "pnpm exec next start -p 3100",
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
-      SPECBOARD_E2E: "1",
+      SPECBOARDS_E2E: "1",
       DATABASE_URL: process.env.DATABASE_URL!,
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET!,
       BETTER_AUTH_URL: BASE_URL,
       APP_URL: BASE_URL,
-      SPECBOARD_E2E_GITHUB_FIXTURE: process.env.SPECBOARD_E2E_GITHUB_FIXTURE!,
+      SPECBOARDS_E2E_GITHUB_FIXTURE: process.env.SPECBOARDS_E2E_GITHUB_FIXTURE!,
       // Let the webhook e2e deliver to a loopback receiver (SSRF guard blocks
       // private targets by default).
-      SPECBOARD_WEBHOOK_ALLOW_PRIVATE: "1",
+      SPECBOARDS_WEBHOOK_ALLOW_PRIVATE: "1",
     },
   },
 });

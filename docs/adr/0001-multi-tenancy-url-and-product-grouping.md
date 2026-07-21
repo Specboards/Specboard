@@ -46,7 +46,7 @@ behind a config flag, never a forked code path.
   federation is a **hosted-only** feature (analogous to two separate GitHub
   Enterprise servers). On-prem therefore needs no SSO/central-identity story to
   ship.
-- **Default is single-tenant** (`SPECBOARD_MULTI_TENANT` unset/false) so the
+- **Default is single-tenant** (`SPECBOARDS_MULTI_TENANT` unset/false) so the
   OSS / self-host path is the simple one; hosted opts in.
 
 This is also the **open-core seam**: the OSS core is the single-tenant app; the

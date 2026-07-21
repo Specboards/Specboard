@@ -7,11 +7,11 @@
 # through the intermediate statuses (e.g. in_progress from backlog goes via
 # defining -> ready). Best-effort: if no legal path exists the step is logged
 # and skipped, never fatal.
-# Expects the env the CI workflow provides (SPECBOARD_URL/TOKEN, BASE_SHA,
+# Expects the env the CI workflow provides (SPECBOARDS_URL/TOKEN, BASE_SHA,
 # HEAD_SHA, PR_NUMBER, PR_BODY, ACTION, MERGED).
 set -uo pipefail
 
-if [ -z "${SPECBOARD_URL:-}" ] || [ -z "${SPECBOARD_TOKEN:-}" ]; then
+if [ -z "${SPECBOARDS_URL:-}" ] || [ -z "${SPECBOARDS_TOKEN:-}" ]; then
   echo "Specboard secrets not set; skipping sync."
   exit 0
 fi

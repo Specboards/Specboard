@@ -2,7 +2,7 @@ import { load } from "js-yaml";
 import { z } from "zod";
 
 /**
- * Schema for `.specboard/config.yml`, the per-repo file that tells Specboard
+ * Schema for `.specboards/config.yml`, the per-repo file that tells Specboard
  * where specs live and how this team's workflow is shaped. Kept in the repo so
  * the configuration is versioned with the code, while the resulting metadata
  * still lives in the DB. Custom item properties are NOT configured here: admins
@@ -12,7 +12,7 @@ export const repoConfigSchema = z.object({
   version: z.literal(1),
   /**
    * Glob(s), relative to repo root, that identify spec directories/files. This
-   * comes from an untrusted `.specboard/config.yml` in a connected repo and is
+   * comes from an untrusted `.specboards/config.yml` in a connected repo and is
    * compiled to a regex and matched against every path in the tree, so bound
    * both the count and each pattern's length to keep a hostile config from
    * driving pathological compile/match cost.
@@ -35,7 +35,7 @@ export function parseRepoConfig(input: unknown): RepoConfig {
   return repoConfigSchema.parse(input);
 }
 
-/** Parse `.specboard/config.yml` (raw YAML) into a validated {@link RepoConfig}. */
+/** Parse `.specboards/config.yml` (raw YAML) into a validated {@link RepoConfig}. */
 export function parseRepoConfigYaml(raw: string): RepoConfig {
   return repoConfigSchema.parse(load(raw) ?? {});
 }

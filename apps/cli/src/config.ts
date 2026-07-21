@@ -4,9 +4,9 @@ import { dirname, join } from "node:path";
 
 /**
  * CLI configuration: where the Specboard deployment lives and the API key to
- * authenticate with. Stored at ~/.specboard/config.json (override the whole
- * path with SPECBOARD_CONFIG). Environment variables SPECBOARD_URL and
- * SPECBOARD_TOKEN take precedence over the file, so CI can run keyless of disk.
+ * authenticate with. Stored at ~/.specboards/config.json (override the whole
+ * path with SPECBOARDS_CONFIG). Environment variables SPECBOARDS_URL and
+ * SPECBOARDS_TOKEN take precedence over the file, so CI can run keyless of disk.
  */
 export interface CliConfig {
   baseUrl?: string;
@@ -14,13 +14,13 @@ export interface CliConfig {
   /**
    * Which organization to act in, by slug. Only needed when the key's user
    * belongs to more than one org; the server rejects an ambiguous request
-   * otherwise. Env `SPECBOARD_ORG` overrides the file.
+   * otherwise. Env `SPECBOARDS_ORG` overrides the file.
    */
   orgSlug?: string;
 }
 
 export function configPath(): string {
-  return process.env.SPECBOARD_CONFIG ?? join(homedir(), ".specboard", "config.json");
+  return process.env.SPECBOARDS_CONFIG ?? join(homedir(), ".specboards", "config.json");
 }
 
 export function loadFileConfig(): CliConfig {
@@ -49,8 +49,8 @@ export function clearFileConfig(): void {
 export function resolveConfig(): CliConfig {
   const file = loadFileConfig();
   return {
-    baseUrl: process.env.SPECBOARD_URL ?? file.baseUrl,
-    apiKey: process.env.SPECBOARD_TOKEN ?? file.apiKey,
-    orgSlug: process.env.SPECBOARD_ORG ?? file.orgSlug,
+    baseUrl: process.env.SPECBOARDS_URL ?? file.baseUrl,
+    apiKey: process.env.SPECBOARDS_TOKEN ?? file.apiKey,
+    orgSlug: process.env.SPECBOARDS_ORG ?? file.orgSlug,
   };
 }
