@@ -4,7 +4,21 @@
 links) from the terminal. It talks to the same `/api/v1` surface the web app
 uses, authenticating with a personal API key.
 
-## Install (from the monorepo)
+## Install
+
+```bash
+# npm (run without installing)
+npx @specboard/cli whoami
+
+# npm (global)
+npm install -g @specboard/cli
+specboard help
+
+# Homebrew
+brew install specboard/tap/specboard
+```
+
+### From the monorepo (development)
 
 ```bash
 pnpm --filter @specboard/cli build

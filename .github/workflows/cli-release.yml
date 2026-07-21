@@ -1,0 +1,45 @@
+# Publish @specboard/cli to npm when a `cli-v*` tag is pushed (e.g. cli-v0.21.0).
+# A dedicated tag prefix keeps the CLI's release cadence independent of the app's
+# `v*` release tags. Requires the NPM_TOKEN repo secret (an npm automation token
+# with publish rights to the @specboard scope).
+name: Publish CLI
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+      - run: pnpm install --frozen-lockfile
+
+      # Guard: the tag version must match the package version, so a mistagged
+      # push can't publish a mismatched CLI.
+      - name: Verify tag matches package version
+        run: |
+          pkg="$(node -p "require('./apps/cli/package.json').version")"
+          tag="${GITHUB_REF_NAME#cli-v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "Tag $GITHUB_REF_NAME ($tag) does not match apps/cli version ($pkg)."
+            exit 1
+          fi
+
+      - run: pnpm --filter @specboard/cli build
+      - run: pnpm --filter @specboard/cli test
+
+      # `pnpm publish` respects publishConfig.access=public. --no-git-checks
+      # because the tag ref is a detached checkout.
+      - run: pnpm --filter @specboard/cli publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
