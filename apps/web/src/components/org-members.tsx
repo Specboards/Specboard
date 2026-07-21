@@ -19,6 +19,7 @@ import {
 } from "@/lib/api-client";
 import type {
   InvitationProductGrant,
+  MemberDisplayRole,
   OrgInvitationRecord,
   OrgMemberRecord,
   OrgRole,
@@ -33,9 +34,10 @@ export interface InviteProduct {
 
 const ORG_ROLES: OrgRole[] = ["owner", "member"];
 
-const ORG_ROLE_LABEL: Record<OrgRole, string> = {
+const ORG_ROLE_LABEL: Record<MemberDisplayRole, string> = {
   owner: "Owner",
   member: "Member",
+  service: "Service",
 };
 
 const PRODUCT_ROLES: ProductRole[] = ["admin", "contributor", "viewer"];
@@ -165,7 +167,7 @@ export function OrgMembers({
                     </Badge>
                   ) : null}
                 </span>
-                {canManage ? (
+                {canManage && m.role !== "service" ? (
                   <>
                     <Select
                       value={m.role}

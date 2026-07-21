@@ -122,7 +122,9 @@ function toRecord(row: typeof invitations.$inferSelect): OrgInvitationRecord {
   return {
     id: row.id,
     email: row.email,
-    role: row.role,
+    // Invitations are only ever created with an owner/member role (never the
+    // machine-only `service`), so narrowing the enum to OrgRole is safe here.
+    role: row.role as OrgRole,
     productGrants: (row.productGrants as InvitationProductGrant[]) ?? [],
     status: effectiveStatus(row),
     invitedBy: row.invitedBy,

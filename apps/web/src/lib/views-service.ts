@@ -5,7 +5,7 @@ import {
   type SavedViewInput,
   type WorkspaceScope,
 } from "@/lib/store";
-import type { SavedViewFilters } from "@/lib/store/types";
+import type { SavedViewFilters, SavedViewPatch } from "@/lib/store/types";
 
 /**
  * Domain operations for saved views behind /api/v1/views. Mirrors
@@ -41,6 +41,42 @@ export function parseSavedViewInput(body: unknown): SavedViewInput {
   return { name, view, filters: parseFilters(raw.filters) };
 }
 
+/**
+ * Parse and validate an untrusted saved-view patch body: an object with an
+ * optional `name` and/or `filters`. At least one must be present. `view` is
+ * immutable, so it is rejected if supplied.
+ */
+export function parseSavedViewPatch(body: unknown): SavedViewPatch {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidViewError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  if ("view" in raw) {
+    throw new InvalidViewError("A saved view's list (view) cannot be changed.");
+  }
+  const patch: SavedViewPatch = {};
+
+  if (raw.name !== undefined) {
+    if (typeof raw.name !== "string" || raw.name.trim() === "") {
+      throw new InvalidViewError("name must be a non-empty string.");
+    }
+    const name = raw.name.trim();
+    if (name.length > MAX_NAME_LEN) {
+      throw new InvalidViewError(`name must be ${MAX_NAME_LEN} characters or fewer.`);
+    }
+    patch.name = name;
+  }
+
+  if (raw.filters !== undefined) {
+    patch.filters = parseFilters(raw.filters);
+  }
+
+  if (patch.name === undefined && patch.filters === undefined) {
+    throw new InvalidViewError("Provide at least one of name or filters to update.");
+  }
+  return patch;
+}
+
 /** Validate the filter bundle: only known keys, scalar string/number values. */
 function parseFilters(value: unknown): SavedViewFilters {
   if (value === undefined || value === null) return {};
@@ -74,6 +110,15 @@ export async function createSavedView(
 ): Promise<SavedView> {
   const store = await getStore();
   return store.createSavedView(input, scope);
+}
+
+export async function updateSavedView(
+  id: string,
+  patch: SavedViewPatch,
+  scope?: WorkspaceScope,
+): Promise<SavedView | null> {
+  const store = await getStore();
+  return store.updateSavedView(id, patch, scope);
 }
 
 export async function deleteSavedView(

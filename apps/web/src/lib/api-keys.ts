@@ -26,6 +26,8 @@ export interface GeneratedApiKey {
   key: string;
   name: string;
   prefix: string;
+  /** Resource scopes; empty = a full-access (legacy-shaped) key. */
+  scopes: string[];
   createdAt: Date;
   expiresAt: Date | null;
 }
@@ -35,25 +37,39 @@ export interface ApiKeySummary {
   id: string;
   name: string;
   prefix: string;
+  scopes: string[];
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   createdAt: Date;
 }
 
-/** Create a new key for `userId`. Returns the plaintext exactly once. */
+/**
+ * Create a new key for `userId`. Returns the plaintext exactly once. `scopes`
+ * defaults to `[]` (a full-access key, back-compat); pass validated scopes
+ * (see `parseApiScopes`) to mint a restricted key.
+ */
 export async function createApiKey(
   db: Database,
   userId: string,
   name: string,
   expiresAt: Date | null = null,
+  scopes: string[] = [],
 ): Promise<GeneratedApiKey> {
   const secret = KEY_PREFIX + randomBytes(32).toString("base64url");
   const prefix = secret.slice(0, PREFIX_DISPLAY_LEN);
   const [row] = await db
     .insert(apiKeys)
-    .values({ userId, name, prefix, keyHash: hashKey(secret), expiresAt })
+    .values({ userId, name, prefix, keyHash: hashKey(secret), expiresAt, scopes })
     .returning({ id: apiKeys.id, createdAt: apiKeys.createdAt });
-  return { id: row!.id, key: secret, name, prefix, createdAt: row!.createdAt, expiresAt };
+  return {
+    id: row!.id,
+    key: secret,
+    name,
+    prefix,
+    scopes,
+    createdAt: row!.createdAt,
+    expiresAt,
+  };
 }
 
 /** List a user's keys (newest first), without any secret material. */
@@ -63,6 +79,7 @@ export async function listApiKeys(db: Database, userId: string): Promise<ApiKeyS
       id: apiKeys.id,
       name: apiKeys.name,
       prefix: apiKeys.prefix,
+      scopes: apiKeys.scopes,
       lastUsedAt: apiKeys.lastUsedAt,
       expiresAt: apiKeys.expiresAt,
       createdAt: apiKeys.createdAt,
@@ -101,14 +118,22 @@ export function extractApiKey(req: Request): string | null {
   return null;
 }
 
+/** A verified API key: the user it authenticates as and the scopes it carries. */
+export interface VerifiedApiKey {
+  user: SessionUser;
+  /** Resource scopes; empty = a full-access (legacy) key. */
+  scopes: string[];
+}
+
 /**
- * Resolve the user a raw API key belongs to, or `null` if the key is missing,
- * malformed, unknown, revoked, or expired. Bumps `lastUsedAt` on success.
+ * Resolve the user + scopes a raw API key belongs to, or `null` if the key is
+ * missing, malformed, unknown, revoked, or expired. Bumps `lastUsedAt` on
+ * success.
  */
-export async function verifyApiKeyUser(
+export async function verifyApiKey(
   db: Database,
   rawKey: string,
-): Promise<SessionUser | null> {
+): Promise<VerifiedApiKey | null> {
   if (!rawKey.startsWith(KEY_PREFIX)) return null;
   const hash = hashKey(rawKey);
   const [row] = await db
@@ -116,6 +141,7 @@ export async function verifyApiKeyUser(
       id: apiKeys.id,
       keyHash: apiKeys.keyHash,
       userId: apiKeys.userId,
+      scopes: apiKeys.scopes,
       expiresAt: apiKeys.expiresAt,
       revokedAt: apiKeys.revokedAt,
     })
@@ -141,5 +167,5 @@ export async function verifyApiKeyUser(
     .update(apiKeys)
     .set({ lastUsedAt: new Date() })
     .where(eq(apiKeys.id, row.id));
-  return user;
+  return { user, scopes: row.scopes };
 }

@@ -1,4 +1,5 @@
 import { createApiKey, listApiKeys } from "@/lib/api-keys";
+import { InvalidScopeError, parseApiScopes } from "@/lib/api-scopes";
 import { getAuth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
@@ -72,6 +73,16 @@ export async function POST(req: Request) {
     expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   }
 
-  const created = await createApiKey(getDb()!, who.id, name, expiresAt);
+  let scopes: string[];
+  try {
+    scopes = parseApiScopes(record.scopes);
+  } catch (err) {
+    if (err instanceof InvalidScopeError) {
+      return Response.json({ error: err.message }, { status: 422 });
+    }
+    throw err;
+  }
+
+  const created = await createApiKey(getDb()!, who.id, name, expiresAt, scopes);
   return Response.json({ key: created }, { status: 201 });
 }

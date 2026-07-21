@@ -1,20 +1,50 @@
 {
   "name": "@specboard/cli",
-  "version": "0.19.0",
-  "private": true,
+  "version": "0.21.0",
   "type": "module",
   "description": "Command-line interface for Specboard (manage specs, status, and GitHub links from the terminal).",
+  "license": "Apache-2.0",
+  "homepage": "https://specboard.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Specboards/Specboard.git",
+    "directory": "apps/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Specboards/Specboard/issues"
+  },
+  "keywords": [
+    "specboard",
+    "cli",
+    "product-management",
+    "backlog",
+    "specs",
+    "roadmap"
+  ],
   "bin": {
     "specboard": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -b",
     "dev": "tsc -b --watch",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "test": "vitest run",
+    "lint": "eslint src",
+    "prepublishOnly": "tsc -b"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0"
+    "@types/node": "^22.20.0",
+    "vitest": "^3.2.6"
   }
 }

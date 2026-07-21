@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 
 import { ApiError, SpecboardClient, type Feature, type FeaturePatch } from "./client.js";
 import { clearFileConfig, loadFileConfig, resolveConfig, saveFileConfig } from "./config.js";
+import { shortestTransitionPath } from "./workflow.js";
 
 // Read the version from package.json at runtime (bin lives at dist/index.js, so
 // the manifest is one level up) rather than hardcoding it, so `specboard
@@ -26,7 +27,8 @@ Work
   features [--mine] [--status <s>]         List features (work items)
            [--product <key>] [--assignee <id>]
   show <specId>                            Show one feature
-  status <specId> <status>                 Set a feature's status
+  status <specId> <status> [--advance]     Set a feature's status
+                                           (--advance walks intermediate steps)
   assign <specId> <me|none|userId>         Set or clear the assignee
   link <specId> (--pr <n> | --issue <n> | --branch <name>)
                                            Link a GitHub PR / issue / branch
@@ -201,6 +203,44 @@ function describe(f: Feature, patch: FeaturePatch): string {
   return "updated";
 }
 
+/**
+ * `status <specId> <target> [--advance]`. Without `--advance` this is a single
+ * transition (the server rejects an illegal jump). With `--advance` the CLI
+ * walks the spec through the shortest legal chain of intermediate statuses,
+ * PATCHing each hop, so e.g. `backlog -> in_progress` succeeds via
+ * `defining -> ready`. The path is computed from the workflow the server
+ * reports, so it honors custom / config.yml workflows too.
+ */
+async function cmdStatus(specId: string, target: string, argv: string[]): Promise<void> {
+  const { values } = parseArgs({
+    args: argv,
+    options: { advance: { type: "boolean" } },
+  });
+  if (!values.advance) {
+    await patchAndReport(specId, { status: target }, "status");
+    return;
+  }
+
+  const api = client();
+  const current = (await api.getFeature(specId)).status;
+  if (current === target) {
+    process.stdout.write(`${specId}: already ${target}\n`);
+    return;
+  }
+  const workflow = await api.getWorkflow();
+  const path = shortestTransitionPath(current, target, workflow);
+  if (path === null) {
+    fail(`no legal path from "${current}" to "${target}" in this workflow.`);
+  }
+
+  let from = current;
+  for (const step of path) {
+    const f = await api.patchFeature(specId, { status: step });
+    process.stdout.write(`${specId}: ${from} -> ${f.status}\n`);
+    from = f.status;
+  }
+}
+
 async function cmdAssign(specId: string, who: string): Promise<void> {
   let assigneeId: string | null;
   if (who === "none") assigneeId = null;
@@ -273,8 +313,8 @@ async function main(): Promise<void> {
       if (!rest[0]) fail("usage: specboard show <specId>");
       return cmdShow(rest[0]);
     case "status":
-      if (!rest[0] || !rest[1]) fail("usage: specboard status <specId> <status>");
-      return patchAndReport(rest[0], { status: rest[1] }, "status");
+      if (!rest[0] || !rest[1]) fail("usage: specboard status <specId> <status> [--advance]");
+      return cmdStatus(rest[0], rest[1], rest.slice(2));
     case "assign":
       if (!rest[0] || !rest[1]) fail("usage: specboard assign <specId> <me|none|userId>");
       return cmdAssign(rest[0], rest[1]);
