@@ -1,4 +1,4 @@
-# Production — https://app.specboard.ai (Fly app "specboard", org "specboard").
+# Production — https://app.specboards.ai (Fly app "specboard", org "specboard").
 # Deploy from the repo root: fly deploy
 # Test environment config lives in fly.test.toml; deploy there first.
 app = "specboard"

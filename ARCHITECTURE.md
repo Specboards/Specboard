@@ -163,8 +163,8 @@ Postgres (RLS multi-tenancy) · Better Auth · `@modelcontextprotocol/sdk` ·
 - **SaaS:** Fly.io Machines running `infra/web.Dockerfile` (the same image
   self-hosters run) + Fly Postgres (legacy `fly postgres`, PG 17); auth via
   Better Auth in-app.
-  Two environments: test.specboard.ai (every push to `main`) and
-  app.specboard.ai (manual promote). Migrations in `infra/migrations/`.
+  Two environments: test.specboards.ai (every push to `main`) and
+  app.specboards.ai (manual promote). Migrations in `infra/migrations/`.
 
 ## Local file mode (development/testing)
 

@@ -21,8 +21,8 @@ shared App. The one-click manifest flow below is the **self-host** path.
 
 | Env | Model | App host | Webhook URL |
 | --- | --- | --- | --- |
-| test | hosted | `https://test.specboard.ai` | `https://test.specboard.ai/api/webhooks/github` |
-| prod | hosted | `https://app.specboard.ai` | `https://app.specboard.ai/api/webhooks/github` |
+| test | hosted | `https://test.specboards.ai` | `https://test.specboards.ai/api/webhooks/github` |
+| prod | hosted | `https://app.specboards.ai` | `https://app.specboards.ai/api/webhooks/github` |
 
 → **Hosted setup is in [§ Hosted: one shared App](#hosted-one-shared-app).**
 The rest of this runbook (steps 1–3) is the **self-host** one-click path.
@@ -41,7 +41,7 @@ For the hosted deployments (test, prod) you register **one** GitHub App per
 environment, owned by the `Specboards` org, and provide its credentials via env.
 Tenants never create an App; they only install this one. Each environment needs
 its own App because a GitHub App binds to a single host's webhook/callback URLs
-(test → `test.specboard.ai`, prod → `app.specboard.ai`).
+(test → `test.specboards.ai`, prod → `app.specboards.ai`).
 
 1. **Register the App** under the `Specboards` org: GitHub → org **Settings** →
    Developer settings → **New GitHub App**. Set Homepage = app host; Webhook URL
@@ -184,7 +184,7 @@ Stored (in-app) credentials take precedence over these env vars when both exist.
 Repositories can also be registered via the API instead of the picker:
 
 ```sh
-curl -X POST https://test.specboard.ai/api/v1/repositories \
+curl -X POST https://test.specboards.ai/api/v1/repositories \
   -H 'content-type: application/json' \
   -H 'cookie: better-auth.session_token=<your-session-token>' \
   -d '{ "installationId": "<INSTALLATION_ID>", "owner": "Specboards", "name": "Specboard" }'

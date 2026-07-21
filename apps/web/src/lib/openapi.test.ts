@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument } from "./openapi";
 
 describe("buildOpenApiDocument", () => {
-  const doc = buildOpenApiDocument("https://app.specboard.ai") as {
+  const doc = buildOpenApiDocument("https://app.specboards.ai") as {
     openapi: string;
     info: { title: string };
     servers: { url: string }[];
@@ -14,7 +14,7 @@ describe("buildOpenApiDocument", () => {
   it("is an OpenAPI 3 document with the deployment origin as its server", () => {
     expect(doc.openapi).toMatch(/^3\./);
     expect(doc.info.title).toBe("Specboard API");
-    expect(doc.servers[0]!.url).toBe("https://app.specboard.ai");
+    expect(doc.servers[0]!.url).toBe("https://app.specboards.ai");
   });
 
   it("declares the x-api-key security scheme", () => {

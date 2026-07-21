@@ -32,7 +32,7 @@ not a human. As an owner (from a browser session), call `POST
 `--advance` can read the workflow):
 
 ```bash
-curl -X POST https://app.specboard.ai/api/v1/org/service-accounts \
+curl -X POST https://app.specboards.ai/api/v1/org/service-accounts \
   -H 'content-type: application/json' --cookie "$SESSION" \
   -d '{"name":"CI sync bot","scopes":["features:write","statuses:read"]}'
 ```
@@ -44,8 +44,8 @@ The response returns the `sb_…` key once. (A personal full-access key under
 
 In the GitHub repo settings, add:
 
-- `SPECBOARD_URL` - the deployment, e.g. `https://app.specboard.ai` (use
-  `https://test.specboard.ai` while validating).
+- `SPECBOARD_URL` - the deployment, e.g. `https://app.specboards.ai` (use
+  `https://test.specboards.ai` while validating).
 - `SPECBOARD_TOKEN` - the `sb_…` API key.
 
 Without both, `specboard-sync.yml` no-ops, so forks and outside contributors are
@@ -56,7 +56,7 @@ unaffected.
 ```bash
 pnpm --filter @specboard/cli build
 pnpm --filter @specboard/cli exec npm link    # puts `specboard` on PATH
-specboard auth login --url https://app.specboard.ai
+specboard auth login --url https://app.specboards.ai
 scripts/specboard/install-hooks.sh            # sets core.hooksPath=.githooks
 ```
 
@@ -79,4 +79,4 @@ git push`.
 
 Open a PR that edits a `specs/**/spec.md` (or add a `Spec: <id>` trailer), then
 check the Action log under **Specboard Sync** and the item's status + linked PR
-in the app. Start against `test.specboard.ai` before pointing CI at production.
+in the app. Start against `test.specboards.ai` before pointing CI at production.

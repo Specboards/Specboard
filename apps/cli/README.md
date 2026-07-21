@@ -36,7 +36,7 @@ specboard help
 Create a key in the web app under **Settings → API keys**, then:
 
 ```bash
-specboard auth login --url https://app.specboard.ai
+specboard auth login --url https://app.specboards.ai
 # paste the sb_… key when prompted (input is hidden)
 specboard whoami
 ```
@@ -100,7 +100,7 @@ jobs:
       SPECBOARD_TOKEN: ${{ secrets.SPECBOARD_TOKEN }}
 ```
 
-Set the two repo secrets: `SPECBOARD_URL` (e.g. `https://app.specboard.ai`) and
+Set the two repo secrets: `SPECBOARD_URL` (e.g. `https://app.specboards.ai`) and
 `SPECBOARD_TOKEN` (an API key, ideally a `service`-account key scoped to
 `features:write` and `statuses:read`).
 

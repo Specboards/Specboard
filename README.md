@@ -21,7 +21,7 @@ family of apps.
 > Board · Roadmap · Ideas · Feature detail), multi-product backlogs, releases,
 > custom card properties, spec parsing, the status workflow, auth, one-click
 > GitHub sync, and the MCP server for agents. The hosted service is currently
-> **invite-only** ([request access](https://www.specboard.ai/request-access)).
+> **invite-only** ([request access](https://www.specboards.ai/request-access)).
 
 ## Why Specboard
 
@@ -102,7 +102,7 @@ Optional environment flags for a hosted deployment:
 - `ACCESS_REQUEST_NOTIFY_EMAIL` - where `POST /api/access-request` submissions
   are sent for review (default `contact@specboard.net`).
 - `ACCESS_REQUEST_ALLOWED_ORIGINS` - comma-separated CORS allow-list for that
-  endpoint (default: the `specboard.ai` marketing origins + localhost).
+  endpoint (default: the `specboards.ai` marketing origins + localhost).
 - `POSTMARK_SERVER_TOKEN` / `EMAIL_FROM` - transactional email (verification,
   password reset, invites, access-request notifications). Unset = email is a
   logged no-op.
@@ -135,7 +135,7 @@ Specboard speaks the Model Context Protocol so coding agents (Claude Code and
 others) can read and drive the backlog. Two ways to connect:
 
 **Hosted endpoint (recommended).** Every deployment serves an authenticated MCP
-endpoint at `POST /api/mcp` (e.g. `https://app.specboard.ai/api/mcp`) with OAuth
+endpoint at `POST /api/mcp` (e.g. `https://app.specboards.ai/api/mcp`) with OAuth
 2.1 sign-in, or an `x-api-key` for service accounts. Point your client at it,
 approve the browser consent screen, and the connection binds to your user and
 the workspace you pick.
@@ -165,7 +165,7 @@ key. Great for git hooks and CI.
 pnpm --filter @specboard/cli build
 node apps/cli/dist/index.js help
 
-specboard auth login --url https://app.specboard.ai   # paste an sb_… key
+specboard auth login --url https://app.specboards.ai   # paste an sb_… key
 specboard whoami
 specboard features --mine --status in_progress
 specboard status <specId> in_review --advance         # walk intermediate stages

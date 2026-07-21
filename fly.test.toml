@@ -1,4 +1,4 @@
-# Test/staging — https://test.specboard.ai (Fly app "specboard-test", org "specboard").
+# Test/staging — https://test.specboards.ai (Fly app "specboard-test", org "specboard").
 # New code deploys here before production. Deploy from the repo root:
 #   fly deploy -c fly.test.toml
 app = "specboard-test"

@@ -29,7 +29,7 @@ end.
 
 ## Prerequisites
 
-- Cloud **test** deploy is current (`test.specboard.ai`, app `specboard-test`)
+- Cloud **test** deploy is current (`test.specboards.ai`, app `specboard-test`)
   with the fix live.
 - Both GitHub Apps have their client secret + callback URL configured for the
   test environment (the hosted deployment prerequisites the card notes).
@@ -43,7 +43,7 @@ end.
 
 1. As **Account A**, install the GitHub App on Account A's org (creates a live
    installation, `installation_id = INST_A`).
-2. As **Account B**, sign in to `test.specboard.ai` and start the connect flow.
+2. As **Account B**, sign in to `test.specboards.ai` and start the connect flow.
    Attempt to bind `INST_A` to Account B's workspace. Try each vector:
    - **Direct callback replay:** hit
      `/api/v1/github/oauth/callback?installation_id=INST_A&...` with values

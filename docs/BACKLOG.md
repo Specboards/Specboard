@@ -5,7 +5,7 @@ product), not in this repo. This file is a pointer.
 
 ## Where the backlog is
 
-The connected Specboard workspace is **Specboard** (`app.specboard.ai`, workspace
+The connected Specboard workspace is **Specboard** (`app.specboards.ai`, workspace
 slug `specboard`). Work is organized as Initiative -> Epic -> Feature -> Work Item.
 
 To see the current state and the next items to pick up:

@@ -28,7 +28,7 @@ import { requireWorkspaceAccess } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
 
-/** This deployment's public MCP endpoint, e.g. https://test.specboard.ai/api/mcp. */
+/** This deployment's public MCP endpoint, e.g. https://test.specboards.ai/api/mcp. */
 async function mcpEndpoint(): Promise<string> {
   const configured = (process.env.APP_URL ?? process.env.BETTER_AUTH_URL)?.trim();
   let origin: string;

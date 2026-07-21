@@ -125,7 +125,7 @@ export function installUrlWithState(
 }
 
 /**
- * This deployment's public origin (e.g. `https://test.specboard.ai`). Behind
+ * This deployment's public origin (e.g. `https://test.specboards.ai`). Behind
  * Fly's proxy `req.url` is the internal bind address, so derive it from the
  * forwarded headers (the same ones Better Auth trusts), with an `APP_URL`
  * env override for unusual setups. Used to build absolute GitHub callback URLs.

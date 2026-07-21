@@ -4,6 +4,19 @@ import { NextResponse, type NextRequest } from "next/server";
 const GITHUB_SETUP_PATH = "/api/v1/github/setup";
 
 /**
+ * Old -> new host redirects for the Specboard -> Specboards domain move. The Fly
+ * apps still serve the old certs, so both domains reach this app; we 301 human
+ * navigation to the new canonical host. Scoped to browser page loads
+ * (non-API GET/HEAD) on purpose: API and webhook POSTs on the old domain must
+ * keep working un-redirected until the GitHub App and API clients are pointed at
+ * the new host (a 301 would drop the POST body / break webhook signatures).
+ */
+const HOST_REDIRECTS: Record<string, string> = {
+  "app.specboard.ai": "app.specboards.ai",
+  "test.specboard.ai": "test.specboards.ai",
+};
+
+/**
  * Build the per-request Content-Security-Policy. `script-src` carries a
  * per-request nonce plus `strict-dynamic` and NO `'unsafe-inline'`, so only
  * Next's own nonce-tagged bootstrap (and the chunks it loads) can execute:
@@ -67,6 +80,22 @@ function newNonce(): string {
  */
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Domain move: redirect browser navigation from the old host to the new one,
+  // preserving path + query. Only GET/HEAD page loads are redirected; API and
+  // webhook traffic on the old host falls through and is served directly.
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
+  const newHost = HOST_REDIRECTS[host];
+  if (
+    newHost &&
+    !pathname.startsWith("/api/") &&
+    (req.method === "GET" || req.method === "HEAD")
+  ) {
+    const url = req.nextUrl.clone();
+    url.hostname = newHost;
+    url.port = "";
+    return NextResponse.redirect(url, 301);
+  }
 
   // `nextUrl.pathname` may arrive encoded (`…/setup%20`) or decoded (`…/setup `)
   // depending on the hop; decode then trim trailing whitespace to catch both.
