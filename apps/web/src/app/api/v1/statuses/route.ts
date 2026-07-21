@@ -7,16 +7,30 @@ import {
   parseStatusStages,
   replaceStatuses,
 } from "@/lib/features-service";
+import { resolveWorkflowFor } from "@/lib/repo-config";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/v1/statuses — the workspace's workflow stages ([] = built-in default). */
+/**
+ * GET /api/v1/statuses — the workspace's workflow stages ([] = built-in
+ * default) plus the fully-resolved `workflow` (ordered statuses + legal
+ * transitions) the PATCH validator enforces. The resolved graph lets API
+ * clients (e.g. the CLI's `status --advance`) compute a legal multi-step path
+ * without reimplementing the default/config.yml/admin-stage precedence.
+ */
 export async function GET(req: Request) {
   const authz = await resolveReadScope(req);
   if (!authz.ok) return authz.response;
 
-  const statuses = await listStatuses(authz.scope ?? undefined);
-  return Response.json({ statuses });
+  const scope = authz.scope ?? undefined;
+  const [statuses, workflow] = await Promise.all([
+    listStatuses(scope),
+    resolveWorkflowFor(authz.scope ?? null),
+  ]);
+  return Response.json({
+    statuses,
+    workflow: { statuses: workflow.statuses, transitions: workflow.transitions },
+  });
 }
 
 /**

@@ -42,6 +42,11 @@ export interface Product {
   name: string;
 }
 
+export interface Workflow {
+  statuses: string[];
+  transitions: Record<string, string[]>;
+}
+
 export type GithubLinkKind = "pull_request" | "issue" | "branch";
 
 export interface FeaturePatch {
@@ -134,5 +139,14 @@ export class SpecboardClient {
       "/api/v1/products",
     );
     return products;
+  }
+
+  /** The resolved workflow (ordered statuses + legal transitions) the server enforces. */
+  async getWorkflow(): Promise<Workflow> {
+    const { workflow } = await this.request<{ workflow: Workflow }>(
+      "GET",
+      "/api/v1/statuses",
+    );
+    return workflow;
   }
 }

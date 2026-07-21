@@ -3,8 +3,10 @@
 #   PR opened / updated  -> set each touched spec in_progress + link the PR
 #   PR merged            -> set each touched spec done
 #
-# Best-effort: an individual status change that the workflow state machine
-# rejects (e.g. in_progress from backlog) is logged and skipped, never fatal.
+# Uses `status --advance` so a spec several stages behind the target is walked
+# through the intermediate statuses (e.g. in_progress from backlog goes via
+# defining -> ready). Best-effort: if no legal path exists the step is logged
+# and skipped, never fatal.
 # Expects the env the CI workflow provides (SPECBOARD_URL/TOKEN, BASE_SHA,
 # HEAD_SHA, PR_NUMBER, PR_BODY, ACTION, MERGED).
 set -uo pipefail
@@ -27,10 +29,10 @@ while IFS= read -r id; do
   [ -n "$id" ] || continue
   if [ "${ACTION:-}" = "closed" ] && [ "${MERGED:-}" = "true" ]; then
     echo "==> $id: done"
-    "${cli[@]}" status "$id" done || echo "  (skip: 'done' not allowed from current status)"
+    "${cli[@]}" status "$id" done --advance || echo "  (skip: no legal path to 'done' from current status)"
   else
     echo "==> $id: in_progress + link PR #${PR_NUMBER:-?}"
-    "${cli[@]}" status "$id" in_progress || echo "  (skip: 'in_progress' not allowed from current status)"
+    "${cli[@]}" status "$id" in_progress --advance || echo "  (skip: no legal path to 'in_progress' from current status)"
     if [ -n "${PR_NUMBER:-}" ]; then
       "${cli[@]}" link "$id" --pr "$PR_NUMBER" || echo "  (skip: link failed, maybe already linked)"
     fi

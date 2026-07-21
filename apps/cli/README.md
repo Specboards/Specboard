@@ -39,7 +39,7 @@ whoami                                   Show the authenticated user + workspace
 features [--mine] [--status <s>]         List work items
          [--product <key>] [--assignee <id>]
 show <specId>                            Show one feature
-status <specId> <status>                 Set a feature's status
+status <specId> <status> [--advance]     Set a feature's status
 assign <specId> <me|none|userId>         Set or clear the assignee
 link <specId> (--pr <n> | --issue <n> | --branch <name>)
 products                                 List products
@@ -48,10 +48,19 @@ products                                 List products
 Statuses: `backlog`, `defining`, `ready`, `in_progress`, `in_review`, `done`,
 `archived` (status changes are validated against the workflow state machine).
 
+The default workflow only allows single-step moves (e.g. `backlog` reaches only
+`defining`), so a jump like `backlog -> in_progress` is rejected. Pass
+`--advance` to walk the spec through the shortest legal chain of intermediate
+statuses automatically:
+
+```bash
+specboard status "$SPEC_ID" in_progress --advance   # backlog -> defining -> ready -> in_progress
+```
+
 ## Example: a Git hook that advances a spec on PR open
 
 ```bash
 # .git/hooks or CI: when a PR opens, mark its spec in_progress and link the PR.
-specboard status "$SPEC_ID" in_progress
+specboard status "$SPEC_ID" in_progress --advance
 specboard link "$SPEC_ID" --pr "$PR_NUMBER"
 ```

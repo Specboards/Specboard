@@ -32,6 +32,9 @@ importers:
       '@types/node':
         specifier: ^22.20.0
         version: 22.20.0
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   apps/mcp:
     dependencies:

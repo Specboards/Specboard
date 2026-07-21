@@ -12,9 +12,11 @@
     "dev": "tsc -b --watch",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "eslint src"
   },
   "devDependencies": {
-    "@types/node": "^22.20.0"
+    "@types/node": "^22.20.0",
+    "vitest": "^3.2.6"
   }
 }
