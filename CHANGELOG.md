@@ -7,6 +7,20 @@ for how and when the version is bumped.
 
 ## [Unreleased]
 
+### Changed
+
+- **Relicensed the core from Apache-2.0 to AGPL-3.0-only.** The Specboard server
+  and web app are now open source under the GNU Affero General Public License v3,
+  with a commercial license available for the cases the AGPL does not fit
+  (reselling Specboard as a hosted service, embedding it in proprietary software,
+  or needing enterprise add-ons and support). See
+  [LICENSING.md](./LICENSING.md) for the dual-license model. The published
+  `@specboard/cli` (`apps/cli/`) stays Apache-2.0 so customers can embed it
+  freely. Contributions are now covered by a CLA
+  ([CONTRIBUTING.md](./CONTRIBUTING.md)) that grants the right to relicense them
+  commercially, which is what makes the dual-license model hold. Releases v0.21.0
+  and earlier remain available under Apache-2.0.
+
 ## [0.21.0] - 2026-07-21
 
 Dogfood loop & public API: make the PR -> work-item-status loop consumable by

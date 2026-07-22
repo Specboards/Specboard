@@ -2,8 +2,8 @@
   "name": "specboards",
   "version": "0.21.0",
   "private": true,
-  "description": "Lightweight, spec-based product management layer over git-native specs. Open-core self-host + hosted SaaS.",
-  "license": "Apache-2.0",
+  "description": "Lightweight, spec-based product management layer over git-native specs. Open-core self-host (AGPL-3.0) + hosted SaaS.",
+  "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22"

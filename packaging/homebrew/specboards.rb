@@ -13,7 +13,7 @@ class Specboards < Formula
   # Replace after `npm publish`: shasum -a 256 of the published tarball
   # (`npm view @specboards/cli@0.21.0 dist.tarball` then curl | shasum -a 256).
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
-  license "Apache-2.0"
+  license "AGPL-3.0-only"
 
   depends_on "node"
 

@@ -143,15 +143,28 @@ whose authority is re-checked against membership server-side, and a product is a
 grouping (`features.product_id`) that can span repos. See
 [`docs/adr/0001-multi-tenancy-url-and-product-grouping.md`](docs/adr/0001-multi-tenancy-url-and-product-grouping.md).
 
-## Open-core boundary
+## License boundary
 
-- **Open source (Apache-2.0):** spec editor, kanban/backlog/roadmap, GitHub git sync,
-  MCP server, single-workspace self-host, docker-compose deploy.
-- **Commercial (hosted SaaS):** multi-tenant hosting, SSO/SAML/SCIM, advanced
-  analytics/insights, premium integrations (Jira/Linear/Slack), audit logs, support.
+The whole application ships in this repository under the **GNU AGPLv3**
+(open source): spec editor, kanban/backlog/roadmap, GitHub git sync, MCP server,
+self-host, docker-compose deploy, and the multi-tenant code path. You may run,
+modify, and self-host all of it, including for your own commercial use. AGPLv3's
+network copyleft means a modified Specboards run as a service for others must
+offer its source to those users. A separate **commercial license** lifts that
+obligation and bundles enterprise support.
 
-Commercial code stays in clearly separated, flag-gated modules so the OSS build is
-fully functional standalone (no crippleware).
+- **AGPLv3, self-host and modify freely:** `apps/web`, `apps/mcp`,
+  `packages/**`, and `infra/**`.
+- **Apache-2.0 exception:** the `apps/cli` client (`@specboards/cli`) is
+  Apache-2.0 so it can be embedded freely; it is a self-contained REST client
+  with no AGPL linkage.
+- **Reasons to take the commercial license:** offering Specboards as a
+  hosted/managed service to others without releasing your changes, embedding it
+  in a proprietary product, an AGPL-barring org policy, or wanting enterprise
+  features (SSO/SAML/SCIM, advanced analytics, audit logs) and support.
+
+The single-vs-multi-tenant split is a runtime flag (`SPECBOARDS_MULTI_TENANT`),
+not withheld code: self-host defaults to `N=1`, hosted opts in. See LICENSING.md.
 
 ## Tech stack
 
