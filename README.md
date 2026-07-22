@@ -8,7 +8,8 @@ status, priority, assignment, backlog order, roadmap, releases, dependencies,
 and epic/feature hierarchy. PM, UX, and engineering plan together without
 editing files in a terminal, and without copying every spec into Jira or Aha.
 
-- **Open-core.** Self-host the Apache-2.0 core for free, or use the hosted SaaS.
+- **Open source.** Self-host the full app for free under the AGPL-3.0, modify it
+  as you like, or use the hosted SaaS.
 - **Git-native.** No second source of truth. The specs in your repo *are* the
   backlog.
 - **Agent-ready.** An MCP server gives coding agents the same prioritized plan
@@ -225,18 +226,28 @@ pnpm db:migrate                         # apply against $DATABASE_URL (incl. RLS
 
 ## License
 
-Specboards is **open-core**. The core product, which includes the web app,
-shared packages, MCP server, and single-org (`N=1`) self-hosting, is licensed
-under the [Apache License 2.0](./LICENSE). You may run, modify, and self-host it
-for any purpose, including commercially.
+Specboards is **open source** under the
+[GNU Affero General Public License v3.0](./LICENSE) (AGPLv3), and is also
+available under a separate **commercial license**. The whole application, which
+includes the web app, shared packages, MCP server, and self-hosting (including
+the multi-tenant code path), ships in this repository. You may run, modify,
+extend, and self-host it for any purpose, including for your own commercial use,
+under the AGPL.
 
-A small set of SaaS-oriented features are licensed separately: multi-tenant
-hosting (`N>1`), SSO/SAML/SCIM, advanced analytics, premium integrations, and
-audit logs. See [LICENSING.md](./LICENSING.md) for the full breakdown, or contact
-**contact@specboard.ai** for a commercial license.
+Because AGPLv3 is a network copyleft, if you run a modified Specboards as a
+service for others you must offer them your source under the AGPL. If you want to
+offer Specboards as a hosted service without that obligation, embed it in a
+proprietary product, or work under an organization that bars AGPL software, take
+the commercial license instead. It also bundles enterprise add-ons (SSO/SAML/SCIM,
+advanced analytics, audit logs) and support. See [LICENSING.md](./LICENSING.md)
+for the full breakdown, or contact **contact@specboard.ai**.
+
+One exception: the CLI client (`apps/cli`, the published `@specboards/cli`) is
+licensed under [Apache-2.0](./apps/cli/LICENSE), not AGPLv3, so you can embed and
+script against it freely.
 
 The Specboards **brand** (name, logos, visual identity) and the marketing site
 are **not** open source. They live in the separate
 [Website](https://github.com/Specboards/Website) repo under a proprietary
-license. Apache-2.0 does not grant trademark rights; see
+license. AGPLv3 is a copyright license and grants no trademark rights; see
 [LICENSING.md](./LICENSING.md#brand-and-trademarks-all-rights-reserved).
