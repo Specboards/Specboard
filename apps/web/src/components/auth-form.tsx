@@ -102,8 +102,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
       const { error } = await signIn.email({ email, password, callbackURL: redirectTo });
       if (error) {
         // An unverified address can't sign in; Better Auth re-sends the
-        // verification email, so route the user to the "check your email" state.
-        if (error.status === 403) {
+        // verification email, so route the user to the "check your email"
+        // state. Match the specific code, not a bare 403: other failures also
+        // use 403 (e.g. INVALID_ORIGIN when BETTER_AUTH_URL doesn't match the
+        // serving domain), and steering those to the verify screen sends the
+        // user chasing an email that never comes instead of showing the fault.
+        if (error.code === "EMAIL_NOT_VERIFIED") {
           setPendingEmail(email);
           return;
         }
