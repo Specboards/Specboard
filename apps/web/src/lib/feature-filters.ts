@@ -56,6 +56,11 @@ export function hasActiveFilters(filters: FeatureFilters): boolean {
   return FILTER_KEYS.some((k) => filters[k] !== undefined);
 }
 
+/** How many filter dimensions are set — drives the mobile "Filters" badge. */
+export function countActiveFilters(filters: FeatureFilters): number {
+  return FILTER_KEYS.filter((k) => filters[k] !== undefined).length;
+}
+
 /** Apply the filters to a feature list (AND across dimensions). */
 export function applyFeatureFilters(
   features: FeatureRecord[],

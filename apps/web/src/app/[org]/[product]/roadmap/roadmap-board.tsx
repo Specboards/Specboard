@@ -518,7 +518,10 @@ function CardBody({
           <Button
             variant="link"
             size="inline"
-            className="justify-start text-left font-normal text-foreground"
+            // w-full + whitespace-normal so a long title wraps within the card
+            // instead of overflowing the column: Button's base is
+            // `whitespace-nowrap`, which a plain <a>/<Link> title never carried.
+            className="w-full justify-start whitespace-normal text-left font-normal text-foreground"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
