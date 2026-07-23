@@ -208,7 +208,7 @@ export function ReleaseDetailSheet({
               <Field label="Status">
                 {shipped ? (
                   <div className="flex h-8 items-center px-2">
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" size="sm">
                       Shipped
                     </Badge>
                   </div>
@@ -282,7 +282,7 @@ export function ReleaseDetailSheet({
                   <button
                     type="button"
                     onClick={() => setEditingNotes(true)}
-                    className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                    className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     {current.notes ? (
                       <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
@@ -298,7 +298,7 @@ export function ReleaseDetailSheet({
               </div>
 
               <p
-                className="h-4 text-[11px] text-muted-foreground"
+                className="h-4 text-2xs text-muted-foreground"
                 role="status"
                 aria-live="polite"
               >
@@ -313,7 +313,7 @@ export function ReleaseDetailSheet({
             <Box>
               <BoxHeader className="flex-wrap justify-between gap-2 text-xs font-normal text-muted-foreground">
                 <span className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge variant="outline" size="sm">
                     {RELEASE_STATUS_LABELS[current.status]}
                   </Badge>
                   {shipped && current.shippedDate

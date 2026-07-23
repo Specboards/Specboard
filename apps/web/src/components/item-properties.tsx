@@ -363,7 +363,9 @@ export function ItemProperties({
 
       {error ? <p className="pt-1 text-xs text-destructive">{error}</p> : null}
       <p
-        className="h-4 pl-[9.5rem] text-[11px] text-muted-foreground"
+        // Aligns under the value column: the w-36 (9rem) PropertyRow label plus
+        // its gap-2 (0.5rem) = 9.5rem, i.e. the pl-38 spacing step.
+        className="h-4 pl-38 text-2xs text-muted-foreground"
         role="status"
         aria-live="polite"
       >

@@ -353,7 +353,7 @@ function SpecScanList({ repos }: { repos: RepoScan[] }) {
                   className="flex items-center justify-between gap-3 px-3 py-2"
                 >
                   <span className="min-w-0 truncate text-sm">{spec.title}</span>
-                  <code className="shrink-0 text-[11px] text-muted-foreground">
+                  <code className="shrink-0 text-2xs text-muted-foreground">
                     {spec.path}
                   </code>
                 </li>

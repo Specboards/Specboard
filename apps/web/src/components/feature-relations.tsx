@@ -128,7 +128,7 @@ export function FeatureRelations({
         <ul className="space-y-2">
           {grouped.map((group) => (
             <li key={group.dir} className="space-y-1">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
                 {DIRECTION_LABEL[group.dir]}
               </span>
               {group.items.map((r) => (

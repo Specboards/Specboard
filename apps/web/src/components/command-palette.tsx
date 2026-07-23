@@ -142,7 +142,7 @@ export function CommandPalette() {
             onKeyDown={onInputKeyDown}
             placeholder="Jump to…"
             aria-label="Search commands"
-            className="w-full border-b bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+            className="w-full border-b bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
           />
           <ul className="max-h-80 overflow-y-auto p-1">
             {results.length === 0 ? (

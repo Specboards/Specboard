@@ -72,8 +72,9 @@ export function FeatureCard({
         {product ? (
           <Badge
             variant="secondary"
+            size="sm"
             className={cn(
-              "w-fit border-transparent text-[10px]",
+              "w-fit border-transparent",
               productBadge(product).className,
             )}
             style={productBadge(product).style}
@@ -105,7 +106,8 @@ export function FeatureCard({
             {feature.riceScore !== null ? (
               <Badge
                 variant="outline"
-                className="text-[10px] tabular-nums"
+                size="sm"
+                className="tabular-nums"
                 title="RICE score"
               >
                 RICE {formatRiceScore(feature.riceScore)}

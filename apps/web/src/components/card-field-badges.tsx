@@ -34,7 +34,7 @@ export function renderCardField(
   switch (key) {
     case "assignee":
       return f.assigneeId ? (
-        <Badge key="assignee" variant="secondary" className="text-[10px]">
+        <Badge key="assignee" variant="secondary" size="sm">
           {memberNames[f.assigneeId] ?? "Assigned"}
         </Badge>
       ) : null;
@@ -43,7 +43,7 @@ export function renderCardField(
         <Badge
           key="blocked"
           variant="destructive"
-          className="text-[10px]"
+          size="sm"
           title={`Blocked by ${f.blockedByCount} feature(s)`}
         >
           Blocked
@@ -54,7 +54,7 @@ export function renderCardField(
         <Badge
           key="epic"
           variant="outline"
-          className="text-[10px]"
+          size="sm"
           title={`${f.childDoneCount} of ${f.childCount} children done`}
         >
           epic {f.childDoneCount}/{f.childCount}
@@ -65,7 +65,7 @@ export function renderCardField(
         <Badge
           key="sub"
           variant="secondary"
-          className="text-[10px]"
+          size="sm"
           title="Has a parent epic"
         >
           ↳ sub
@@ -73,7 +73,7 @@ export function renderCardField(
       ) : null;
     case "release":
       return f.releaseId ? (
-        <Badge key="release" variant="outline" className="text-[10px]">
+        <Badge key="release" variant="outline" size="sm">
           {releaseNames[f.releaseId] ?? "Release"}
         </Badge>
       ) : null;
@@ -85,7 +85,7 @@ export function renderCardField(
           <Badge
             key="github"
             variant="default"
-            className="text-[10px]"
+            size="sm"
             title="Has a merged PR"
           >
             PR merged
@@ -96,7 +96,7 @@ export function renderCardField(
           <Badge
             key="github"
             variant="secondary"
-            className="text-[10px]"
+            size="sm"
             title="Has an open PR"
           >
             PR open
@@ -106,7 +106,7 @@ export function renderCardField(
         <Badge
           key="github"
           variant="outline"
-          className="text-[10px]"
+          size="sm"
           title="Linked GitHub artifacts"
         >
           🔗 {g.total}
@@ -119,7 +119,7 @@ export function renderCardField(
             <Badge
               key={`tag:${tag}`}
               variant="secondary"
-              className="text-[10px]"
+              size="sm"
             >
               {tag}
             </Badge>
@@ -131,7 +131,7 @@ export function renderCardField(
       const text = customFieldText(f.customFields[cfKey] ?? null);
       if (!text) return null;
       return (
-        <Badge key={key} variant="secondary" className="text-[10px]">
+        <Badge key={key} variant="secondary" size="sm">
           {customFieldLabels[cfKey] ?? cfKey}: {text}
         </Badge>
       );
@@ -175,7 +175,7 @@ export function featuredBadge(
   const value = customFieldText(f.customFields[featured] ?? null);
   if (!value) return null;
   return (
-    <Badge variant="secondary" className="w-fit text-[10px]">
+    <Badge variant="secondary" size="sm" className="w-fit">
       {maps.customFieldLabels[featured] ?? featured}: {value}
     </Badge>
   );

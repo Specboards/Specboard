@@ -156,7 +156,7 @@ export function MentionInput({
               >
                 <span
                   aria-hidden
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-medium text-muted-foreground"
                 >
                   {m.name.trim()[0]?.toUpperCase() ?? "?"}
                 </span>

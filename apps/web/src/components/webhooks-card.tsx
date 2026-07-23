@@ -438,7 +438,7 @@ export function WebhooksCard({
                             ? `Auto-disabled after ${ep.consecutiveFailures} consecutive failures. Resume to re-enable.`
                             : undefined
                         }
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium ${
                           ep.active
                             ? "bg-success/15 text-success-fg"
                             : autoDisabled
@@ -564,7 +564,7 @@ function DeliveryLog({
               </td>
               <td className="px-2 py-1.5">
                 <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                  className={`rounded-full px-1.5 py-0.5 text-2xs font-medium ${
                     DELIVERY_STATUS_STYLE[d.status] ??
                     "bg-muted text-muted-foreground"
                   }`}

@@ -129,7 +129,7 @@ export function FeatureGithubLinks({
             <li key={l.id} className="flex items-center gap-1.5 text-sm">
               <LinkRow link={l} />
               <span
-                className="text-[10px] text-muted-foreground"
+                className="text-2xs text-muted-foreground"
                 title={`Inherited from ${l.sourceTitle}`}
               >
                 ↳ {l.sourceTitle}
@@ -180,7 +180,7 @@ function LinkRow({ link }: { link: GithubLink }) {
     >
       <span className="font-mono text-xs">{linkLabel(link)}</span>
       {link.state ? (
-        <Badge variant={stateVariant(link.state)} className="text-[10px]">
+        <Badge variant={stateVariant(link.state)} size="sm">
           {link.state}
         </Badge>
       ) : null}

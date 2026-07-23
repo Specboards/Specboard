@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-sm border font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
   {
     variants: {
       variant: {
@@ -17,11 +17,19 @@ const badgeVariants = cva(
         // Primer "counter": a monospace number in a soft neutral round-pill,
         // like the count next to Issues / PRs.
         counter:
-          "rounded-full border-transparent bg-muted px-2 font-mono text-xs text-muted-foreground",
+          "rounded-full border-transparent bg-muted font-mono text-muted-foreground",
+      },
+      size: {
+        // sm keeps the chip padding and drops only the label to the 2xs step,
+        // matching the dense metadata badges (card products, field chips) that
+        // previously carried an ad-hoc text-[10px] override.
+        default: "px-2 py-0.5 text-xs",
+        sm: "px-2 py-0.5 text-2xs",
       },
     },
     defaultVariants: {
       variant: "default",
+      size: "default",
     },
   },
 );
@@ -31,9 +39,9 @@ export interface BadgeProps
     React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant, size, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <div className={cn(badgeVariants({ variant, size }), className)} {...props} />
   );
 }
 

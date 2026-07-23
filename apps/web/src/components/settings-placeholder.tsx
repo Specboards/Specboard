@@ -13,7 +13,7 @@ export function SettingsPlaceholder({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {title}
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             Soon
           </span>
         </CardTitle>

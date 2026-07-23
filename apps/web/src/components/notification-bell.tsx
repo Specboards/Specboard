@@ -106,7 +106,7 @@ export function NotificationBell({ collapsed = false }: { collapsed?: boolean })
         {unread > 0 ? (
           <span
             className={cn(
-              "flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground",
+              "flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-2xs font-medium text-primary-foreground",
               collapsed ? "absolute -right-0.5 -top-0.5" : "ml-auto",
             )}
           >
@@ -170,7 +170,7 @@ export function NotificationBell({ collapsed = false }: { collapsed?: boolean })
                           </span>{" "}
                           mentioned you
                         </span>
-                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                        <span className="ml-auto shrink-0 text-2xs text-muted-foreground">
                           {timeAgo(n.createdAt)}
                         </span>
                       </div>
