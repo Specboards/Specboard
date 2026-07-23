@@ -13,11 +13,15 @@ import { getDb } from "@/lib/db";
 import {
   applyFeatureFilters,
   hasActiveFilters,
+  parseCustomDateFilters,
   parseFeatureFilters,
 } from "@/lib/feature-filters";
 import {
+  compareByCustomField,
   compareByRiceScore,
+  CUSTOM_SORT_PREFIX,
   parseSortMode,
+  sortableProperties,
   sortFeatures,
 } from "@/lib/feature-helpers";
 import { resolveWorkflowFor } from "@/lib/repo-config";
@@ -51,7 +55,6 @@ export async function ListView({
   const workflow = await resolveWorkflowFor(access);
   const sp = await searchParams;
   const filters = parseFeatureFilters(sp);
-  const sort = parseSortMode(sp.sort);
   const store = await getStore();
 
   // Scope to the segment in the URL: a product, a group (`~key`), or `all`.
@@ -104,6 +107,17 @@ export async function ListView({
     access && db ? await listWorkspaceMembers(db, access.workspaceId) : [];
   const savedViews = await store.listSavedViews(access ?? undefined);
 
+  // Custom properties power both the custom-field sort options and the date
+  // range filters. Date-typed fields also add a from/to range filter, parsed
+  // here so it applies (and shows in the bar) alongside the built-in filters.
+  const properties = await store.listProperties(access ?? undefined);
+  const dateProps = properties.filter((p) => p.type === "date");
+  const customDates = parseCustomDateFilters(
+    sp,
+    dateProps.map((p) => p.key),
+  );
+  if (Object.keys(customDates).length > 0) filters.customDates = customDates;
+
   const options: FilterOptions = {
     statuses: workflow.statuses.filter((s) => s !== "archived"),
     assignees: members.map((m) => ({ userId: m.userId, name: m.name })),
@@ -115,20 +129,49 @@ export async function ListView({
     products: productsById
       ? scopedProducts.map((p) => ({ id: p.id, name: p.name }))
       : undefined,
+    dateFields: dateProps.map((p) => ({ key: p.key, label: p.label })),
   };
 
+  // Sort options include the workspace's sortable custom properties; a `cf:`
+  // sort is only honored for a key that exists (else it falls back to default).
+  const sortableProps = sortableProperties(properties);
+  const sort = parseSortMode(
+    sp.sort,
+    sortableProps.map((p) => p.key),
+  );
+  const customSorts = sortableProps.map((p) => ({
+    value: `cf:${p.key}`,
+    label: p.label,
+  }));
+  const customFieldTypes = Object.fromEntries(
+    properties.map((p) => [p.key, p.type]),
+  );
+  const cfSortKey = sort.startsWith(CUSTOM_SORT_PREFIX)
+    ? sort.slice(CUSTOM_SORT_PREFIX.length)
+    : null;
+
   const filtering = hasActiveFilters(filters);
-  // Filtering or RICE-sorting flattens the view: excluding arbitrary rows, or
-  // ranking by score, both break the parent→child hierarchy grouping.
+  // Filtering or a value-ordered sort (RICE, custom field) flattens the view:
+  // excluding arbitrary rows, or ranking by a value, both break the
+  // parent→child hierarchy grouping.
   const base = filtering ? applyFeatureFilters(features, filters) : features;
   const rows =
     sort === "rice"
       ? [...base]
           .sort(compareByRiceScore)
           .map((feature) => ({ feature, depth: 0 }))
-      : filtering
-        ? base.map((feature) => ({ feature, depth: 0 }))
-        : buildHierarchyRows(features);
+      : cfSortKey
+        ? [...base]
+            .sort(
+              compareByCustomField(
+                cfSortKey,
+                customFieldTypes[cfSortKey] ?? "text",
+              ),
+            )
+            .map((feature) => ({ feature, depth: 0 }))
+        : filtering
+          ? base.map((feature) => ({ feature, depth: 0 }))
+          : buildHierarchyRows(features);
 
   return (
     <section className="space-y-4">
@@ -145,7 +188,7 @@ export async function ListView({
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <BacklogFilters filters={filters} options={options} />
-            <SortControl sort={sort} />
+            <SortControl sort={sort} customSorts={customSorts} />
           </div>
           <SavedViews
             views={savedViews}

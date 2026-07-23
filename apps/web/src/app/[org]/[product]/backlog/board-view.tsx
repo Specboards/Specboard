@@ -23,9 +23,10 @@ import {
   applyFeatureFilters,
   filtersToQuery,
   hasActiveFilters,
+  parseCustomDateFilters,
   parseFeatureFilters,
 } from "@/lib/feature-filters";
-import { parseSortMode } from "@/lib/feature-helpers";
+import { parseSortMode, sortableProperties } from "@/lib/feature-helpers";
 import { SortControl } from "./sort-control";
 import { getDb } from "@/lib/db";
 import { resolveWorkflowFor } from "@/lib/repo-config";
@@ -52,7 +53,6 @@ export async function BoardView({
   const { product: productSlug } = await params;
   const sp = await searchParams;
   const filters = parseFeatureFilters(sp);
-  const sort = parseSortMode(sp.sort);
   // Board columns are the workflow statuses. A `status` filter narrows the
   // board to just that one column rather than emptying every other one.
   const allColumns = workflow.statuses.filter((s) => s !== "archived");
@@ -67,6 +67,15 @@ export async function BoardView({
       store.listReleases(access ?? undefined),
       store.listDetailTemplates(access ?? undefined),
     ]);
+
+  // Date-typed custom fields add a from/to range filter; parse those params now
+  // so the range is applied (and reflected in the bar) alongside the built-ins.
+  const dateProps = properties.filter((p) => p.type === "date");
+  const customDates = parseCustomDateFilters(
+    sp,
+    dateProps.map((p) => p.key),
+  );
+  if (Object.keys(customDates).length > 0) filters.customDates = customDates;
 
   // The board scopes to the segment in the URL: one product, a product group
   // (`~key`, covering its subtree's products), or `all` = every product; it
@@ -146,6 +155,22 @@ export async function BoardView({
     properties.map((f) => [f.key, f.label]),
   );
 
+  // Sort options include the workspace's sortable custom properties, so a
+  // board can be ordered by e.g. a "Due date" date field. Parsed here (not up
+  // top) because a `cf:` sort is only honored for a key that actually exists.
+  const sortableProps = sortableProperties(properties);
+  const sort = parseSortMode(
+    sp.sort,
+    sortableProps.map((p) => p.key),
+  );
+  const customSorts = sortableProps.map((p) => ({
+    value: `cf:${p.key}`,
+    label: p.label,
+  }));
+  const customFieldTypes = Object.fromEntries(
+    properties.map((p) => [p.key, p.type]),
+  );
+
   // Filter-bar options mirror the list view: any status (minus archived),
   // workspace assignees, and tags/epics drawn from every in-scope card so the
   // choices don't shrink as you drill into a single level.
@@ -161,6 +186,7 @@ export async function BoardView({
     products: productsById
       ? scopedProducts.map((p) => ({ id: p.id, name: p.name }))
       : undefined,
+    dateFields: dateProps.map((p) => ({ key: p.key, label: p.label })),
   };
 
   // The "New {level}" affordance, shared between the toolbar and the empty
@@ -237,7 +263,7 @@ export async function BoardView({
         {featuresForLevel.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <BacklogFilters filters={filters} options={filterOptions} />
-            <SortControl sort={sort} />
+            <SortControl sort={sort} customSorts={customSorts} />
           </div>
         ) : null}
         {featuresForLevel.length === 0 ? (
@@ -278,6 +304,7 @@ export async function BoardView({
             columns={columns}
             workflow={workflow}
             sortMode={sort}
+            customFieldTypes={customFieldTypes}
             customFieldLabels={customFieldLabels}
             memberNames={memberNames}
             releases={releases}

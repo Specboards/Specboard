@@ -74,6 +74,9 @@ export default async function RoadmapPage({
   const customFieldLabels = Object.fromEntries(
     properties.map((p) => [p.key, p.label]),
   );
+  const customFieldTypes = Object.fromEntries(
+    properties.map((p) => [p.key, p.type]),
+  );
   const memberNames = Object.fromEntries(
     members.map((m) => [m.userId, m.name]),
   );
@@ -273,6 +276,7 @@ export default async function RoadmapPage({
       workflow={workflow}
       productsById={productsById}
       customFieldLabels={customFieldLabels}
+      customFieldTypes={customFieldTypes}
       memberNames={memberNames}
       releaseNames={releaseNames}
       allowDrag={canEdit && !showShipped}

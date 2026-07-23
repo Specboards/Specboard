@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { toast } from "sonner";
 
-import type { StatusWorkflow } from "@specboards/core";
+import type { PropertyType, StatusWorkflow } from "@specboards/core";
 
 import { useBoardPrefs } from "@/app/[org]/[product]/backlog/board-prefs";
 import { BoardColumnNav } from "@/components/board-column-nav";
@@ -83,6 +83,7 @@ export function RoadmapBoard({
   workflow,
   productsById,
   customFieldLabels,
+  customFieldTypes,
   memberNames,
   releaseNames,
   allowDrag,
@@ -96,6 +97,8 @@ export function RoadmapBoard({
   productsById?: Record<string, ProductTag>;
   /** Label for each custom-property key (without the `cf:` prefix). */
   customFieldLabels: Record<string, string>;
+  /** Declared type per custom-property key, so `date` values render formatted. */
+  customFieldTypes: Record<string, PropertyType>;
   memberNames: Record<string, string>;
   /** Release name by id, for the release badge. */
   releaseNames: Record<string, string>;
@@ -117,7 +120,12 @@ export function RoadmapBoard({
 }) {
   const router = useRouter();
   const announce = useAnnouncer();
-  const maps: CardFieldMaps = { customFieldLabels, memberNames, releaseNames };
+  const maps: CardFieldMaps = {
+    customFieldLabels,
+    customFieldTypes,
+    memberNames,
+    releaseNames,
+  };
   const [placement, setPlacement] = useState<Record<string, string | null>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detailReleaseId, setDetailReleaseId] = useState<string | null>(null);
