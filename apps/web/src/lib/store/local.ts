@@ -566,7 +566,7 @@ export class LocalFileStore implements FeatureStore {
         releaseId: item.releaseId ?? null,
         assigneeId: item.assigneeId,
         assigneeName: null,
-        customFields: {},
+        customFields: item.customFields ?? {},
         ...riceFields({
           riceReach: item.riceReach ?? null,
           riceImpact: item.riceImpact ?? null,
@@ -772,6 +772,20 @@ export class LocalFileStore implements FeatureStore {
 
     const id = randomUUID();
     const productId = input.productId ?? (await this.defaultProductId());
+    // Mirror the DB store: a release must exist and be a portfolio release or
+    // one scoped to this item's product.
+    if (input.releaseId) {
+      const release = (await this.readReleases()).find(
+        (r) => r.id === input.releaseId,
+      );
+      if (!release) {
+        throw new FeatureError(`Unknown release: ${input.releaseId}`);
+      }
+      const releaseProductId = release.productId ?? null;
+      if (releaseProductId !== null && releaseProductId !== productId) {
+        throw new FeatureError("Release belongs to a different product.");
+      }
+    }
     const item: LocalItem = {
       id,
       title,
