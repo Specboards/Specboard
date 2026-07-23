@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/card";
 import { AuthRequiredError, patchFeature } from "@/lib/api-client";
 import { statusLabel } from "@/lib/feature-helpers";
-import { productColorClasses } from "@/lib/product-color";
+import { productBadge } from "@/lib/product-color";
 import type { FeatureRecord, ReleaseRecord } from "@/lib/store/types";
 import { useAnnouncer } from "@/lib/use-announcer";
 import { useIsCoarsePointer, useIsMobile } from "@/lib/use-media-query";
@@ -500,8 +500,9 @@ function CardBody({
             variant="secondary"
             className={cn(
               "w-fit border-transparent text-[10px]",
-              productColorClasses(product).badge,
+              productBadge(product).className,
             )}
+            style={productBadge(product).style}
           >
             {product.name}
           </Badge>

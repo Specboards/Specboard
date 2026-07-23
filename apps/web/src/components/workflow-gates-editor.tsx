@@ -8,8 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthRequiredError, updateStageGates } from "@/lib/api-client";
-import { statusDotClassFor } from "@/lib/feature-helpers";
-import { cn } from "@/lib/utils";
+import { statusDotColor } from "@/lib/feature-helpers";
 import type { StageGate } from "@/lib/store/types";
 
 /** One editable gate row. `id` is present for gates that already exist (kept
@@ -141,10 +140,8 @@ export function WorkflowGatesEditor({
             <li key={stage.key} className="rounded-md border bg-background p-3">
               <div className="mb-2 flex items-center gap-2">
                 <span
-                  className={cn(
-                    "size-2.5 shrink-0 rounded-full",
-                    statusDotClassFor(stage.key),
-                  )}
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: statusDotColor(stage.key) }}
                 />
                 <span className="text-sm font-medium">{stage.label}</span>
                 <span className="text-xs text-muted-foreground">

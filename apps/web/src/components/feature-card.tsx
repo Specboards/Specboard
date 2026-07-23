@@ -10,7 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatRiceScore } from "@/lib/feature-helpers";
-import { productColorClasses } from "@/lib/product-color";
+import { productBadge } from "@/lib/product-color";
 import type { FeatureRecord } from "@/lib/store/types";
 import { useOrgProductPath } from "@/lib/use-org";
 import { cn } from "@/lib/utils";
@@ -74,8 +74,9 @@ export function FeatureCard({
             variant="secondary"
             className={cn(
               "w-fit border-transparent text-[10px]",
-              productColorClasses(product).badge,
+              productBadge(product).className,
             )}
+            style={productBadge(product).style}
           >
             {product.name}
           </Badge>

@@ -8,8 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthRequiredError, updateStatuses } from "@/lib/api-client";
-import { statusDotClassFor } from "@/lib/feature-helpers";
-import { cn } from "@/lib/utils";
+import { statusDotColor } from "@/lib/feature-helpers";
 import type { WorkspaceStatus } from "@/lib/store/types";
 
 /** A stage being edited. `key` is empty for stages added in this session; the
@@ -96,10 +95,8 @@ export function WorkflowEditor({
           >
             <GripVertical className="size-4 shrink-0 text-muted-foreground" />
             <span
-              className={cn(
-                "size-2.5 shrink-0 rounded-full",
-                statusDotClassFor(row.key || row.label),
-              )}
+              className="size-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: statusDotColor(row.key || row.label) }}
             />
             <Input
               value={row.label}

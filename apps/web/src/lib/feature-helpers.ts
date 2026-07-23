@@ -1,6 +1,7 @@
 import { generateKeyBetween } from "fractional-indexing";
 
 import { defaultWorkflow, type StatusWorkflow } from "@specboards/core";
+import { fallbackStatusDots, statusColors } from "@specboards/ui";
 
 import type { FeatureRecord } from "./store/types";
 
@@ -82,48 +83,20 @@ export function parseSortMode(value: string | string[] | undefined): SortMode {
 }
 
 /**
- * Per-status accent for the small dot next to status text (default workflow).
- * Hues track Primer's semantic labels: cool gray for open/neutral, accent blue
- * for ready, attention amber for in-progress, purple for spec/definition work,
- * and success green for done. Grays use `slate` (cool-biased) to sit with the
- * Primer neutral palette rather than the old chroma-zero `zinc`.
+ * Dot color (a hex value) for any status: the shared design-system color from
+ * `statusColors` when the status is in the default workflow, otherwise a stable
+ * color hashed from the status name so custom statuses stay consistent. Render
+ * it as a decorative, label-paired swatch via inline `background-color`; the
+ * shared token map is the single source both the app and Gesso read from.
  */
-export const statusDotClass: Record<string, string> = {
-  backlog: "bg-slate-400",
-  defining: "bg-purple-400",
-  ready: "bg-blue-500",
-  in_progress: "bg-amber-400",
-  in_review: "bg-pink-400",
-  done: "bg-green-500",
-  archived: "bg-slate-300",
-};
-
-/** Palette for custom statuses not in the default map (assigned deterministically). */
-const FALLBACK_DOT_CLASSES = [
-  "bg-purple-400",
-  "bg-blue-500",
-  "bg-amber-400",
-  "bg-pink-400",
-  "bg-green-500",
-  "bg-cyan-400",
-  "bg-rose-400",
-  "bg-lime-400",
-  "bg-indigo-400",
-  "bg-teal-400",
-];
-
-/**
- * Dot color for any status: the default-workflow color when known, otherwise a
- * stable color hashed from the status name so custom statuses stay consistent.
- */
-export function statusDotClassFor(status: string): string {
-  const known = statusDotClass[status];
-  if (known) return known;
+export function statusDotColor(status: string): string {
+  const known = statusColors[status];
+  if (known) return known.dot;
   let hash = 0;
   for (let i = 0; i < status.length; i++) {
     hash = (hash * 31 + status.charCodeAt(i)) >>> 0;
   }
-  return FALLBACK_DOT_CLASSES[hash % FALLBACK_DOT_CLASSES.length] ?? "bg-zinc-400";
+  return fallbackStatusDots[hash % fallbackStatusDots.length] ?? "#9ca3af";
 }
 
 /** Statuses a feature may move to from `status` (current first, for selects). */

@@ -19,7 +19,7 @@ import type { StatusWorkflow } from "@specboards/core";
 import { type ProductTag } from "@/components/feature-card";
 import { StatusDot } from "@/components/status-dot";
 import { StatusSelect } from "@/components/status-select";
-import { productColorClasses } from "@/lib/product-color";
+import { productBadge } from "@/lib/product-color";
 import type { FeatureRecord } from "@/lib/store/types";
 import { useOrgProductPath } from "@/lib/use-org";
 import { cn } from "@/lib/utils";
@@ -253,7 +253,8 @@ export function BacklogTable({
                     return p ? (
                       <Badge
                         variant="secondary"
-                        className={cn("border-transparent text-[10px]", productColorClasses(p).badge)}
+                        className={cn("border-transparent text-[10px]", productBadge(p).className)}
+                        style={productBadge(p).style}
                       >
                         {p.name}
                       </Badge>

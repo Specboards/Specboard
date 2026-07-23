@@ -51,8 +51,8 @@ type Status = { kind: "ok" | "error"; message: string } | null;
 const ALL_PRODUCTS = "__all__";
 
 const DELIVERY_STATUS_STYLE: Record<string, string> = {
-  delivered: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  pending: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  delivered: "bg-success/15 text-success-fg",
+  pending: "bg-warning/15 text-warning-fg",
   failed: "bg-destructive/15 text-destructive",
 };
 
@@ -440,7 +440,7 @@ export function WebhooksCard({
                         }
                         className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                           ep.active
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                            ? "bg-success/15 text-success-fg"
                             : autoDisabled
                               ? "bg-destructive/15 text-destructive"
                               : "bg-muted text-muted-foreground"
