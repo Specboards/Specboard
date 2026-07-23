@@ -421,12 +421,12 @@ function IdeaRow({
             {idea.title}
           </span>
           {productName ? (
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" size="sm">
               {productName}
             </Badge>
           ) : null}
           {idea.promotedFeatureSpecId ? (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" size="sm">
               Promoted
             </Badge>
           ) : null}

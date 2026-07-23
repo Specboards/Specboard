@@ -85,7 +85,7 @@ function ColorPicker({
         aria-label="Auto color"
         aria-pressed={value === null}
         className={cn(
-          "h-6 rounded-full border px-2 text-[11px] text-muted-foreground transition",
+          "h-6 rounded-full border px-2 text-2xs text-muted-foreground transition",
           value === null &&
             "ring-2 ring-ring ring-offset-1 ring-offset-background",
         )}
@@ -814,7 +814,7 @@ function ProductRow({
       />
       <span>{product.name}</span>
       {product.visibility === "private" ? (
-        <Badge variant="outline" className="text-[10px]">
+        <Badge variant="outline" size="sm">
           Private
         </Badge>
       ) : null}

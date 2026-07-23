@@ -109,7 +109,7 @@ export function GateChecklist({
                 onClick={() => toggle(gate)}
                 disabled={!canEdit || pending.has(gate.id)}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm",
+                  "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   canEdit && "hover:bg-muted disabled:opacity-60",
                   !canEdit && "cursor-default",
                 )}

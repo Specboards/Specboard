@@ -53,7 +53,7 @@ const SheetContent = React.forwardRef<
       {children}
       {/* 32px hit target (SC 2.5.8), centered on the X so its visual position is
           unchanged. */}
-      <SheetPrimitive.Close className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-ring">
+      <SheetPrimitive.Close className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
         <X className="size-4" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>

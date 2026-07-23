@@ -86,7 +86,7 @@ export function ItemTitle({
         className={cn(
           base,
           "-mx-1 block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0.5 outline-none",
-          "hover:bg-muted/50 focus:bg-muted/50",
+          "hover:bg-muted/50 focus:bg-muted/50 focus-visible:ring-1 focus-visible:ring-ring",
         )}
       />
       {error ? <p className="px-1 text-xs text-destructive">{error}</p> : null}

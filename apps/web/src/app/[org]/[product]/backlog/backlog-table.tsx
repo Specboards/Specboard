@@ -226,7 +226,7 @@ export function BacklogTable({
                   {f.childCount > 0 && (
                     <Badge
                       variant="outline"
-                      className="text-[10px]"
+                      size="sm"
                       title={`${f.childDoneCount} of ${f.childCount} children done`}
                     >
                       epic {f.childDoneCount}/{f.childCount}
@@ -235,7 +235,7 @@ export function BacklogTable({
                   {f.blockedByCount > 0 && (
                     <Badge
                       variant="destructive"
-                      className="text-[10px]"
+                      size="sm"
                       title={`Blocked by ${f.blockedByCount} feature(s)`}
                     >
                       Blocked
@@ -253,7 +253,8 @@ export function BacklogTable({
                     return p ? (
                       <Badge
                         variant="secondary"
-                        className={cn("border-transparent text-[10px]", productBadge(p).className)}
+                        size="sm"
+                        className={cn("border-transparent", productBadge(p).className)}
                         style={productBadge(p).style}
                       >
                         {p.name}

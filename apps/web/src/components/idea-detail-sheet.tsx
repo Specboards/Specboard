@@ -249,7 +249,7 @@ export function IdeaDetailSheet({
               ariaLabel={`Status of ${current.title}`}
             />
             {productName ? (
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" size="sm">
                 {productName}
               </Badge>
             ) : null}

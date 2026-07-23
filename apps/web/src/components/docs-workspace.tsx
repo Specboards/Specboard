@@ -461,7 +461,7 @@ function PageEditor({ page, canEdit }: { page: DocPageRecord; canEdit: boolean }
             <p className="text-xs text-destructive">{error}</p>
           ) : (
             <p
-              className="h-4 text-[11px] text-muted-foreground"
+              className="h-4 text-2xs text-muted-foreground"
               role="status"
               aria-live="polite"
             >

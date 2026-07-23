@@ -147,7 +147,7 @@ export function MarkdownEditor({
           type="button"
           onClick={toggleRaw}
           disabled={disabled}
-          className="ml-auto rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted"
+          className="ml-auto rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           {raw ? "Rich text" : "Raw"}
         </button>
@@ -190,7 +190,7 @@ function ToolbarButton({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "h-6 min-w-6 rounded px-1.5 text-xs font-medium hover:bg-muted",
+        "h-6 min-w-6 rounded px-1.5 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         active && "bg-muted text-foreground",
       )}
     >

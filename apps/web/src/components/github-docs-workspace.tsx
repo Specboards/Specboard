@@ -343,7 +343,7 @@ export function GithubDocsWorkspace({
               }}
             >
               {draft.folder ? (
-                <p className="text-[11px] text-muted-foreground">in {draft.folder}/</p>
+                <p className="text-2xs text-muted-foreground">in {draft.folder}/</p>
               ) : null}
               <Input
                 autoFocus
@@ -411,7 +411,7 @@ export function GithubDocsWorkspace({
                 {canEdit ? (
                   <div className="flex items-center gap-2">
                     <span
-                      className="text-[11px] text-muted-foreground"
+                      className="text-2xs text-muted-foreground"
                       role="status"
                       aria-live="polite"
                     >

@@ -500,8 +500,9 @@ function CardBody({
         {product ? (
           <Badge
             variant="secondary"
+            size="sm"
             className={cn(
-              "w-fit border-transparent text-[10px]",
+              "w-fit border-transparent",
               productBadge(product).className,
             )}
             style={productBadge(product).style}

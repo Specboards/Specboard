@@ -64,7 +64,8 @@ export function ItemDetailView({
       <header className="space-y-2">
         <Badge
           variant="outline"
-          className="text-[10px] uppercase tracking-wide"
+          size="sm"
+          className="uppercase tracking-wide"
         >
           {levelLabel}
         </Badge>
