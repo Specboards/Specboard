@@ -1,16 +1,27 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
+import { SlidersHorizontal } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { statusLabel } from "@/lib/feature-helpers";
 import {
+  countActiveFilters,
   filtersToQuery,
   hasActiveFilters,
   type FeatureFilters,
 } from "@/lib/feature-filters";
+import { cn } from "@/lib/utils";
 
 export interface FilterOptions {
   statuses: string[];
@@ -22,10 +33,29 @@ export interface FilterOptions {
   products?: { id: string; name: string }[];
 }
 
+/** One filter dimension, resolved to the options the current data set offers. */
+interface FilterControl {
+  key: keyof FeatureFilters;
+  /** Short noun used as the field label inside the mobile sheet. */
+  label: string;
+  /** The "Any X" placeholder / accessible name. */
+  placeholder: string;
+  value: string;
+  /** Sentinel options (e.g. "Unassigned") shown before the real values. */
+  leading?: { value: string; label: string }[];
+  options: { value: string; label: string }[];
+  /** Desktop width; the status control sizes to content, the rest are uniform. */
+  desktopWidth: string;
+}
+
 /**
  * Backlog filter bar. Holds no state of its own — the active filters live in
  * the URL (parsed server-side), and each control pushes an updated query so the
  * filtered view is shareable and survives refresh.
+ *
+ * On desktop the controls sit inline. On mobile they collapse behind a single
+ * "Filters" button that opens a sheet, so the filter row never pushes the board
+ * itself off the top of a phone screen.
  */
 export function BacklogFilters({
   filters,
@@ -38,6 +68,7 @@ export function BacklogFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   function update(next: FeatureFilters) {
     // Rebuild the query from the filters, preserving the non-filter `view`
@@ -62,120 +93,170 @@ export function BacklogFilters({
   }
 
   const active = hasActiveFilters(filters);
+  const activeCount = countActiveFilters(filters);
+
+  // Build the list of controls once, from the options this data set actually
+  // offers, then render it two ways (inline on desktop, stacked in the sheet on
+  // mobile) so the two layouts can never drift apart.
+  const controls: FilterControl[] = [];
+  if (options.products && options.products.length > 0) {
+    controls.push({
+      key: "product",
+      label: "Product",
+      placeholder: "Any product",
+      value: filters.product ?? "",
+      options: options.products.map((p) => ({ value: p.id, label: p.name })),
+      desktopWidth: "sm:w-40",
+    });
+  }
+  controls.push({
+    key: "status",
+    label: "Status",
+    placeholder: "Any status",
+    value: filters.status ?? "",
+    options: options.statuses.map((s) => ({ value: s, label: statusLabel(s) })),
+    // Status sizes to content on desktop; the rest are a uniform w-40.
+    desktopWidth: "sm:w-auto",
+  });
+  if (options.assignees.length > 0) {
+    controls.push({
+      key: "assignee",
+      label: "Assignee",
+      placeholder: "Any assignee",
+      value: filters.assignee ?? "",
+      leading: [{ value: "unassigned", label: "Unassigned" }],
+      options: options.assignees.map((a) => ({
+        value: a.userId,
+        label: a.name,
+      })),
+      desktopWidth: "sm:w-40",
+    });
+  }
+  if (options.releases.length > 0) {
+    controls.push({
+      key: "release",
+      label: "Release",
+      placeholder: "Any release",
+      value: filters.release ?? "",
+      leading: [{ value: "none", label: "No release" }],
+      options: options.releases.map((r) => ({ value: r.id, label: r.name })),
+      desktopWidth: "sm:w-40",
+    });
+  }
+  if (options.tags.length > 0) {
+    controls.push({
+      key: "tag",
+      label: "Tag",
+      placeholder: "Any tag",
+      value: filters.tag ?? "",
+      options: options.tags.map((t) => ({ value: t, label: t })),
+      desktopWidth: "sm:w-40",
+    });
+  }
+  if (options.epics.length > 0) {
+    controls.push({
+      key: "parent",
+      label: "Parent",
+      placeholder: "Any parent",
+      value: filters.parent ?? "",
+      leading: [{ value: "none", label: "Top-level only" }],
+      options: options.epics.map((ep) => ({
+        value: ep.specId,
+        label: ep.title,
+      })),
+      desktopWidth: "sm:w-40",
+    });
+  }
 
   // Every filter select is a fixed `w-40` rather than `w-auto`: a native
   // <select> sizes to its widest option, so a long option (e.g. an epic title
   // under "Any parent") would otherwise stretch that control far wider than the
   // rest. A uniform width keeps the row even; long selected values truncate.
-  return (
-    <div className="flex flex-wrap items-center gap-2" data-pending={pending}>
-      {options.products && options.products.length > 0 ? (
-        <Select
-          aria-label="Filter by product"
-          className="h-8 max-sm:w-[calc(50%-0.25rem)] sm:w-40"
-          value={filters.product ?? ""}
-          onChange={(e) => set("product", e.target.value || undefined)}
-        >
-          <option value="">Any product</option>
-          {options.products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
-      ) : null}
-
+  function renderSelect(c: FilterControl, widthClass: string) {
+    return (
       <Select
-        aria-label="Filter by status"
-        className="h-8 max-sm:w-[calc(50%-0.25rem)] sm:w-auto"
-        value={filters.status ?? ""}
-        onChange={(e) => set("status", e.target.value || undefined)}
+        key={c.key}
+        aria-label={`Filter by ${c.label.toLowerCase()}`}
+        className={cn("h-8", widthClass)}
+        value={c.value}
+        onChange={(e) => set(c.key, e.target.value || undefined)}
       >
-        <option value="">Any status</option>
-        {options.statuses.map((s) => (
-          <option key={s} value={s}>
-            {statusLabel(s)}
+        <option value="">{c.placeholder}</option>
+        {c.leading?.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+        {c.options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </Select>
+    );
+  }
 
-      {options.assignees.length > 0 ? (
-        <Select
-          aria-label="Filter by assignee"
-          className="h-8 max-sm:w-[calc(50%-0.25rem)] sm:w-40"
-          value={filters.assignee ?? ""}
-          onChange={(e) => set("assignee", e.target.value || undefined)}
-        >
-          <option value="">Any assignee</option>
-          <option value="unassigned">Unassigned</option>
-          {options.assignees.map((a) => (
-            <option key={a.userId} value={a.userId}>
-              {a.name}
-            </option>
-          ))}
-        </Select>
-      ) : null}
+  return (
+    <>
+      {/* Desktop: inline filter row. */}
+      <div
+        className="hidden flex-wrap items-center gap-2 sm:flex"
+        data-pending={pending}
+      >
+        {controls.map((c) => renderSelect(c, c.desktopWidth))}
+        {active ? (
+          <Button
+            variant="link"
+            size="inline"
+            onClick={() => update({})}
+            className="text-xs font-normal text-muted-foreground underline-offset-2"
+          >
+            Clear filters
+          </Button>
+        ) : null}
+      </div>
 
-      {options.releases.length > 0 ? (
-        <Select
-          aria-label="Filter by release"
-          className="h-8 max-sm:w-[calc(50%-0.25rem)] sm:w-40"
-          value={filters.release ?? ""}
-          onChange={(e) => set("release", e.target.value || undefined)}
-        >
-          <option value="">Any release</option>
-          <option value="none">No release</option>
-          {options.releases.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </Select>
-      ) : null}
-
-      {options.tags.length > 0 ? (
-        <Select
-          aria-label="Filter by tag"
-          className="h-8 max-sm:w-[calc(50%-0.25rem)] sm:w-40"
-          value={filters.tag ?? ""}
-          onChange={(e) => set("tag", e.target.value || undefined)}
-        >
-          <option value="">Any tag</option>
-          {options.tags.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
-      ) : null}
-
-      {options.epics.length > 0 ? (
-        <Select
-          aria-label="Filter by parent epic"
-          className="h-8 max-sm:w-[calc(50%-0.25rem)] sm:w-40"
-          value={filters.parent ?? ""}
-          onChange={(e) => set("parent", e.target.value || undefined)}
-        >
-          <option value="">Any parent</option>
-          <option value="none">Top-level only</option>
-          {options.epics.map((ep) => (
-            <option key={ep.specId} value={ep.specId}>
-              {ep.title}
-            </option>
-          ))}
-        </Select>
-      ) : null}
-
-      {active ? (
-        <Button
-          variant="link"
-          size="inline"
-          onClick={() => update({})}
-          className="text-xs font-normal text-muted-foreground underline-offset-2"
-        >
-          Clear filters
-        </Button>
-      ) : null}
-    </div>
+      {/* Mobile: one "Filters" button that opens a sheet with the same controls
+          stacked full-width, so the row stays a single line on a phone. */}
+      <div className="sm:hidden" data-pending={pending}>
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="default" className="h-8 gap-2">
+              <SlidersHorizontal />
+              Filters
+              {activeCount > 0 ? (
+                <Badge variant="counter" size="sm">
+                  {activeCount}
+                </Badge>
+              ) : null}
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="gap-5">
+            <SheetHeader>
+              <SheetTitle>Filters</SheetTitle>
+            </SheetHeader>
+            <div className="flex flex-col gap-4">
+              {controls.map((c) => (
+                <label key={c.key} className="flex flex-col gap-1.5 text-sm">
+                  <span className="font-medium text-muted-foreground">
+                    {c.label}
+                  </span>
+                  {renderSelect(c, "h-9 w-full")}
+                </label>
+              ))}
+            </div>
+            {active ? (
+              <Button
+                variant="outline"
+                onClick={() => update({})}
+                className="w-full"
+              >
+                Clear filters
+              </Button>
+            ) : null}
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }
