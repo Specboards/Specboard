@@ -13,8 +13,10 @@
   --card-foreground: #1f2328;
   --popover: #ffffff;
   --popover-foreground: #1f2328;
-  /* Primary action is GitHub green, not near-black. */
-  --primary: #1f883d;
+  /* Primary action is GitHub green, not near-black. Primer green-600 (#1a7f37)
+   * instead of green-500, so white text on it clears 4.5:1 (5.08:1) with margin
+   * rather than sitting on the 4.52:1 line. */
+  --primary: #1a7f37;
   --primary-foreground: #ffffff;
   --secondary: #f6f8fa;
   --secondary-foreground: #1f2328;
@@ -24,8 +26,12 @@
   --accent-foreground: #1f2328;
   --destructive: #d1242f;
   --destructive-foreground: #ffffff;
+  /* Decorative hairline for cards and separators (subtle by design). */
   --border: #d1d9e0;
-  --input: #d1d9e0;
+  /* Form-control boundary. Kept distinct from --border and darker so an input's
+   * edge meets the 3:1 non-text contrast minimum (SC 1.4.11): #818b98 is 3.45:1
+   * on white, where the old #d1d9e0 was only 1.43:1. */
+  --input: #818b98;
   /* Links, focus, and selection share Primer's accent blue. */
   --link: #0969da;
   --ring: #0969da;
@@ -52,7 +58,9 @@
   --destructive: #da3633;
   --destructive-foreground: #ffffff;
   --border: #30363d;
-  --input: #30363d;
+  /* Form-control boundary, lightened from the hairline #30363d (1.3:1 on the
+   * slate background) to #6e7781 (4.2:1) so input edges are perceivable (1.4.11). */
+  --input: #6e7781;
   --link: #4493f8;
   --ring: #4493f8;
 }

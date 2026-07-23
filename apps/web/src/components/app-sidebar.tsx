@@ -170,7 +170,7 @@ export function SidebarBody({
         {navGroups.map((group, i) => (
           <div key={group.label ?? i} className="space-y-1">
             {group.label && !collapsed ? (
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {group.label}
               </p>
             ) : null}
