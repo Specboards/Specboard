@@ -41,6 +41,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # Fail the build on a high/critical advisory in production dependencies.
+      # Accepted exceptions are recorded by GHSA id in package.json
+      # (pnpm.auditConfig.ignoreGhsas) and documented, with a review-by date, in
+      # docs/security-audit-exceptions.md. A scheduled full audit
+      # (security-audit.yml) surfaces lower-severity drift out of band.
+      - run: pnpm run audit
+
       # Build packages + web once; typecheck and E2E both need the output.
       - run: pnpm -w build
       - run: pnpm -w typecheck

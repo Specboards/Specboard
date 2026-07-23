@@ -1,0 +1,43 @@
+# Dependabot keeps two things fresh:
+#
+#   - github-actions: PR #156 pinned every Action to a commit SHA. Pins do not
+#     drift on their own, so without this they silently rot. Dependabot opens a
+#     reviewed bump PR (new SHA + version comment) when an Action releases.
+#
+#   - npm: the pnpm workspace. Grouped and rate-limited so routine bumps arrive
+#     as a small number of PRs rather than a flood; security updates still come
+#     through on their own. Backs the CI audit gate (pnpm run audit) by keeping
+#     production dependencies current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # One PR for routine minor/patch bumps; majors and security stay separate.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      production-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch

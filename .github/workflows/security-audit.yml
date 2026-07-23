@@ -1,0 +1,36 @@
+# Scheduled dependency audit. CI (ci.yml) already fails a PR on a high/critical
+# production advisory; this job runs the full audit on a cadence so a newly
+# disclosed advisory against an already-merged dependency is caught between PRs,
+# and so lower-severity drift stays visible. The high/critical gate here fails
+# the run (opening a visible red check); the informational full audit never
+# fails the job.
+name: Security audit
+
+on:
+  schedule:
+    # 15:00 UTC every Monday.
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Blocking gate: identical to CI, honors the recorded GHSA exceptions.
+      - run: pnpm run audit
+
+      # Informational: the complete advisory list (all severities, including the
+      # recorded exceptions) for review. Never fails the run.
+      - name: Full advisory report (informational)
+        if: always()
+        run: pnpm audit --prod --ignore-registry-errors || true
