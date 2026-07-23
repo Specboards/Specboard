@@ -166,6 +166,23 @@ export async function BoardView({
   // The "New {level}" affordance, shared between the toolbar and the empty
   // state so a blank board offers the next step right where the user is
   // looking. Leaf items come from spec sync, so it only exists off-leaf.
+  // The per-column quick add needs a single product to create into. Use the
+  // product in scope, or the sole product when the view spans "all"/a group but
+  // the workspace has just one. Spanning several products, there's no unambiguous
+  // target, so the column quick add stays off and creation goes through the
+  // drawer's product picker instead.
+  const quickAddProductId =
+    activeProduct?.id ??
+    (scopedProducts.length === 1 ? scopedProducts[0]?.id ?? null : null);
+  const quickAdd =
+    canEdit && !activeLevel.isLeaf && quickAddProductId
+      ? {
+          levelKey: activeLevel.key,
+          levelLabel: activeLevel.label,
+          productId: quickAddProductId,
+        }
+      : undefined;
+
   const newItemButton =
     canEdit && !activeLevel.isLeaf ? (
       <WorkItemCreate
@@ -265,6 +282,7 @@ export async function BoardView({
             memberNames={memberNames}
             releases={releases}
             productsById={productsById}
+            quickAdd={quickAdd}
             bulkOptions={
               canEdit
                 ? {

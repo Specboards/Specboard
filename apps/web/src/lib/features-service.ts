@@ -511,9 +511,14 @@ export function parseCreateFeatureInput(body: unknown): CreateFeatureInput {
     level: raw.level.trim(),
   };
 
-  if ("productId" in raw && raw.productId !== null) {
-    if (!isUuid(raw.productId)) {
-      throw new InvalidPatchError("productId must be a UUID or null.");
+  // productId is any non-empty product id (a UUID in the cloud DB; a stable key
+  // like "default" in local file mode) or null. The store validates that the
+  // product exists and is writable, so we only check the shape here. Mirrors the
+  // release/idea parsers' leniency, and lets a product-scoped create work in
+  // local mode where product ids aren't UUIDs.
+  if ("productId" in raw && raw.productId !== null && raw.productId !== "") {
+    if (typeof raw.productId !== "string") {
+      throw new InvalidPatchError("productId must be a string or null.");
     }
     input.productId = raw.productId;
   }

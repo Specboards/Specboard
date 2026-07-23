@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import type { StatusWorkflow } from "@specboards/core";
 
 import { BoardColumnNav } from "@/components/board-column-nav";
+import { ColumnQuickAdd } from "@/components/column-quick-add";
 import { FeatureCard, type ProductTag } from "@/components/feature-card";
 import { FeatureEditSheet } from "@/components/feature-edit-sheet";
 import { MoveMenu, type MoveOption } from "@/components/move-menu";
@@ -66,6 +67,7 @@ export function BoardClient({
   releases,
   productsById,
   bulkOptions,
+  quickAdd,
   sortMode = "default",
 }: {
   features: FeatureRecord[];
@@ -83,6 +85,9 @@ export function BoardClient({
   /** Option lists for the bulk action bar; enables card multi-select when
    * provided (editors only). */
   bulkOptions?: BulkOptions;
+  /** Enables the per-column "Add {level}" quick add (editors, non-leaf level,
+   * single product in scope). The new item takes the column's status. */
+  quickAdd?: { levelKey: string; levelLabel: string; productId: string | null };
 }) {
   const router = useRouter();
   const announce = useAnnouncer();
@@ -393,6 +398,7 @@ export function BoardClient({
               dragDisabled={isMobile}
               onMoveToStatus={moveToStatus}
               onMoveWithinColumn={moveWithinColumn}
+              quickAdd={quickAdd}
             />
           ))}
         </div>
@@ -449,6 +455,7 @@ function Column({
   dragDisabled,
   onMoveToStatus,
   onMoveWithinColumn,
+  quickAdd,
 }: {
   status: string;
   workflow: StatusWorkflow;
@@ -470,6 +477,9 @@ function Column({
   onMoveToStatus: (specId: string, toStatus: string) => void;
   /** Non-drag reorder within this column (-1 up, +1 down). */
   onMoveWithinColumn: (specId: string, dir: -1 | 1) => void;
+  /** When set, a per-column "Add {level}" affordance sits at the column foot;
+   * the new item takes this column's status. */
+  quickAdd?: { levelKey: string; levelLabel: string; productId: string | null };
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${COL_PREFIX}${status}` });
   // Destinations for a card's Move menu: this column (checked, current) plus the
@@ -566,6 +576,16 @@ function Column({
           ) : null}
         </div>
       </SortableContext>
+      {quickAdd ? (
+        <div className="mt-2">
+          <ColumnQuickAdd
+            levelKey={quickAdd.levelKey}
+            levelLabel={quickAdd.levelLabel}
+            productId={quickAdd.productId}
+            status={status}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
