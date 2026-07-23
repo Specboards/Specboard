@@ -130,7 +130,7 @@ export function SetupForm() {
           ) : null}
 
           {warning ? (
-            <p className="rounded-md border border-amber-500/40 px-3 py-2 text-xs text-amber-600 dark:text-amber-500">
+            <p className="rounded-md border border-amber-500/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
               {warning}
             </p>
           ) : null}

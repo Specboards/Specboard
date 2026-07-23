@@ -83,7 +83,7 @@ export function GateChecklist({
         <span
           className={cn(
             "ml-auto text-xs",
-            allDone ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+            allDone ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground",
           )}
         >
           {allDone ? (
