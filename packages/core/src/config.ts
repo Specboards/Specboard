@@ -35,8 +35,28 @@ export function parseRepoConfig(input: unknown): RepoConfig {
   return repoConfigSchema.parse(input);
 }
 
-/** Parse `.specboards/config.yml` (raw YAML) into a validated {@link RepoConfig}. */
+/**
+ * Upper bound on the raw `.specboards/config.yml` text accepted for parsing,
+ * in UTF-16 code units (string length; parse cost scales with it). The
+ * schema's own limits (glob/status counts and lengths) apply only after YAML
+ * parsing completes, so without this a hostile repo could feed the parser an
+ * arbitrarily large document and burn CPU during import or webhook sync. A
+ * real config is well under 10 KB; 256 K units leave generous room for
+ * comments while bounding parse cost.
+ */
+export const MAX_REPO_CONFIG_LENGTH = 256 * 1024;
+
+/**
+ * Parse `.specboards/config.yml` (raw YAML) into a validated {@link RepoConfig}.
+ * The file comes from an untrusted connected repo: reject oversized documents
+ * before the parser ever sees them.
+ */
 export function parseRepoConfigYaml(raw: string): RepoConfig {
+  if (raw.length > MAX_REPO_CONFIG_LENGTH) {
+    throw new Error(
+      `.specboards/config.yml exceeds the maximum accepted size of ${MAX_REPO_CONFIG_LENGTH} characters.`,
+    );
+  }
   return repoConfigSchema.parse(load(raw) ?? {});
 }
 
