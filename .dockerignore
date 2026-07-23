@@ -3,10 +3,25 @@
 node_modules
 **/node_modules
 .pnpm-store
+# Build output, at the repo root and in every workspace package. Without the
+# `**/` globs a locally-built apps/web/.next (500MB+) gets shipped in the build
+# context, since a bare `.next` only matches the root. The image builds fresh
+# inside the container, so none of this is needed.
 dist
+**/dist
 .next
+**/.next
 out
+**/out
 .turbo
+**/.turbo
+# Playwright / test artifacts from local runs.
+test-results
+**/test-results
+playwright-report
+**/playwright-report
+e2e/.tmp
+**/e2e/.tmp
 *.tsbuildinfo
 *.log
 .env
