@@ -221,6 +221,9 @@ export interface CreateFeatureInput {
   parentSpecId?: string | null;
   status?: string;
   assigneeId?: string | null;
+  /** Release to schedule the new item into; must belong to the item's product
+   * or be a portfolio release. Null/omitted leaves it unscheduled. */
+  releaseId?: string | null;
   tags?: string[];
   /** Markdown body for the new DB-native item, or null/omitted for a blank body. */
   details?: string | null;

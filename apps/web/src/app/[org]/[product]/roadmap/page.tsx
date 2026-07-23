@@ -228,6 +228,11 @@ export default async function RoadmapPage({
         parents={parents}
         productId={activeProduct?.id ?? null}
         products={products.map((p) => ({ id: p.id, name: p.name }))}
+        releases={activeReleases.map((r) => ({
+          id: r.id,
+          name: r.name,
+          productId: r.productId,
+        }))}
         workflow={workflow}
         members={members}
         templateBody={templateBody}

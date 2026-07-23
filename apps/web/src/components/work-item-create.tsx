@@ -33,6 +33,8 @@ export function WorkItemCreate({
   parents,
   productId,
   products,
+  releases = [],
+  defaultReleaseId = null,
   workflow,
   members = [],
   templateBody = "",
@@ -47,6 +49,11 @@ export function WorkItemCreate({
   /** Products to choose from in the cross-product ("All products") view, where
    * no single product is in context. Omitted/empty when scoped to a product. */
   products?: { id: string; name: string }[];
+  /** Releases the new item may be scheduled into. Portfolio releases
+   * (productId null) and releases in the item's product are offered. */
+  releases?: { id: string; name: string; productId: string | null }[];
+  /** Pre-selected release (e.g. when adding from a roadmap column). */
+  defaultReleaseId?: string | null;
   /** Workspace status workflow; the first status is the default for new items. */
   workflow: StatusWorkflow;
   /** Assignable workspace members. */
@@ -75,6 +82,14 @@ export function WorkItemCreate({
     ? parents.filter((p) => p.productId === selectedProduct)
     : parents;
 
+  // The product this item will belong to, tracked reactively so the release
+  // list narrows with the product picker. Releases offered: portfolio releases
+  // (no product) plus releases scoped to this product.
+  const chosenProductId = showProductPicker ? selectedProduct : (productId ?? null);
+  const visibleReleases = releases.filter(
+    (r) => r.productId === null || r.productId === chosenProductId,
+  );
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -84,9 +99,9 @@ export function WorkItemCreate({
       return;
     }
     const parentSpecId = String(data.get("parentSpecId") ?? "") || null;
-    const chosenProductId = showProductPicker ? selectedProduct : productId;
     const status = String(data.get("status") ?? defaultStatus) || defaultStatus;
     const assigneeId = String(data.get("assigneeId") ?? "") || null;
+    const releaseId = String(data.get("releaseId") ?? "") || null;
     const details = String(data.get("details") ?? "").trim() || null;
     startTransition(async () => {
       setError(null);
@@ -98,6 +113,7 @@ export function WorkItemCreate({
           productId: chosenProductId,
           status,
           assigneeId,
+          releaseId,
           details,
         });
         toast.success(`${levelLabel} created`);
@@ -156,6 +172,27 @@ export function WorkItemCreate({
                   {members.map((m) => (
                     <option key={m.userId} value={m.userId}>
                       {m.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+            {visibleReleases.length > 0 ? (
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Release
+                </span>
+                {/* Remount on product change so a now-invalid release resets. */}
+                <Select
+                  key={chosenProductId ?? "all"}
+                  name="releaseId"
+                  defaultValue={defaultReleaseId ?? ""}
+                  className="h-8"
+                >
+                  <option value="">No release</option>
+                  {visibleReleases.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
                     </option>
                   ))}
                 </Select>

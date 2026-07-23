@@ -778,7 +778,7 @@ export class LocalFileStore implements FeatureStore {
       assigneeId: input.assigneeId ?? null,
       tags: input.tags ?? [],
       parentSpecId: input.parentSpecId ?? null,
-      releaseId: null,
+      releaseId: input.releaseId ?? null,
       productId,
       details: input.details?.trim() ? input.details : null,
     };
