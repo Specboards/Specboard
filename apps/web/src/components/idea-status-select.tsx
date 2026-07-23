@@ -3,22 +3,17 @@
 import { ChevronDown } from "lucide-react";
 
 import { ideaStatusLabel, type IdeaStage } from "@specboards/core";
+import { ideaStageColors } from "@specboards/ui";
 
 import { cn } from "@/lib/utils";
 
-/** Dot colors for the built-in idea stages; custom stages get a neutral dot. */
-const IDEA_DOT: Record<string, string> = {
-  new: "bg-blue-400",
-  under_review: "bg-amber-400",
-  planned: "bg-violet-400",
-  shipped: "bg-emerald-400",
-  parked: "bg-zinc-400",
-  declined: "bg-rose-400",
-};
-
-/** Status-dot color for an idea stage key. */
-export function ideaDotClass(status: string): string {
-  return IDEA_DOT[status] ?? "bg-zinc-400";
+/**
+ * Status-dot color (a hex value) for an idea stage key, from the shared
+ * `ideaStageColors` token map; custom stages fall back to a neutral gray.
+ * Render as a decorative, label-paired swatch via inline `background-color`.
+ */
+export function ideaDotColor(status: string): string {
+  return ideaStageColors[status]?.dot ?? "#a1a1aa";
 }
 
 /**
@@ -49,7 +44,10 @@ export function IdeaStatusSelect({
   ariaLabel?: string;
 }) {
   const dot = (
-    <span className={cn("size-2 shrink-0 rounded-full", ideaDotClass(status))} />
+    <span
+      className="size-2 shrink-0 rounded-full"
+      style={{ backgroundColor: ideaDotColor(status) }}
+    />
   );
 
   if (!canEdit) {

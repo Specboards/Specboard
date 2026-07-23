@@ -50,7 +50,7 @@ import {
   updateProduct,
   updateProductGroup,
 } from "@/lib/api-client";
-import { colorDot, productColorClasses } from "@/lib/product-color";
+import { productDotColor } from "@/lib/product-color";
 import type {
   ProductGroupPatch,
   ProductGroupRecord,
@@ -101,10 +101,10 @@ function ColorPicker({
           aria-pressed={value === c}
           className={cn(
             "h-6 w-6 rounded-full transition",
-            colorDot(c),
             value === c &&
               "ring-2 ring-ring ring-offset-1 ring-offset-background",
           )}
+          style={{ backgroundColor: productDotColor(c) }}
         />
       ))}
     </div>
@@ -719,10 +719,8 @@ function GroupRow({
       ) : null}
       {group.color ? (
         <span
-          className={cn(
-            "h-2 w-2 shrink-0 rounded-full",
-            colorDot(resolveProductColor(group)),
-          )}
+          className="h-2 w-2 shrink-0 rounded-full"
+          style={{ backgroundColor: productDotColor(resolveProductColor(group)) }}
           aria-hidden
         />
       ) : null}
@@ -810,10 +808,8 @@ function ProductRow({
         />
       ) : null}
       <span
-        className={cn(
-          "h-2 w-2 shrink-0 rounded-full",
-          productColorClasses(product).dot,
-        )}
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: productDotColor(resolveProductColor(product)) }}
         aria-hidden
       />
       <span>{product.name}</span>

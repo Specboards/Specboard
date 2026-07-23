@@ -7,9 +7,9 @@ import { EmptyState } from "@/components/empty-state";
 import { StatusDot } from "@/components/status-dot";
 import { buttonVariants } from "@/components/ui/button";
 import { GROUP_SLUG_PREFIX, resolveActiveScope } from "@/lib/active-product";
-import { statusDotClassFor } from "@/lib/feature-helpers";
+import { statusDotColor } from "@/lib/feature-helpers";
 import { LOCAL_ORG_SLUG, orgPath, orgProductPath } from "@/lib/org-path";
-import { colorDot } from "@/lib/product-color";
+import { productDotColor } from "@/lib/product-color";
 import { resolveWorkflowFor } from "@/lib/repo-config";
 import { getStore } from "@/lib/store";
 import type {
@@ -18,7 +18,6 @@ import type {
   ReleaseRecord,
 } from "@/lib/store/types";
 import { requireWorkspaceAccess } from "@/lib/workspace-access";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -64,8 +63,10 @@ function StatusBar({
       {ordered.map((status) => (
         <div
           key={status}
-          className={statusDotClassFor(status)}
-          style={{ width: `${((counts[status] ?? 0) / total) * 100}%` }}
+          style={{
+            backgroundColor: statusDotColor(status),
+            width: `${((counts[status] ?? 0) / total) * 100}%`,
+          }}
         />
       ))}
     </div>
@@ -93,7 +94,7 @@ function ReleaseProgress({
         aria-hidden
       >
         <div
-          className="h-full rounded-full bg-emerald-500"
+          className="h-full rounded-full bg-success"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -329,10 +330,8 @@ function ProductSummaryCard({
     <div className="space-y-2 rounded-md border p-3">
       <div className="flex items-baseline gap-2">
         <span
-          className={cn(
-            "h-2.5 w-2.5 shrink-0 self-center rounded-full",
-            colorDot(resolveProductColor(product)),
-          )}
+          className="h-2.5 w-2.5 shrink-0 self-center rounded-full"
+          style={{ backgroundColor: productDotColor(resolveProductColor(product)) }}
           aria-hidden
         />
         <Link

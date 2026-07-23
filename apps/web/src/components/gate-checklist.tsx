@@ -83,7 +83,7 @@ export function GateChecklist({
         <span
           className={cn(
             "ml-auto text-xs",
-            allDone ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground",
+            allDone ? "text-success-fg" : "text-muted-foreground",
           )}
         >
           {allDone ? (
@@ -118,7 +118,7 @@ export function GateChecklist({
                   className={cn(
                     "flex size-4 shrink-0 items-center justify-center rounded border",
                     checked
-                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      ? "border-success bg-success text-white"
                       : "border-muted-foreground/40",
                   )}
                 >
