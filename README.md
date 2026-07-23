@@ -91,8 +91,15 @@ system-of-record split in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 ### Self-host the full stack
 
 ```bash
+cp infra/.env.example infra/.env   # then set a strong POSTGRES_PASSWORD
 docker compose -f infra/docker-compose.yml up   # web + Postgres
 ```
+
+Set the password before the first `up`: Postgres bakes it into the data volume
+on initialization. The database port is bound to loopback only; keep it that
+way (or drop the mapping) on any machine others can reach. Skipping the `.env`
+step falls back to the sample `postgres` password, which is fine for a local
+trial and unsafe anywhere else.
 
 Optional environment flags for a hosted deployment:
 
