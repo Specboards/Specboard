@@ -116,6 +116,8 @@ interface LocalItem {
   productId?: string | null;
   /** Markdown details body, or null/absent for a blank body. */
   details?: string | null;
+  /** Custom-property values keyed by property key. */
+  customFields?: Record<string, CustomFieldValue>;
   /** RICE prioritization inputs (see RiceInputs). */
   riceReach?: number | null;
   riceImpact?: number | null;
@@ -781,6 +783,7 @@ export class LocalFileStore implements FeatureStore {
       releaseId: input.releaseId ?? null,
       productId,
       details: input.details?.trim() ? input.details : null,
+      customFields: input.customFields ?? {},
     };
     const items = await this.readItems();
     await this.writeItems([...items, item]);
@@ -794,9 +797,9 @@ export class LocalFileStore implements FeatureStore {
       status: item.status,
       rank: null,
       tags: item.tags,
-      releaseId: null,
+      releaseId: item.releaseId ?? null,
       assigneeId: item.assigneeId,
-      customFields: {},
+      customFields: item.customFields ?? {},
       ...riceFields({
         riceReach: null,
         riceImpact: null,

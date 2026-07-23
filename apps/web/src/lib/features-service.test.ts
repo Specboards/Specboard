@@ -35,4 +35,27 @@ describe("parseCreateFeatureInput", () => {
       parseCreateFeatureInput({ title: "A", level: "epic", releaseId: "nope" }),
     ).toThrow(/releaseId/);
   });
+
+  it("accepts a valid customFields map", () => {
+    const input = parseCreateFeatureInput({
+      title: "A",
+      level: "epic",
+      customFields: { risk: "high", points: 3, owners: ["a", "b"] },
+    });
+    expect(input.customFields).toEqual({
+      risk: "high",
+      points: 3,
+      owners: ["a", "b"],
+    });
+  });
+
+  it("rejects customFields with a non-scalar value", () => {
+    expect(() =>
+      parseCreateFeatureInput({
+        title: "A",
+        level: "epic",
+        customFields: { bad: { nested: true } },
+      }),
+    ).toThrow(/customFields/);
+  });
 });

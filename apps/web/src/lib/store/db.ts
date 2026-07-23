@@ -1015,6 +1015,7 @@ export class DbStore implements FeatureStore {
           status: input.status ?? "backlog",
           assigneeId: input.assigneeId ?? null,
           releaseId: input.releaseId ?? null,
+          customFields: input.customFields ?? {},
           tags: input.tags ?? [],
           details: input.details?.trim() ? input.details : null,
           parentId,

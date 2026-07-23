@@ -224,6 +224,8 @@ export interface CreateFeatureInput {
   /** Release to schedule the new item into; must belong to the item's product
    * or be a portfolio release. Null/omitted leaves it unscheduled. */
   releaseId?: string | null;
+  /** Initial values for the workspace's custom properties, keyed by property key. */
+  customFields?: Record<string, CustomFieldValue>;
   tags?: string[];
   /** Markdown body for the new DB-native item, or null/omitted for a blank body. */
   details?: string | null;

@@ -178,6 +178,7 @@ export async function BoardView({
         releases={releases
           .filter((r) => r.status !== "shipped")
           .map((r) => ({ id: r.id, name: r.name, productId: r.productId }))}
+        properties={properties}
         workflow={workflow}
         members={members}
         templateBody={templateBody}

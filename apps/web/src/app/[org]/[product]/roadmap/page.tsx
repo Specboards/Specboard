@@ -233,6 +233,7 @@ export default async function RoadmapPage({
           name: r.name,
           productId: r.productId,
         }))}
+        properties={properties}
         workflow={workflow}
         members={members}
         templateBody={templateBody}
