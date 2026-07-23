@@ -240,6 +240,23 @@ export default async function RoadmapPage({
       />
     ) : null;
 
+  // Per-column quick add: same single-product gate as the backlog board (a
+  // release column can only create into an unambiguous product). Off in the
+  // shipped view and on leaf levels. The new item inherits the column's release;
+  // status defaults to the workflow's first stage.
+  const quickAddProductId =
+    activeProduct?.id ??
+    (scopedProducts.length === 1 ? scopedProducts[0]?.id ?? null : null);
+  const quickAdd =
+    canEdit && !activeLevel.isLeaf && !showShipped && quickAddProductId
+      ? {
+          levelKey: activeLevel.key,
+          levelLabel: activeLevel.label,
+          productId: quickAddProductId,
+          status: workflow.statuses[0] ?? "backlog",
+        }
+      : undefined;
+
   const board = (
     <RoadmapBoard
       // Remount when the data set changes (level or product scope) so the
@@ -261,6 +278,7 @@ export default async function RoadmapPage({
       allowDrag={canEdit && !showShipped}
       editableReleaseIds={editableReleaseIds}
       productNamesById={productNamesById}
+      quickAdd={quickAdd}
     />
   );
 

@@ -36,6 +36,30 @@ describe("parseCreateFeatureInput", () => {
     ).toThrow(/releaseId/);
   });
 
+  it("accepts a non-UUID productId (local file mode uses stable keys)", () => {
+    const input = parseCreateFeatureInput({
+      title: "A",
+      level: "epic",
+      productId: "default",
+    });
+    expect(input.productId).toBe("default");
+  });
+
+  it("treats an empty-string productId as unset", () => {
+    const input = parseCreateFeatureInput({
+      title: "A",
+      level: "epic",
+      productId: "",
+    });
+    expect(input.productId).toBeUndefined();
+  });
+
+  it("rejects a non-string productId", () => {
+    expect(() =>
+      parseCreateFeatureInput({ title: "A", level: "epic", productId: 5 }),
+    ).toThrow(/productId/);
+  });
+
   it("accepts a valid customFields map", () => {
     const input = parseCreateFeatureInput({
       title: "A",

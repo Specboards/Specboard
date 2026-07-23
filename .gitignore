@@ -31,10 +31,8 @@ apps/web/e2e/.tmp/
 .vscode/*
 !.vscode/extensions.json
 
-# Personal saved backlog views (local file mode) — not sample data
-.specboards/local-views.json
-# Per-user board prefs + DB-native work items + hierarchy config (local file mode)
-.specboards/local-board-prefs.json
-.specboards/local-items.json
-.specboards/local-levels.json
+# Local file-mode runtime state (views, board prefs, DB-native items, hierarchy,
+# releases, ...): per-user scratch data, never sample data. config.yml is the one
+# tracked file in here. A glob so new local-*.json siblings are covered too.
+.specboards/local-*.json
 .claude/worktrees/

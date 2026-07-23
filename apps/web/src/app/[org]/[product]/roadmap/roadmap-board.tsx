@@ -20,6 +20,7 @@ import type { StatusWorkflow } from "@specboards/core";
 
 import { useBoardPrefs } from "@/app/[org]/[product]/backlog/board-prefs";
 import { BoardColumnNav } from "@/components/board-column-nav";
+import { ColumnQuickAdd } from "@/components/column-quick-add";
 import {
   cardFieldBadges,
   featuredBadge,
@@ -87,6 +88,7 @@ export function RoadmapBoard({
   allowDrag,
   editableReleaseIds,
   productNamesById,
+  quickAdd,
 }: {
   columns: RoadmapColumn[];
   features: FeatureRecord[];
@@ -103,6 +105,15 @@ export function RoadmapBoard({
   editableReleaseIds: string[];
   /** Product name by id, for the detail panel's product label. */
   productNamesById: Record<string, string>;
+  /** Enables the per-column "Add {level}" quick add (editors, non-leaf level,
+   * single product in scope, active view). The new item takes the column's
+   * release. */
+  quickAdd?: {
+    levelKey: string;
+    levelLabel: string;
+    productId: string;
+    status: string;
+  };
 }) {
   const router = useRouter();
   const announce = useAnnouncer();
@@ -259,6 +270,7 @@ export function RoadmapBoard({
               onMoveToRelease={moveToRelease}
               onOpenDetail={setDetailReleaseId}
               onOpenItem={setEditingSpecId}
+              quickAdd={quickAdd}
             />
           ))}
         </div>
@@ -304,6 +316,7 @@ function Column({
   onMoveToRelease,
   onOpenDetail,
   onOpenItem,
+  quickAdd,
 }: {
   column: RoadmapColumn;
   items: FeatureRecord[];
@@ -318,6 +331,14 @@ function Column({
   onMoveToRelease: (specId: string, targetKey: string) => void;
   onOpenDetail: (releaseId: string) => void;
   onOpenItem: (specId: string) => void;
+  /** When set, a per-column "Add {level}" affordance sits at the column foot;
+   * the new item takes this column's release. */
+  quickAdd?: {
+    levelKey: string;
+    levelLabel: string;
+    productId: string;
+    status: string;
+  };
 }) {
   const columnKey = column.releaseId ?? UNSCHEDULED;
   const { setNodeRef, isOver } = useDroppable({
@@ -416,6 +437,16 @@ function Column({
           <p className="px-2 py-1 text-xs text-muted-foreground">Empty</p>
         ) : null}
       </div>
+      {quickAdd ? (
+        <ColumnQuickAdd
+          levelKey={quickAdd.levelKey}
+          levelLabel={quickAdd.levelLabel}
+          productId={quickAdd.productId}
+          status={quickAdd.status}
+          releaseId={column.releaseId}
+          className="px-1"
+        />
+      ) : null}
     </div>
   );
 }
