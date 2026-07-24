@@ -121,8 +121,14 @@ Nothing to copy by hand.
 - **Feature grouping:** the summary's `featuresCreated` counts Feature groupings
   auto-created to home new work items. Each spec lands under a Feature chosen by a
   stable key: its `feature:` frontmatter when set, else its folder path (so specs
-  in the same directory share a Feature). Sync only assigns a Feature when the work
-  item has none, so re-syncs never override a parent you set in the app.
+  in the same directory share a Feature).
+- **Re-parenting on frontmatter change:** changing a spec's `feature:` and
+  re-syncing moves the item under the new Feature grouping, but only when its
+  parent was system-assigned. A parent you set by hand in the app (including
+  detaching an item to Unassigned) is never overridden: sync logs
+  `[sync] spec <id>: feature: frontmatter changed … leaving it in place` and
+  moves on. Sync tracks the last-synced grouping key per row (`synced_feature_key`)
+  and who set the parent (`parent_set_by`) to make this distinction (gh-51).
 - **Stable ids:** specs that lacked an `id` get a `chore(specboards): assign
   stable id …` commit on `main`.
 - **Live sync:** push a change to any `specs/**/spec.md`; GitHub App → Advanced →

@@ -1019,6 +1019,9 @@ export class DbStore implements FeatureStore {
           tags: input.tags ?? [],
           details: input.details?.trim() ? input.details : null,
           parentId,
+          // A DB-native card's parent is user-chosen (sync never touches these
+          // rows, but keep the discriminator honest). Null when it has none.
+          parentSetBy: parentId ? "user" : null,
         })
         .returning();
       if (!row) throw new FeatureError("Failed to create work item.");
@@ -1154,6 +1157,10 @@ export class DbStore implements FeatureStore {
       }
       const set: Record<string, unknown> = { ...rest, updatedAt: new Date() };
       if (parentSpecId !== undefined) {
+        // Record that a person set this parent, so a later `feature:` frontmatter
+        // change on re-sync leaves it alone (gh-51). Covers detaching to the
+        // Unassigned view too: an unparented item stays unassigned.
+        set.parentSetBy = "user";
         if (parentSpecId === null) {
           set.parentId = null;
         } else {

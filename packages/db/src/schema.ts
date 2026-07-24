@@ -592,6 +592,20 @@ export const features = pgTable(
       onDelete: "set null",
     }),
     /**
+     * Who set `parentId`: `'system'` when sync homed the item under a Feature
+     * grouping, `'user'` when a person re-parented it in the app. NULL for a
+     * row that has never had a parent. Re-sync only re-homes a `'system'` row,
+     * so a manual re-parent survives a later `feature:` frontmatter change. See
+     * gh-51 / RUNBOOK-github-sync.
+     */
+    parentSetBy: text("parent_set_by"),
+    /**
+     * The grouping key (`featureKeyFor(...)`) last used to home this spec row,
+     * so re-sync can tell when a spec's `feature:` frontmatter changed. NULL
+     * until sync records one. See gh-51.
+     */
+    syncedFeatureKey: text("synced_feature_key"),
+    /**
      * Owning release, or null when unscheduled. `set null` on delete so
      * removing a release unschedules its items rather than deleting them.
      */
