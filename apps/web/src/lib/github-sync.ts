@@ -121,6 +121,58 @@ function featureTitleFor(key: string, fallbackTitle: string): string {
   return cleaned.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** How sync assigned an item's parent: on import, or by a person in the app. */
+export type ParentSetBy = "system" | "user" | null;
+
+/** What a re-sync should do with one spec's Feature parent (see decideReparent). */
+export type ReparentAction =
+  /** Assign a system parent under the current grouping key (first import). */
+  | { kind: "home" }
+  /** Move the system parent to the grouping the frontmatter now points at. */
+  | { kind: "rehome" }
+  /** Record the current key as the baseline, without moving the parent. */
+  | { kind: "baseline" }
+  /** The `feature:` frontmatter changed but the parent is user-owned: skip it. */
+  | { kind: "override" }
+  /** Nothing to do. */
+  | { kind: "noop" };
+
+/**
+ * Decide how a re-sync should treat a spec's Feature parent, given the row's
+ * current parent state and the grouping key its frontmatter now resolves to.
+ * Pure so it can be unit-tested without a database; the caller performs the
+ * chosen action (see the sync loop).
+ *
+ * - No parent and not user-detached -> `home` (first import, unchanged).
+ * - System parent whose key changed -> `rehome` (the gh-51 fix).
+ * - User-set parent whose key changed -> `override` (honor the manual parent).
+ * - System parent with no recorded key yet -> `baseline` (a backfilled row;
+ *   record the key so the *next* frontmatter change is detectable).
+ * - Otherwise -> `noop` (key unchanged, or a user row we must not touch).
+ */
+export function decideReparent(
+  row: {
+    parentId: string | null;
+    parentSetBy: ParentSetBy;
+    syncedFeatureKey: string | null;
+  },
+  key: string,
+): ReparentAction {
+  const userOwned = row.parentSetBy === "user";
+  if (row.parentId === null) {
+    // A user who deliberately unparented an item (Unassigned view) keeps it
+    // there; only a never-homed row gets a first parent.
+    return userOwned ? { kind: "noop" } : { kind: "home" };
+  }
+  const keyChanged =
+    row.syncedFeatureKey !== null && row.syncedFeatureKey !== key;
+  if (keyChanged) return userOwned ? { kind: "override" } : { kind: "rehome" };
+  // Parent exists and the key is unchanged (or untracked). Record a baseline
+  // for a system row that predates key tracking so a future change is caught.
+  if (!userOwned && row.syncedFeatureKey === null) return { kind: "baseline" };
+  return { kind: "noop" };
+}
+
 /** The spec globs configured for a repo, falling back to the default. */
 export function repoGlobs(repo: RepoRecord): string[] {
   const config = repo.config as { specGlobs?: unknown } | null;
@@ -454,46 +506,77 @@ export async function syncRepository(db: Database, repo: RepoRecord): Promise<Sy
             updatedAt: new Date(),
           },
         })
-        .returning({ id: features.id, parentId: features.parentId });
+        .returning({
+          id: features.id,
+          parentId: features.parentId,
+          parentSetBy: features.parentSetBy,
+          syncedFeatureKey: features.syncedFeatureKey,
+        });
       if (!row) throw new Error(`Upsert returned no feature row for spec ${specId}`);
 
-      // Home the work item under a Feature grouping. Only when it has no parent
-      // yet — so a re-sync never overrides a parent a user set in the app. The
-      // Feature is found (or created) by a stable grouping key so re-syncs and
-      // sibling specs reuse it rather than spawning duplicates.
-      if (featureLevelKey && row.parentId === null) {
+      // Home the work item under a Feature grouping, keyed by a stable grouping
+      // key so re-syncs and sibling specs reuse it rather than spawning
+      // duplicates. decideReparent honors a parent a user set in the app: it
+      // re-homes only system-assigned parents when the `feature:` frontmatter
+      // changed, and tracks the last-synced key on the row (gh-51).
+      if (featureLevelKey) {
         const key = featureKeyFor(item.spec.frontmatter.feature, item.path, specId);
-        const existing = await tx
-          .select({ id: features.id })
-          .from(features)
-          .where(
-            and(
-              eq(features.workspaceId, repo.workspaceId),
-              eq(features.externalKey, key),
-              eq(features.level, featureLevelKey),
-            ),
-          )
-          .limit(1);
-        let featureId = existing[0]?.id;
-        if (!featureId) {
-          const newId = randomUUID();
-          await tx.insert(features).values({
-            id: newId,
-            workspaceId: repo.workspaceId,
-            repoId: null,
-            productId,
-            specId: newId,
-            level: featureLevelKey,
-            externalKey: key,
-            title: featureTitleFor(key, item.spec.frontmatter.title),
-          });
-          featureId = newId;
-          summary.featuresCreated += 1;
+        const action = decideReparent(
+          {
+            parentId: row.parentId,
+            parentSetBy: row.parentSetBy as ParentSetBy,
+            syncedFeatureKey: row.syncedFeatureKey,
+          },
+          key,
+        );
+        if (action.kind === "home" || action.kind === "rehome") {
+          const existing = await tx
+            .select({ id: features.id })
+            .from(features)
+            .where(
+              and(
+                eq(features.workspaceId, repo.workspaceId),
+                eq(features.externalKey, key),
+                eq(features.level, featureLevelKey),
+              ),
+            )
+            .limit(1);
+          let featureId = existing[0]?.id;
+          if (!featureId) {
+            const newId = randomUUID();
+            await tx.insert(features).values({
+              id: newId,
+              workspaceId: repo.workspaceId,
+              repoId: null,
+              productId,
+              specId: newId,
+              level: featureLevelKey,
+              externalKey: key,
+              title: featureTitleFor(key, item.spec.frontmatter.title),
+            });
+            featureId = newId;
+            summary.featuresCreated += 1;
+          }
+          await tx
+            .update(features)
+            .set({ parentId: featureId, parentSetBy: "system", syncedFeatureKey: key })
+            .where(eq(features.id, row.id));
+        } else if (action.kind === "baseline") {
+          // Record the current key without moving the parent, so a later
+          // frontmatter change on this pre-tracking row is detectable.
+          await tx
+            .update(features)
+            .set({ syncedFeatureKey: key })
+            .where(eq(features.id, row.id));
+        } else if (action.kind === "override") {
+          // A frontmatter change is intentionally ignored because the parent
+          // was set by hand. Log it so the divergence is visible in the sync
+          // output (see RUNBOOK-github-sync).
+          console.info(
+            `[sync] spec ${specId}: feature: frontmatter changed to "${key}" ` +
+              `but its parent was set in the app; leaving it in place.`,
+          );
         }
-        await tx
-          .update(features)
-          .set({ parentId: featureId })
-          .where(eq(features.id, row.id));
       }
 
       const parsed = { title: item.spec.frontmatter.title, sections: item.spec.sections };

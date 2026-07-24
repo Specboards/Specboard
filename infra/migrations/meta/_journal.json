@@ -330,6 +330,13 @@
       "when": 1784651254711,
       "tag": "0046_rebrand_specboard_to_specboards",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1784854542138,
+      "tag": "0047_dapper_yellowjacket",
+      "breakpoints": true
     }
   ]
 }
