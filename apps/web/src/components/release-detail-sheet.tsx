@@ -297,6 +297,8 @@ export function ReleaseDetailSheet({
                 )}
               </div>
 
+              <ReleaseNotesSection release={current} canEdit onCommit={commit} />
+
               <p
                 className="h-4 text-2xs text-muted-foreground"
                 role="status"
@@ -310,33 +312,40 @@ export function ReleaseDetailSheet({
               </p>
             </div>
           ) : (
-            <Box>
-              <BoxHeader className="flex-wrap justify-between gap-2 text-xs font-normal text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  <Badge variant="outline" size="sm">
-                    {RELEASE_STATUS_LABELS[current.status]}
-                  </Badge>
-                  {shipped && current.shippedDate
-                    ? `Shipped ${current.shippedDate}`
-                    : dates
-                      ? dates
-                      : "No dates set"}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Badge variant="counter">{current.itemCount}</Badge>
-                  item{current.itemCount === 1 ? "" : "s"}
-                </span>
-              </BoxHeader>
-              <div className="px-4 py-3">
-                {current.notes ? (
-                  <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
-                    <ReactMarkdown>{current.notes}</ReactMarkdown>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No notes yet.</p>
-                )}
-              </div>
-            </Box>
+            <div className="space-y-4">
+              <Box>
+                <BoxHeader className="flex-wrap justify-between gap-2 text-xs font-normal text-muted-foreground">
+                  <span className="flex items-center gap-2">
+                    <Badge variant="outline" size="sm">
+                      {RELEASE_STATUS_LABELS[current.status]}
+                    </Badge>
+                    {shipped && current.shippedDate
+                      ? `Shipped ${current.shippedDate}`
+                      : dates
+                        ? dates
+                        : "No dates set"}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Badge variant="counter">{current.itemCount}</Badge>
+                    item{current.itemCount === 1 ? "" : "s"}
+                  </span>
+                </BoxHeader>
+                <div className="px-4 py-3">
+                  {current.notes ? (
+                    <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
+                      <ReactMarkdown>{current.notes}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No notes yet.</p>
+                  )}
+                </div>
+              </Box>
+              <ReleaseNotesSection
+                release={current}
+                canEdit={false}
+                onCommit={() => {}}
+              />
+            </div>
           )}
         </div>
 
@@ -400,5 +409,219 @@ function Field({
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** The URL's host, for a compact link label; falls back to the raw URL. */
+function externalHost(url: string): string {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * The customer-facing release notes, distinct from the internal planning notes
+ * above. A release can carry in-app Markdown notes, a link to externally hosted
+ * notes, or neither. Following the "Add starts as an affordance" convention, an
+ * empty release shows "Write release notes" / "Link external notes" controls;
+ * the editor fields appear only after the user opts in, and Cancel collapses
+ * them without saving. Saving an empty body/URL resets the mode to `none`.
+ * Viewers (canEdit=false) get a read-only rendering.
+ */
+function ReleaseNotesSection({
+  release,
+  canEdit,
+  onCommit,
+}: {
+  release: ReleaseRecord;
+  canEdit: boolean;
+  onCommit: (patch: ReleasePatch) => void;
+}) {
+  // Which editor is open, or null when showing the collapsed/read view.
+  const [draftKind, setDraftKind] = useState<"in_app" | "external" | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+  const mode = release.releaseNotesMode;
+
+  function saveInApp() {
+    const value = bodyRef.current?.value.trim() ?? "";
+    onCommit({
+      releaseNotesMode: value ? "in_app" : "none",
+      releaseNotesBody: value || null,
+    });
+    setDraftKind(null);
+  }
+
+  function saveExternal() {
+    const value = urlRef.current?.value.trim() ?? "";
+    onCommit({
+      releaseNotesMode: value ? "external" : "none",
+      releaseNotesUrl: value || null,
+    });
+    setDraftKind(null);
+  }
+
+  function remove() {
+    onCommit({ releaseNotesMode: "none" });
+    setDraftKind(null);
+  }
+
+  const header = (
+    <span className="text-xs font-medium text-muted-foreground">
+      Release notes
+    </span>
+  );
+
+  // Editor: revealed once the user opts into Write or Link external.
+  if (canEdit && draftKind) {
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          {header}
+          <div className="flex gap-1">
+            <ModeTab
+              active={draftKind === "in_app"}
+              onClick={() => setDraftKind("in_app")}
+            >
+              Write
+            </ModeTab>
+            <ModeTab
+              active={draftKind === "external"}
+              onClick={() => setDraftKind("external")}
+            >
+              Link external
+            </ModeTab>
+          </div>
+        </div>
+
+        {draftKind === "in_app" ? (
+          <Textarea
+            ref={bodyRef}
+            autoFocus
+            defaultValue={release.releaseNotesBody ?? ""}
+            rows={8}
+            placeholder="Customer-facing release notes (Markdown)."
+          />
+        ) : (
+          <Input
+            ref={urlRef}
+            autoFocus
+            type="url"
+            defaultValue={release.releaseNotesUrl ?? ""}
+            placeholder="https://example.com/release-notes"
+          />
+        )}
+
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={draftKind === "in_app" ? saveInApp : saveExternal}
+          >
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDraftKind(null)}
+          >
+            Cancel
+          </Button>
+          {mode !== "none" ? (
+            <Button
+              variant="link"
+              size="inline"
+              onClick={remove}
+              className="ml-auto text-xs font-normal text-muted-foreground hover:text-destructive"
+            >
+              Remove
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // Collapsed / read view.
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        {header}
+        {canEdit && mode !== "none" ? (
+          <button
+            type="button"
+            onClick={() =>
+              setDraftKind(mode === "external" ? "external" : "in_app")
+            }
+            className="text-2xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Edit
+          </button>
+        ) : null}
+      </div>
+
+      {mode === "in_app" && release.releaseNotesBody ? (
+        <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
+          <ReactMarkdown>{release.releaseNotesBody}</ReactMarkdown>
+        </div>
+      ) : mode === "external" && release.releaseNotesUrl ? (
+        <a
+          href={release.releaseNotesUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-2"
+        >
+          {externalHost(release.releaseNotesUrl)}
+          <span aria-hidden>↗</span>
+        </a>
+      ) : canEdit ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDraftKind("in_app")}
+          >
+            Write release notes
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDraftKind("external")}
+          >
+            Link external notes
+          </Button>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No release notes.</p>
+      )}
+    </div>
+  );
+}
+
+/** A small segmented-control tab for switching between Write / Link external. */
+function ModeTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        "rounded-md px-2 py-0.5 text-2xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring " +
+        (active
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:text-foreground")
+      }
+    >
+      {children}
+    </button>
   );
 }

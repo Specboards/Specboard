@@ -137,6 +137,10 @@ interface LocalRelease {
   /** Actual ship date (YYYY-MM-DD), stamped on ship and cleared on reopen. */
   shippedDate?: string | null;
   notes?: string | null;
+  /** Customer-facing release-notes mode (default none when absent). */
+  releaseNotesMode?: "none" | "in_app" | "external";
+  releaseNotesBody?: string | null;
+  releaseNotesUrl?: string | null;
 }
 
 /** A comment persisted in local file mode. Keyed to the feature's stable
@@ -1405,6 +1409,9 @@ export class LocalFileStore implements FeatureStore {
         productId: r.productId ?? null,
         shippedDate: r.shippedDate ?? null,
         notes: r.notes ?? null,
+        releaseNotesMode: r.releaseNotesMode ?? "none",
+        releaseNotesBody: r.releaseNotesBody ?? null,
+        releaseNotesUrl: r.releaseNotesUrl ?? null,
         itemCount: counts.get(r.id) ?? 0,
       }))
       .sort(compareReleases);
@@ -1435,6 +1442,9 @@ export class LocalFileStore implements FeatureStore {
       targetDate: input.targetDate ?? null,
       shippedDate: null,
       notes: input.notes ?? null,
+      releaseNotesMode: input.releaseNotesMode ?? "none",
+      releaseNotesBody: input.releaseNotesBody ?? null,
+      releaseNotesUrl: input.releaseNotesUrl ?? null,
     };
     await this.writeReleases([...rows, release]);
     return {
@@ -1442,6 +1452,9 @@ export class LocalFileStore implements FeatureStore {
       productId,
       shippedDate: release.shippedDate ?? null,
       notes: release.notes ?? null,
+      releaseNotesMode: release.releaseNotesMode ?? "none",
+      releaseNotesBody: release.releaseNotesBody ?? null,
+      releaseNotesUrl: release.releaseNotesUrl ?? null,
       itemCount: 0,
     };
   }
@@ -1479,6 +1492,12 @@ export class LocalFileStore implements FeatureStore {
     if (patch.startDate !== undefined) release.startDate = patch.startDate;
     if (patch.targetDate !== undefined) release.targetDate = patch.targetDate;
     if (patch.notes !== undefined) release.notes = patch.notes;
+    if (patch.releaseNotesMode !== undefined)
+      release.releaseNotesMode = patch.releaseNotesMode;
+    if (patch.releaseNotesBody !== undefined)
+      release.releaseNotesBody = patch.releaseNotesBody;
+    if (patch.releaseNotesUrl !== undefined)
+      release.releaseNotesUrl = patch.releaseNotesUrl;
     if (patch.productId !== undefined) {
       const targetProductId = patch.productId;
       if (
@@ -1502,6 +1521,9 @@ export class LocalFileStore implements FeatureStore {
       productId: release.productId ?? null,
       shippedDate: release.shippedDate ?? null,
       notes: release.notes ?? null,
+      releaseNotesMode: release.releaseNotesMode ?? "none",
+      releaseNotesBody: release.releaseNotesBody ?? null,
+      releaseNotesUrl: release.releaseNotesUrl ?? null,
       itemCount: all.filter((f) => f.releaseId === id).length,
     };
   }

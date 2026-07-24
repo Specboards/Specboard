@@ -466,6 +466,20 @@ export const RELEASE_STATUSES: readonly ReleaseStatus[] = [
   "shipped",
 ];
 
+/**
+ * The customer-facing release-notes mode on a release, distinct from the
+ * internal planning `notes`. `none`: no release notes. `in_app`: Markdown
+ * authored in the app (`releaseNotesBody`). `external`: a link to externally
+ * hosted notes (`releaseNotesUrl`).
+ */
+export type ReleaseNotesMode = "none" | "in_app" | "external";
+
+export const RELEASE_NOTES_MODES: readonly ReleaseNotesMode[] = [
+  "none",
+  "in_app",
+  "external",
+];
+
 /** A release (ship vehicle) as the UI consumes it. */
 export interface ReleaseRecord {
   id: string;
@@ -481,8 +495,17 @@ export interface ReleaseRecord {
   /** The date the release actually shipped (YYYY-MM-DD), stamped when it first
    * transitions to `shipped` and cleared on reopen. Null while unshipped. */
   shippedDate: string | null;
-  /** Free-form release notes (Markdown), or null. */
+  /** Internal planning notes (Markdown), or null. Distinct from the
+   * customer-facing release notes below. */
   notes: string | null;
+  /** Customer-facing release-notes mode: none / in_app / external. */
+  releaseNotesMode: ReleaseNotesMode;
+  /** In-app authored release notes (Markdown), or null. Rendered when the mode
+   * is `in_app`; retained across mode switches so a draft survives. */
+  releaseNotesBody: string | null;
+  /** External release-notes URL, or null. Linked out to when the mode is
+   * `external`; retained across mode switches. */
+  releaseNotesUrl: string | null;
   /** Count of items scheduled into this release. */
   itemCount: number;
 }
@@ -495,6 +518,9 @@ export interface ReleaseInput {
   startDate?: string | null;
   targetDate?: string | null;
   notes?: string | null;
+  releaseNotesMode?: ReleaseNotesMode;
+  releaseNotesBody?: string | null;
+  releaseNotesUrl?: string | null;
 }
 
 export type ReleasePatch = Partial<{
@@ -504,6 +530,9 @@ export type ReleasePatch = Partial<{
   startDate: string | null;
   targetDate: string | null;
   notes: string | null;
+  releaseNotesMode: ReleaseNotesMode;
+  releaseNotesBody: string | null;
+  releaseNotesUrl: string | null;
 }>;
 
 /** Raised when a release can't be created/updated/deleted. */

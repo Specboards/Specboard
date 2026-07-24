@@ -23,6 +23,9 @@ function rel(id: string, status: ReleaseRecord["status"]): ReleaseRecord {
     targetDate: null,
     shippedDate: null,
     notes: null,
+    releaseNotesMode: "none",
+    releaseNotesBody: null,
+    releaseNotesUrl: null,
     itemCount: 0,
   };
 }

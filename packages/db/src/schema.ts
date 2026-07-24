@@ -817,9 +817,19 @@ export const releases = pgTable(
      * transitions to `shipped` and cleared if it's reopened. Distinct from the
      * planned `targetDate`, which is retained. Null while unshipped. */
     shippedDate: text("shipped_date"),
-    /** Free-form release notes (Markdown), or null. Shown in the release detail
-     * panel on the Roadmap. */
+    /** Free-form INTERNAL planning notes (Markdown), or null. Shown in the
+     * release detail panel on the Roadmap. Distinct from the customer-facing
+     * release notes below (`releaseNotes*`). */
     notes: text("notes"),
+    /** Customer-facing release-notes surface, distinct from the internal
+     * planning `notes`. `mode` selects between: `none` (no release notes),
+     * `in_app` (Markdown authored in the app, stored in `releaseNotesBody`), and
+     * `external` (a link to externally hosted notes in `releaseNotesUrl`). The
+     * body and url are retained across mode switches so toggling back and forth
+     * doesn't lose a draft. */
+    releaseNotesMode: text("release_notes_mode").notNull().default("none"),
+    releaseNotesBody: text("release_notes_body"),
+    releaseNotesUrl: text("release_notes_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

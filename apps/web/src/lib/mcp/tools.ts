@@ -11,6 +11,7 @@ import {
   parseCreateFeatureInput,
   parseFeaturePatch,
   parseReleaseInput,
+  parseReleaseNotesPatch,
   parseReleasePatch,
   patchFeature,
   updateRelease,
@@ -671,6 +672,9 @@ export const TOOLS: McpTool[] = [
         targetDate: r.targetDate,
         shippedDate: r.shippedDate,
         notes: r.notes,
+        releaseNotesMode: r.releaseNotesMode,
+        releaseNotesBody: r.releaseNotesBody,
+        releaseNotesUrl: r.releaseNotesUrl,
         itemCount: r.itemCount,
       }));
     },
@@ -714,7 +718,24 @@ export const TOOLS: McpTool[] = [
         },
         notes: {
           type: ["string", "null"],
-          description: "Free-form release notes (Markdown).",
+          description:
+            "Internal planning notes (Markdown). Distinct from the " +
+            "customer-facing release notes below.",
+        },
+        releaseNotesMode: {
+          type: "string",
+          description:
+            "Customer-facing release-notes mode: none | in_app | external " +
+            "(default none). `in_app` renders `releaseNotesBody` Markdown; " +
+            "`external` links out to `releaseNotesUrl`.",
+        },
+        releaseNotesBody: {
+          type: ["string", "null"],
+          description: "In-app customer-facing release notes (Markdown).",
+        },
+        releaseNotesUrl: {
+          type: ["string", "null"],
+          description: "External release-notes URL (http/https) for `external` mode.",
         },
       },
       required: ["name"],
@@ -735,6 +756,9 @@ export const TOOLS: McpTool[] = [
         targetDate: release.targetDate,
         shippedDate: release.shippedDate,
         notes: release.notes,
+        releaseNotesMode: release.releaseNotesMode,
+        releaseNotesBody: release.releaseNotesBody,
+        releaseNotesUrl: release.releaseNotesUrl,
         itemCount: release.itemCount,
       };
     },
@@ -782,7 +806,26 @@ export const TOOLS: McpTool[] = [
         },
         notes: {
           type: ["string", "null"],
-          description: "Free-form release notes (Markdown), or null to clear.",
+          description:
+            "Internal planning notes (Markdown), or null to clear. Distinct " +
+            "from the customer-facing release notes below.",
+        },
+        releaseNotesMode: {
+          type: "string",
+          description:
+            "Customer-facing release-notes mode: none | in_app | external. " +
+            "`in_app` renders `releaseNotesBody` Markdown; `external` links " +
+            "out to `releaseNotesUrl`.",
+        },
+        releaseNotesBody: {
+          type: ["string", "null"],
+          description:
+            "In-app customer-facing release notes (Markdown), or null to clear.",
+        },
+        releaseNotesUrl: {
+          type: ["string", "null"],
+          description:
+            "External release-notes URL (http/https), or null to clear.",
         },
       },
       required: ["id"],
@@ -809,7 +852,76 @@ export const TOOLS: McpTool[] = [
         targetDate: release.targetDate,
         shippedDate: release.shippedDate,
         notes: release.notes,
+        releaseNotesMode: release.releaseNotesMode,
+        releaseNotesBody: release.releaseNotesBody,
+        releaseNotesUrl: release.releaseNotesUrl,
         itemCount: release.itemCount,
+      };
+    },
+  },
+  {
+    name: "update_release_notes",
+    description:
+      "Author a release's CUSTOMER-FACING release notes (distinct from the " +
+      "internal planning `notes` set by update_release, which this tool never " +
+      "touches). Pass the release `id` (from list_releases) plus either an " +
+      "in-app `body` (Markdown, rendered read-only in the app) or an external " +
+      "`url` (an http(s) link the app points out to), not both. The mode is " +
+      "inferred: a non-empty `body` selects `in_app`, a non-empty `url` selects " +
+      "`external`, and clearing the payload resets it to `none`; pass `mode` " +
+      "explicitly to override. The stored body and url are retained across mode " +
+      "switches, so selecting one never clobbers the other's value. Requires " +
+      "admin/contributor access to the release's product (owner for a portfolio " +
+      "release). Returns the updated release-notes state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "Release id whose notes to author (from list_releases).",
+        },
+        mode: {
+          type: "string",
+          description:
+            "Optional explicit mode: none | in_app | external. Usually left " +
+            "off and inferred from `body`/`url`.",
+        },
+        body: {
+          type: ["string", "null"],
+          description:
+            "In-app customer-facing release notes (Markdown). Non-empty selects " +
+            "in_app mode; null/empty clears the in-app notes.",
+        },
+        url: {
+          type: ["string", "null"],
+          description:
+            "External release-notes URL (http/https). Non-empty selects " +
+            "external mode; null/empty clears the external link.",
+        },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    },
+    write: true,
+    run: async (args, ctx) => {
+      // Reuses updateRelease so authorization (canWriteProductId: admin/
+      // contributor for a product release, owner for portfolio) matches
+      // update_release exactly. The patch is release-notes-only, so this tool
+      // can never rename, reschedule, or edit the internal planning notes.
+      if (typeof args.id !== "string" || args.id.trim() === "") {
+        throw new Error("id must be a non-empty string.");
+      }
+      const release = await updateRelease(
+        args.id,
+        parseReleaseNotesPatch(args),
+        ctx.scope,
+      );
+      return {
+        id: release.id,
+        name: release.name,
+        releaseNotesMode: release.releaseNotesMode,
+        releaseNotesBody: release.releaseNotesBody,
+        releaseNotesUrl: release.releaseNotesUrl,
       };
     },
   },

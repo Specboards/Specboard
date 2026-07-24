@@ -130,6 +130,7 @@ import {
   type RelationInput,
   type ReleaseInput,
   type ReleasePatch,
+  type ReleaseNotesMode,
   type ReleaseRecord,
   type ReleaseStatus,
   type StageGate,
@@ -2075,6 +2076,9 @@ export class DbStore implements FeatureStore {
           startDate: input.startDate ?? null,
           targetDate: input.targetDate ?? null,
           notes: input.notes ?? null,
+          releaseNotesMode: input.releaseNotesMode ?? "none",
+          releaseNotesBody: input.releaseNotesBody ?? null,
+          releaseNotesUrl: input.releaseNotesUrl ?? null,
         })
         .returning();
       if (!row) throw new ReleaseError(`A release named "${name}" already exists.`);
@@ -2132,6 +2136,12 @@ export class DbStore implements FeatureStore {
       if (patch.startDate !== undefined) set.startDate = patch.startDate;
       if (patch.targetDate !== undefined) set.targetDate = patch.targetDate;
       if (patch.notes !== undefined) set.notes = patch.notes;
+      if (patch.releaseNotesMode !== undefined)
+        set.releaseNotesMode = patch.releaseNotesMode;
+      if (patch.releaseNotesBody !== undefined)
+        set.releaseNotesBody = patch.releaseNotesBody;
+      if (patch.releaseNotesUrl !== undefined)
+        set.releaseNotesUrl = patch.releaseNotesUrl;
 
       // Reassigning to a different product (or to portfolio) also needs write
       // access to the destination, and unschedules items that no longer match.
@@ -4058,6 +4068,9 @@ function toReleaseRecord(
     targetDate: string | null;
     shippedDate: string | null;
     notes: string | null;
+    releaseNotesMode: string;
+    releaseNotesBody: string | null;
+    releaseNotesUrl: string | null;
   },
   itemCount: number,
 ): ReleaseRecord {
@@ -4070,6 +4083,9 @@ function toReleaseRecord(
     targetDate: row.targetDate,
     shippedDate: row.shippedDate,
     notes: row.notes,
+    releaseNotesMode: row.releaseNotesMode as ReleaseNotesMode,
+    releaseNotesBody: row.releaseNotesBody,
+    releaseNotesUrl: row.releaseNotesUrl,
     itemCount,
   };
 }

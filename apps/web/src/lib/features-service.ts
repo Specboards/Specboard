@@ -23,6 +23,7 @@ import {
 } from "@/lib/store";
 import {
   RELATION_DIRECTIONS,
+  RELEASE_NOTES_MODES,
   RELEASE_STATUSES,
   RelationError,
   type CommentInput,
@@ -44,6 +45,7 @@ import {
   type PropertyPatch,
   type RelationInput,
   type ReleaseInput,
+  type ReleaseNotesMode,
   type ReleasePatch,
   type ReleaseRecord,
   type ReleaseStatus,
@@ -1206,6 +1208,12 @@ export function parseReleaseInput(body: unknown): ReleaseInput {
   if ("startDate" in raw) input.startDate = parseDate(raw.startDate, "startDate");
   if ("targetDate" in raw) input.targetDate = parseDate(raw.targetDate, "targetDate");
   if ("notes" in raw) input.notes = parseReleaseNotes(raw.notes);
+  if ("releaseNotesMode" in raw)
+    input.releaseNotesMode = parseReleaseNotesMode(raw.releaseNotesMode);
+  if ("releaseNotesBody" in raw)
+    input.releaseNotesBody = parseReleaseNotesBody(raw.releaseNotesBody);
+  if ("releaseNotesUrl" in raw)
+    input.releaseNotesUrl = parseReleaseNotesUrl(raw.releaseNotesUrl);
   return input;
 }
 
@@ -1227,10 +1235,17 @@ export function parseReleasePatch(body: unknown): ReleasePatch {
   if ("startDate" in raw) patch.startDate = parseDate(raw.startDate, "startDate");
   if ("targetDate" in raw) patch.targetDate = parseDate(raw.targetDate, "targetDate");
   if ("notes" in raw) patch.notes = parseReleaseNotes(raw.notes);
+  if ("releaseNotesMode" in raw)
+    patch.releaseNotesMode = parseReleaseNotesMode(raw.releaseNotesMode);
+  if ("releaseNotesBody" in raw)
+    patch.releaseNotesBody = parseReleaseNotesBody(raw.releaseNotesBody);
+  if ("releaseNotesUrl" in raw)
+    patch.releaseNotesUrl = parseReleaseNotesUrl(raw.releaseNotesUrl);
   if (Object.keys(patch).length === 0) {
     throw new InvalidPatchError(
       "Patch must set at least one of: name, productId, status, " +
-        "startDate, targetDate, notes.",
+        "startDate, targetDate, notes, releaseNotesMode, releaseNotesBody, " +
+        "releaseNotesUrl.",
     );
   }
   return patch;
@@ -1256,6 +1271,105 @@ function parseReleaseNotes(value: unknown): string | null {
     throw new InvalidPatchError("notes must be 10,000 characters or fewer.");
   }
   return trimmed || null;
+}
+
+/** Validate the customer-facing release-notes mode: none | in_app | external. */
+function parseReleaseNotesMode(value: unknown): ReleaseNotesMode {
+  if (
+    typeof value !== "string" ||
+    !(RELEASE_NOTES_MODES as readonly string[]).includes(value)
+  ) {
+    throw new InvalidPatchError(
+      `releaseNotesMode must be one of: ${RELEASE_NOTES_MODES.join(", ")}.`,
+    );
+  }
+  return value as ReleaseNotesMode;
+}
+
+/** Validate in-app release-notes body: a string (trimmed; empty → null) or null. */
+function parseReleaseNotesBody(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new InvalidPatchError("releaseNotesBody must be a string or null.");
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > 50_000) {
+    throw new InvalidPatchError(
+      "releaseNotesBody must be 50,000 characters or fewer.",
+    );
+  }
+  return trimmed || null;
+}
+
+/**
+ * Validate an external release-notes URL: a string (trimmed; empty → null) or
+ * null. Only http(s) URLs are accepted so the app never links out to a
+ * `javascript:` or other scheme.
+ */
+function parseReleaseNotesUrl(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new InvalidPatchError("releaseNotesUrl must be a string or null.");
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 2_048) {
+    throw new InvalidPatchError(
+      "releaseNotesUrl must be 2,048 characters or fewer.",
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new InvalidPatchError("releaseNotesUrl must be a valid URL.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new InvalidPatchError("releaseNotesUrl must be an http(s) URL.");
+  }
+  return trimmed;
+}
+
+/**
+ * Parse a customer-facing release-notes-only patch, for the `update_release_notes`
+ * MCP tool. Returns a `ReleasePatch` limited to the `releaseNotes*` fields, so a
+ * caller can author the notes without being able to touch a release's name,
+ * status, dates, product, or the internal planning `notes`.
+ *
+ * `mode` may be given explicitly; when it isn't, it is inferred from the payload:
+ * a non-empty `body` implies `in_app`, a non-empty `url` implies `external`, and
+ * clearing the payload (empty/null body or url with no mode) implies `none`. The
+ * stored body and url are retained across mode switches, so setting one mode
+ * never clobbers the other's value.
+ */
+export function parseReleaseNotesPatch(body: unknown): ReleasePatch {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPatchError("Request body must be a JSON object.");
+  }
+  const raw = body as Record<string, unknown>;
+  const patch: ReleasePatch = {};
+  let mode: ReleaseNotesMode | undefined;
+  if ("mode" in raw) mode = parseReleaseNotesMode(raw.mode);
+  if ("body" in raw) patch.releaseNotesBody = parseReleaseNotesBody(raw.body);
+  if ("url" in raw) patch.releaseNotesUrl = parseReleaseNotesUrl(raw.url);
+  if (patch.releaseNotesBody !== undefined && patch.releaseNotesUrl) {
+    throw new InvalidPatchError(
+      "Provide an in-app `body` or an external `url`, not both.",
+    );
+  }
+  // Infer the mode from the payload when it wasn't set explicitly.
+  if (mode === undefined) {
+    if (patch.releaseNotesBody) mode = "in_app";
+    else if (patch.releaseNotesUrl) mode = "external";
+    else if ("body" in raw || "url" in raw) mode = "none";
+  }
+  if (mode !== undefined) patch.releaseNotesMode = mode;
+  if (Object.keys(patch).length === 0) {
+    throw new InvalidPatchError(
+      "Provide at least one of: mode, body, url.",
+    );
+  }
+  return patch;
 }
 
 function parseReleaseStatus(value: unknown): ReleaseStatus {
