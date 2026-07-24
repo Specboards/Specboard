@@ -260,6 +260,19 @@ export default async function RoadmapPage({
         }
       : undefined;
 
+  // Bulk multi-select reuses the backlog board's action bar. Offered to editors
+  // on the active view only (the shipped view is read-only, like drag); the
+  // client also hides it on the mobile swipe layout. Releases to schedule into
+  // are the active (non-shipped) columns; the bar adds its own "No release".
+  const bulkOptions =
+    canEdit && !showShipped
+      ? {
+          statuses: workflow.statuses.filter((s) => s !== "archived"),
+          assignees: members.map((m) => ({ userId: m.userId, name: m.name })),
+          releases: activeReleases.map((r) => ({ id: r.id, name: r.name })),
+        }
+      : undefined;
+
   const board = (
     <RoadmapBoard
       // Remount when the data set changes (level or product scope) so the
@@ -283,6 +296,7 @@ export default async function RoadmapPage({
       editableReleaseIds={editableReleaseIds}
       productNamesById={productNamesById}
       quickAdd={quickAdd}
+      bulkOptions={bulkOptions}
     />
   );
 

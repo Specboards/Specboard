@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ListChecks } from "lucide-react";
 import {
   DndContext,
   DragOverlay,
@@ -19,6 +20,10 @@ import { toast } from "sonner";
 import type { PropertyType, StatusWorkflow } from "@specboards/core";
 
 import { useBoardPrefs } from "@/app/[org]/[product]/backlog/board-prefs";
+import {
+  BulkActionBar,
+  type BulkOptions,
+} from "@/app/[org]/[product]/backlog/bulk-action-bar";
 import { BoardColumnNav } from "@/components/board-column-nav";
 import { ColumnQuickAdd } from "@/components/column-quick-add";
 import {
@@ -90,6 +95,7 @@ export function RoadmapBoard({
   editableReleaseIds,
   productNamesById,
   quickAdd,
+  bulkOptions,
 }: {
   columns: RoadmapColumn[];
   features: FeatureRecord[];
@@ -117,6 +123,9 @@ export function RoadmapBoard({
     productId: string;
     status: string;
   };
+  /** Option lists for the bulk action bar; enables multi-select when provided
+   * (editors, active view). */
+  bulkOptions?: BulkOptions;
 }) {
   const router = useRouter();
   const announce = useAnnouncer();
@@ -153,6 +162,39 @@ export function RoadmapBoard({
   const { scrollRef, activeColumn, scrollToColumn } = useSwipeColumns(
     columns.length,
   );
+
+  // Opt-in multi-select, mirroring the backlog board. Off on the mobile swipe
+  // layout (its floating bar and per-card checkboxes fight the carousel) and
+  // for viewers (no bulkOptions). `selecting` gates the checkboxes and bar so
+  // they vanish if the viewport crosses to mobile mid-selection.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const canSelect = !!bulkOptions && !isMobile;
+  const selecting = selectMode && canSelect;
+
+  const toggleSelect = useCallback((specId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(specId)) next.delete(specId);
+      else next.add(specId);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+  const exitSelect = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+  }, []);
+
+  // Esc leaves multi-select entirely.
+  useEffect(() => {
+    if (!selecting) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") exitSelect();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting, exitSelect]);
 
   const releaseOf = (f: FeatureRecord): string | null =>
     f.specId in placement ? placement[f.specId]! : f.releaseId;
@@ -247,6 +289,20 @@ export function RoadmapBoard({
 
   return (
     <>
+      {canSelect ? (
+        <div className="mb-2 flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant={selectMode ? "secondary" : "outline"}
+            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+            className="h-8 gap-1.5"
+          >
+            <ListChecks className="h-4 w-4" />
+            {selectMode ? "Done" : "Select"}
+          </Button>
+        </div>
+      ) : null}
       <BoardColumnNav
         label={(columns[activeColumn] ?? columns[0])?.name}
         index={activeColumn}
@@ -279,6 +335,9 @@ export function RoadmapBoard({
               onOpenDetail={setDetailReleaseId}
               onOpenItem={setEditingSpecId}
               quickAdd={quickAdd}
+              selectMode={selecting}
+              selected={selected}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>
@@ -308,6 +367,14 @@ export function RoadmapBoard({
         specId={editingSpecId}
         onClose={() => setEditingSpecId(null)}
       />
+      {selecting && bulkOptions ? (
+        <BulkActionBar
+          selectedIds={[...selected]}
+          options={bulkOptions}
+          onClear={clearSelection}
+          onExit={exitSelect}
+        />
+      ) : null}
     </>
   );
 }
@@ -325,6 +392,9 @@ function Column({
   onOpenDetail,
   onOpenItem,
   quickAdd,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   column: RoadmapColumn;
   items: FeatureRecord[];
@@ -335,6 +405,10 @@ function Column({
   /** Editor + active view: whether to offer the non-drag Move menu (not gated on
    *  viewport, unlike allowDrag, so it stays available on mobile). */
   canMove: boolean;
+  /** When on, each card shows a select checkbox in a left gutter. */
+  selectMode: boolean;
+  selected: Set<string>;
+  onToggleSelect: (specId: string) => void;
   moveDestinations: MoveOption[];
   onMoveToRelease: (specId: string, targetKey: string) => void;
   onOpenDetail: (releaseId: string) => void;
@@ -426,6 +500,9 @@ function Column({
             maps={maps}
             allowDrag={allowDrag}
             onOpenItem={onOpenItem}
+            selectMode={selectMode}
+            selected={selected.has(f.specId)}
+            onToggleSelect={onToggleSelect}
             moveMenu={
               canMove ? (
                 <MoveMenu
@@ -467,6 +544,9 @@ function DraggableCard({
   allowDrag,
   onOpenItem,
   moveMenu,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   feature: FeatureRecord;
   workflow: StatusWorkflow;
@@ -476,6 +556,9 @@ function DraggableCard({
   onOpenItem: (specId: string) => void;
   /** The non-drag Move menu, or null for viewers. */
   moveMenu?: React.ReactNode;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: (specId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: feature.specId,
@@ -486,24 +569,45 @@ function DraggableCard({
       ref={setNodeRef}
       style={{ opacity: isDragging ? 0.4 : 1 }}
       className={cn(
-        "group relative",
+        "group relative flex items-start gap-1.5",
         allowDrag ? "cursor-grab active:cursor-grabbing" : "",
       )}
       {...(allowDrag ? attributes : {})}
       {...(allowDrag ? listeners : {})}
     >
-      <CardBody
-        feature={feature}
-        workflow={workflow}
-        productsById={productsById}
-        maps={maps}
-        onOpenItem={onOpenItem}
-      />
-      {moveMenu ? (
-        <div className="absolute right-1 top-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100 has-[[data-state=open]]:opacity-100">
-          {moveMenu}
-        </div>
+      {/* Checkbox sits in a left gutter beside the card (not over it), so it
+          never overlaps the title. stopPropagation keeps a checkbox click from
+          starting a drag or opening the card. */}
+      {selectMode ? (
+        <input
+          type="checkbox"
+          aria-label={`Select ${feature.title}`}
+          className="mt-3 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+          checked={selected}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect(feature.specId)}
+        />
       ) : null}
+      <div
+        className={cn(
+          "relative min-w-0 flex-1 rounded-md",
+          selected && "ring-2 ring-primary",
+        )}
+      >
+        <CardBody
+          feature={feature}
+          workflow={workflow}
+          productsById={productsById}
+          maps={maps}
+          onOpenItem={onOpenItem}
+        />
+        {moveMenu ? (
+          <div className="absolute right-1 top-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100 has-[[data-state=open]]:opacity-100">
+            {moveMenu}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
